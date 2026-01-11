@@ -539,6 +539,212 @@ func ValidateFEN(fen string) error {
 }
 ```
 
+## Go Evaluation Module
+
+The evaluation module is implemented in Go at `/backend/analysis-service/internal/evaluation/`.
+
+### Module Structure
+
+```
+internal/evaluation/
+├── evaluation.go       # Core evaluation logic
+└── evaluation_test.go  # Unit tests (50+ test cases)
+```
+
+### Thresholds & Constants
+
+```go
+// Move Classification Thresholds (centipawns)
+const (
+    BestMoveThreshold      = 10   // ≤10cp = Best move
+    ExcellentMoveThreshold = 25   // ≤25cp = Excellent
+    GoodMoveThreshold      = 50   // ≤50cp = Good
+    InaccuracyThreshold    = 100  // ≤100cp = Inaccuracy
+    MistakeThreshold       = 300  // ≤300cp = Mistake
+    BlunderThreshold       = 301  // >300cp = Blunder
+)
+
+// Accuracy Calculation
+const (
+    MaxCPLossPerMove = 500.0  // Cap per move for accuracy
+    WinningThreshold = 200    // Position considered winning
+)
+
+// Performance Rating
+const (
+    WinBonus        = 400    // Rating bonus for win
+    LossPenalty     = -400   // Rating penalty for loss
+    AccuracyWeight  = 8.0    // Accuracy multiplier
+)
+```
+
+### Core Functions
+
+#### Accuracy Calculation
+
+```go
+// Standard Accuracy (0-100%)
+// Formula: 100 - (TotalLoss / MaxPossibleLoss) * 100
+func CalculateAccuracy(moves []MoveEvaluation, color string) float64
+
+// T1 Accuracy (Lichess formula)
+// Formula: 103.1668 * exp(-0.04354 * ACPL) - 3.1669
+func CalculateT1Accuracy(acpl float64) float64
+```
+
+**Example:**
+```go
+moves := []MoveEvaluation{
+    {Color: "white", CentipawnLoss: 10},
+    {Color: "white", CentipawnLoss: 50},
+    {Color: "white", CentipawnLoss: 100},
+}
+accuracy := CalculateAccuracy(moves, "white")
+// Result: ~89.3% (160 loss / 1500 max = 10.7% loss)
+```
+
+#### ACPL (Average Centipawn Loss)
+
+```go
+func CalculateACPL(moves []MoveEvaluation, color string) float64
+```
+
+**Example:**
+```go
+// Player with losses: 10, 20, 30, 40, 50
+acpl := CalculateACPL(moves, "white")
+// Result: 30.0 (average of losses)
+```
+
+#### Move Classification
+
+```go
+func ClassifyMove(
+    cpLoss int,
+    wasBestMove bool,
+    evalBefore, evalAfter int,
+    isMateScore bool,
+) MoveClassification
+```
+
+**Classification Table:**
+
+| Classification | CP Loss | Description |
+|----------------|---------|-------------|
+| `ClassBest` | ≤10 or best move | Optimal play |
+| `ClassExcellent` | 11-25 | Very strong |
+| `ClassGood` | 26-50 | Solid |
+| `ClassInaccuracy` | 51-100 | Minor mistake |
+| `ClassMistake` | 101-300 | Significant error |
+| `ClassBlunder` | >300 | Major mistake |
+| `ClassMissedWin` | - | Lost winning position |
+| `ClassBrilliant` | - | Sacrifice + advantage |
+
+#### Brilliant Move Detection
+
+```go
+func IsBrilliantMove(evalBefore, evalAfter int, materialSacrificed int) bool
+```
+
+A move is brilliant if:
+1. Sacrifices at least 100cp of material (≥1 pawn)
+2. Position improves by ≥100cp OR maintains ≥300cp advantage
+
+#### Performance Rating
+
+```go
+func CalculatePerformanceRating(opponentRating int, accuracy float64, result GameResult) int
+```
+
+**Formula:**
+```
+Performance = OpponentRating + (Accuracy - 50) * 8 + ResultBonus
+```
+
+| Result | Bonus |
+|--------|-------|
+| Win | +400 |
+| Draw | 0 |
+| Loss | -400 |
+
+**Example:**
+```go
+// Beat a 1500-rated opponent with 85% accuracy
+perf := CalculatePerformanceRating(1500, 85.0, ResultWin)
+// Result: 1500 + (35 * 8) + 400 = 2180
+```
+
+#### Win Probability
+
+```go
+// Converts centipawn evaluation to win probability
+func EvalToWinProbability(centipawns int) float64
+```
+
+**Formula:**
+```
+P(win) = 1 / (1 + 10^(-cp/400))
+```
+
+| Eval (cp) | Win Probability |
+|-----------|-----------------|
+| 0 | 50% |
+| 100 | 64% |
+| 200 | 76% |
+| 300 | 85% |
+| 500 | 95% |
+
+### Player Metrics
+
+```go
+type PlayerMetrics struct {
+    Accuracy          float64  // 0-100%
+    ACPL              float64  // Average CP Loss
+    TotalCPLoss       int      // Sum of all losses
+    Blunders          int      // >300cp moves
+    Mistakes          int      // 101-300cp moves
+    Inaccuracies      int      // 51-100cp moves
+    GoodMoves         int      // 26-50cp moves
+    ExcellentMoves    int      // 11-25cp moves
+    BestMoves         int      // ≤10cp moves
+    BrilliantMoves    int      // Special moves
+    TotalMoves        int      // Total analyzed
+    PerformanceRating int      // Estimated rating
+    T1Accuracy        float64  // Alternative calculation
+}
+```
+
+### Running Tests
+
+```bash
+cd backend/analysis-service
+
+# Run all evaluation tests
+go test -v ./internal/evaluation/...
+
+# Run with coverage
+go test -cover ./internal/evaluation/...
+
+# Run benchmarks
+go test -bench=. ./internal/evaluation/...
+```
+
+### Test Coverage
+
+The evaluation module includes 50+ test cases covering:
+
+- Move classification across all thresholds
+- Edge cases (0 loss, max loss, negative values)
+- Color filtering (white vs black moves)
+- Accuracy capping (prevents single blunder destroying score)
+- Performance rating bounds
+- Brilliant move detection
+- Win probability calculations
+
 ---
 
-**Next Steps**: See [stockfish-integration.md](stockfish-integration.md) for UCI protocol details.
+**Related Documentation:**
+- [Stockfish Integration](stockfish-integration.md) - UCI protocol details
+- [Game Sync](game-sync.md) - Game data source
+- [gRPC Design](grpc-design.md) - Analysis API definition
+
