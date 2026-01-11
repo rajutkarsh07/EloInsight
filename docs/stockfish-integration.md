@@ -18,6 +18,74 @@ Stockfish is the world's strongest open-source chess engine. EloInsight uses Sto
 - **Cross-Platform**: Works on Linux, macOS, Windows
 - **Well-Documented**: UCI protocol is standard
 
+## Go gRPC Service Implementation
+
+The Stockfish integration is implemented as a Go gRPC microservice located at `/backend/analysis-service`.
+
+### Service Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   ANALYSIS SERVICE                       │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│   ┌─────────────┐    ┌─────────────┐                    │
+│   │ gRPC Server │───▶│  Analyzer   │                    │
+│   │   :50051    │    │  Service    │                    │
+│   └─────────────┘    └──────┬──────┘                    │
+│                             │                            │
+│                    ┌────────▼────────┐                  │
+│                    │   Engine Pool   │                  │
+│                    │ ┌──────────────┐│                  │
+│                    │ │SF1│SF2│SF3│SF4││                  │
+│                    │ └──────────────┘│                  │
+│                    └────────┬────────┘                  │
+│                             │                            │
+│                     UCI Protocol                         │
+│                             │                            │
+│                    ┌────────▼────────┐                  │
+│                    │   Stockfish    │                   │
+│                    │    Binary      │                   │
+│                    └─────────────────┘                  │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Quick Start
+
+```bash
+cd backend/analysis-service
+
+# Install dependencies
+go mod download
+
+# Build
+make build
+
+# Run
+./bin/analysis-service
+```
+
+### gRPC API
+
+| Method | Description |
+|--------|-------------|
+| `AnalyzePosition` | Analyze single FEN position |
+| `AnalyzePositionStream` | Stream analysis at increasing depths |
+| `AnalyzeGame` | Full game analysis with metrics |
+| `AnalyzeGameStream` | Stream game analysis progress |
+| `GetBestMoves` | MultiPV best moves for position |
+| `HealthCheck` | Service health status |
+
+### Key Features
+
+- **Engine Pool**: CPU-limited worker pool (configurable)
+- **MultiPV Support**: Analyze 1-10 best moves
+- **Depth Control**: Configurable 10-30 depth
+- **Streaming**: Real-time progress updates
+- **Move Classification**: Brilliant/Best/Blunder categories
+- **Metrics Calculation**: Accuracy, ACPL, performance rating
+
 ## UCI Protocol
 
 ### Protocol Basics

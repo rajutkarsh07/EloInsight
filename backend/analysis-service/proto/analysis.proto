@@ -1,0 +1,172 @@
+syntax = "proto3";
+
+package analysis;
+
+option go_package = "github.com/eloinsight/analysis-service/proto";
+
+// AnalysisService provides chess position and game analysis using Stockfish
+service AnalysisService {
+  // Analyze a single FEN position
+  rpc AnalyzePosition(AnalyzePositionRequest) returns (PositionAnalysis);
+  
+  // Analyze a position with streaming updates at each depth
+  rpc AnalyzePositionStream(AnalyzePositionRequest) returns (stream PositionAnalysis);
+  
+  // Analyze a full game from PGN
+  rpc AnalyzeGame(AnalyzeGameRequest) returns (GameAnalysis);
+  
+  // Analyze a full game with streaming progress updates
+  rpc AnalyzeGameStream(AnalyzeGameRequest) returns (stream GameAnalysisProgress);
+  
+  // Get best moves for a position (MultiPV analysis)
+  rpc GetBestMoves(GetBestMovesRequest) returns (BestMovesResponse);
+  
+  // Health check
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Request to analyze a single position
+message AnalyzePositionRequest {
+  string fen = 1;              // FEN string of the position
+  int32 depth = 2;             // Analysis depth (10-30)
+  int32 multi_pv = 3;          // Number of principal variations (1-5)
+  int32 timeout_ms = 4;        // Timeout in milliseconds (optional)
+}
+
+// Analysis result for a single position
+message PositionAnalysis {
+  string fen = 1;              // FEN of analyzed position
+  int32 depth = 2;             // Depth reached
+  Evaluation evaluation = 3;   // Position evaluation
+  string best_move = 4;        // Best move in UCI format
+  repeated string pv = 5;      // Principal variation (best line)
+  int64 nodes = 6;             // Nodes searched
+  int64 nps = 7;               // Nodes per second
+  int64 time_ms = 8;           // Time taken in milliseconds
+}
+
+// Position evaluation
+message Evaluation {
+  oneof score {
+    int32 centipawns = 1;      // Score in centipawns (positive = white better)
+    int32 mate_in = 2;         // Mate in N moves (positive = white mates, negative = black mates)
+  }
+  bool is_mate = 3;            // Whether this is a mate score
+}
+
+// Request to analyze a full game
+message AnalyzeGameRequest {
+  string game_id = 1;          // Game identifier
+  string pgn = 2;              // PGN of the game
+  int32 depth = 3;             // Analysis depth per move
+  int32 multi_pv = 4;          // MultiPV for each position
+  bool include_book_moves = 5; // Analyze opening book moves
+}
+
+// Full game analysis result
+message GameAnalysis {
+  string game_id = 1;
+  repeated MoveAnalysis moves = 2;
+  GameMetrics white_metrics = 3;
+  GameMetrics black_metrics = 4;
+  int64 total_time_ms = 5;
+  string engine_version = 6;
+}
+
+// Analysis progress during game analysis
+message GameAnalysisProgress {
+  string game_id = 1;
+  int32 current_move = 2;      // Current move being analyzed (1-indexed)
+  int32 total_moves = 3;       // Total moves in the game
+  float progress_percent = 4;  // Progress percentage (0-100)
+  MoveAnalysis move_analysis = 5; // Analysis of current move (if completed)
+  string status = 6;           // "analyzing", "completed", "error"
+  string error_message = 7;    // Error message if status is "error"
+}
+
+// Analysis for a single move in a game
+message MoveAnalysis {
+  int32 move_number = 1;       // Move number (1-indexed)
+  int32 ply = 2;               // Ply (half-move, 0-indexed)
+  string color = 3;            // "white" or "black"
+  string played_move = 4;      // Move played in SAN format
+  string played_move_uci = 5;  // Move played in UCI format
+  string best_move = 6;        // Best move in SAN format
+  string best_move_uci = 7;    // Best move in UCI format
+  string fen_before = 8;       // FEN before the move
+  string fen_after = 9;        // FEN after the move
+  Evaluation eval_before = 10; // Evaluation before the move
+  Evaluation eval_after = 11;  // Evaluation after the move
+  int32 centipawn_loss = 12;   // Centipawn loss for this move
+  MoveClassification classification = 13; // Move classification
+  repeated string pv = 14;     // Principal variation from this position
+  int32 depth = 15;            // Depth reached
+}
+
+// Move classification enum
+enum MoveClassification {
+  CLASSIFICATION_UNKNOWN = 0;
+  BRILLIANT = 1;               // Exceptional move, often a sacrifice
+  GREAT = 2;                   // Strong move, well above average
+  BEST = 3;                    // The best move available
+  EXCELLENT = 4;               // Very good move
+  GOOD = 5;                    // Good move
+  BOOK = 6;                    // Opening book move
+  NORMAL = 7;                  // Average move
+  INACCURACY = 8;              // Small mistake
+  MISTAKE = 9;                 // Significant mistake
+  BLUNDER = 10;                // Major mistake
+  MISSED_WIN = 11;             // Missed winning opportunity
+}
+
+// Aggregated metrics for a player's side
+message GameMetrics {
+  float accuracy = 1;          // Accuracy percentage (0-100)
+  float acpl = 2;              // Average centipawn loss
+  int32 blunders = 3;          // Number of blunders
+  int32 mistakes = 4;          // Number of mistakes
+  int32 inaccuracies = 5;      // Number of inaccuracies
+  int32 good_moves = 6;        // Number of good moves
+  int32 excellent_moves = 7;   // Number of excellent moves
+  int32 best_moves = 8;        // Number of best moves
+  int32 brilliant_moves = 9;   // Number of brilliant moves
+  int32 book_moves = 10;       // Number of book moves
+  int32 total_moves = 11;      // Total moves analyzed
+  int32 performance_rating = 12; // Estimated performance rating
+}
+
+// Request for MultiPV best moves
+message GetBestMovesRequest {
+  string fen = 1;              // FEN string
+  int32 count = 2;             // Number of best moves to return (1-10)
+  int32 depth = 3;             // Analysis depth
+}
+
+// Response with multiple best moves
+message BestMovesResponse {
+  string fen = 1;
+  repeated BestMove moves = 2;
+  int32 depth = 3;
+}
+
+// A single best move with evaluation
+message BestMove {
+  int32 rank = 1;              // Rank (1 = best, 2 = second best, etc.)
+  string move_uci = 2;         // Move in UCI format
+  string move_san = 3;         // Move in SAN format (if available)
+  Evaluation evaluation = 4;   // Evaluation after this move
+  repeated string pv = 5;      // Principal variation
+}
+
+// Health check request
+message HealthCheckRequest {}
+
+// Health check response
+message HealthCheckResponse {
+  bool healthy = 1;
+  string status = 2;
+  int32 available_workers = 3;
+  int32 total_workers = 4;
+  string stockfish_version = 5;
+  int64 uptime_seconds = 6;
+}
