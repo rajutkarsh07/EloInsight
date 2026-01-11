@@ -1,0 +1,175 @@
+version: '3.8'
+
+# ==============================================================================
+# EloInsight Development Stack (Hot Reload)
+# ==============================================================================
+# 
+# This compose file is optimized for development with:
+# - Volume mounts for hot reloading
+# - Source code changes reflected immediately
+# - Database persistence
+#
+# Usage:
+#   docker-compose -f docker-compose.dev.yml up -d
+#
+# ==============================================================================
+
+services:
+  # ============================================================================
+  # Infrastructure (Same as production)
+  # ============================================================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: eloinsight-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: eloinsight
+      POSTGRES_PASSWORD: eloinsight_dev
+      POSTGRES_DB: eloinsight
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eloinsight"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - eloinsight-dev
+
+  redis:
+    image: redis:7-alpine
+    container_name: eloinsight-redis-dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - eloinsight-dev
+
+  # ============================================================================
+  # Backend Services (Development Mode with Hot Reload)
+  # ============================================================================
+
+  api-gateway:
+    image: node:20-alpine
+    container_name: eloinsight-api-dev
+    working_dir: /app
+    command: sh -c "npm install && npm run start:dev"
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - JWT_SECRET=dev-jwt-secret-change-in-production
+      - JWT_EXPIRES_IN=15m
+      - JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
+      - JWT_REFRESH_EXPIRES_IN=7d
+      - DATABASE_URL=postgresql://eloinsight:eloinsight_dev@postgres:5432/eloinsight
+      - REDIS_URL=redis://redis:6379
+      - CORS_ORIGIN=http://localhost:3000
+      - FRONTEND_URL=http://localhost:3000
+      - ANALYSIS_SERVICE_HOST=analysis-service
+      - ANALYSIS_SERVICE_PORT=50051
+      - GAME_SYNC_SERVICE_HOST=game-sync
+      - GAME_SYNC_SERVICE_PORT=3002
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend/api-gateway:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - eloinsight-dev
+
+  game-sync:
+    image: node:20-alpine
+    container_name: eloinsight-game-sync-dev
+    working_dir: /app
+    command: sh -c "npm install && npm run start:dev"
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - DATABASE_URL=postgresql://eloinsight:eloinsight_dev@postgres:5432/eloinsight
+      - REDIS_URL=redis://redis:6379
+      - SYNC_CRON=0 */6 * * *
+      - CHESS_COM_RATE_LIMIT=300
+      - LICHESS_RATE_LIMIT=15
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./backend/game-sync-service:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - eloinsight-dev
+
+  analysis-service:
+    build:
+      context: ./backend/analysis-service
+      dockerfile: Dockerfile
+    container_name: eloinsight-analysis-dev
+    environment:
+      - GRPC_PORT=50051
+      - STOCKFISH_PATH=/usr/bin/stockfish
+      - STOCKFISH_THREADS=2
+      - STOCKFISH_HASH=512
+      - WORKER_POOL_SIZE=2
+      - DEFAULT_DEPTH=18
+      - LOG_LEVEL=debug
+      - LOG_FORMAT=console
+    ports:
+      - "50051:50051"
+    networks:
+      - eloinsight-dev
+
+  # ============================================================================
+  # Frontend (Development Mode)
+  # ============================================================================
+
+  frontend:
+    image: node:20-alpine
+    container_name: eloinsight-frontend-dev
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - api-gateway
+    networks:
+      - eloinsight-dev
+
+# ==============================================================================
+# Networks & Volumes
+# ==============================================================================
+
+networks:
+  eloinsight-dev:
+    driver: bridge
+    name: eloinsight-dev
+
+volumes:
+  postgres_dev_data:
+    name: eloinsight-postgres-dev-data
+  redis_dev_data:
+    name: eloinsight-redis-dev-data

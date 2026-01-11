@@ -1,0 +1,189 @@
+version: '3.8'
+
+# ==============================================================================
+# EloInsight Local Development Stack
+# ==============================================================================
+# 
+# Usage:
+#   docker-compose up -d              # Start all services
+#   docker-compose up -d postgres     # Start only Postgres
+#   docker-compose down               # Stop all services
+#   docker-compose logs -f api        # View API logs
+#   docker-compose ps                 # Check service status
+#
+# ==============================================================================
+
+services:
+  # ============================================================================
+  # Infrastructure Services
+  # ============================================================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: eloinsight-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-eloinsight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eloinsight_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-eloinsight}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/prisma/migrations/00000000000000_init/migration.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-eloinsight}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - eloinsight-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: eloinsight-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - eloinsight-network
+
+  # ============================================================================
+  # Backend Services
+  # ============================================================================
+
+  api-gateway:
+    build:
+      context: ./backend/api-gateway
+      dockerfile: Dockerfile
+    container_name: eloinsight-api
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
+      - JWT_EXPIRES_IN=15m
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-dev-refresh-secret-change-in-production}
+      - JWT_REFRESH_EXPIRES_IN=7d
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-eloinsight}:${POSTGRES_PASSWORD:-eloinsight_dev}@postgres:5432/${POSTGRES_DB:-eloinsight}
+      - REDIS_URL=redis://redis:6379
+      - CORS_ORIGIN=http://localhost:3000,http://frontend:3000
+      - FRONTEND_URL=http://localhost:3000
+      - ANALYSIS_SERVICE_HOST=analysis-service
+      - ANALYSIS_SERVICE_PORT=50051
+      - ANALYSIS_TIMEOUT_MS=60000
+      - GAME_SYNC_SERVICE_HOST=game-sync
+      - GAME_SYNC_SERVICE_PORT=3002
+    ports:
+      - "${API_PORT:-4000}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - eloinsight-network
+
+  game-sync:
+    build:
+      context: ./backend/game-sync-service
+      dockerfile: Dockerfile
+    container_name: eloinsight-game-sync
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-eloinsight}:${POSTGRES_PASSWORD:-eloinsight_dev}@postgres:5432/${POSTGRES_DB:-eloinsight}
+      - REDIS_URL=redis://redis:6379
+      - SYNC_CRON=0 */6 * * *
+      - CHESS_COM_RATE_LIMIT=300
+      - LICHESS_RATE_LIMIT=15
+      - SYNC_BATCH_SIZE=50
+    ports:
+      - "${GAME_SYNC_PORT:-3002}:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - eloinsight-network
+
+  analysis-service:
+    build:
+      context: ./backend/analysis-service
+      dockerfile: Dockerfile
+    container_name: eloinsight-analysis
+    restart: unless-stopped
+    environment:
+      - GRPC_PORT=50051
+      - STOCKFISH_PATH=/usr/bin/stockfish
+      - STOCKFISH_THREADS=2
+      - STOCKFISH_HASH=1024
+      - STOCKFISH_MULTI_PV=3
+      - WORKER_POOL_SIZE=2
+      - DEFAULT_DEPTH=20
+      - ANALYSIS_TIMEOUT_SECONDS=60
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+    ports:
+      - "${ANALYSIS_PORT:-50051}:50051"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    networks:
+      - eloinsight-network
+
+  # ============================================================================
+  # Frontend
+  # ============================================================================
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: eloinsight-frontend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - eloinsight-network
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+
+networks:
+  eloinsight-network:
+    driver: bridge
+    name: eloinsight-network
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+
+volumes:
+  postgres_data:
+    name: eloinsight-postgres-data
+  redis_data:
+    name: eloinsight-redis-data

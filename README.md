@@ -91,75 +91,90 @@ EloInsight follows a microservices architecture for scalability and maintainabil
 
 For detailed architecture documentation, see [docs/architecture.md](docs/architecture.md).
 
-## 🚀 Local Setup
+## 🚀 Quick Start
 
-### Prerequisites
+### Docker (Recommended)
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/EloInsight.git
+cd EloInsight
+
+# Copy environment file
+cp .env.example .env
+
+# Start everything with one command
+make dev
+```
+
+That's it! 🎉 All services will start with hot reloading enabled.
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| API Gateway | http://localhost:4000/api/v1 |
+| Swagger Docs | http://localhost:4000/api/docs |
+| Game Sync | http://localhost:3002 |
+
+### Common Commands
+
+```bash
+make help          # Show all commands
+make dev           # Start development stack
+make down          # Stop all containers
+make logs          # View all logs
+make db-migrate    # Run database migrations
+make db-seed       # Seed sample data
+```
+
+### Manual Setup (Without Docker)
+
+<details>
+<summary>Click to expand manual setup instructions</summary>
+
+#### Prerequisites
 - **Node.js** >= 18.x
 - **Go** >= 1.21
-- **Python** >= 3.11
-- **Docker** and **Docker Compose**
 - **PostgreSQL** >= 15
 - **Redis** >= 7.0
+- **Stockfish** chess engine
 
-### Quick Start
+#### Steps
 
-1. **Clone the repository**
+1. **Start infrastructure services**
    ```bash
-   git clone https://github.com/yourusername/EloInsight.git
-   cd EloInsight
+   docker-compose -f docker-compose.dev.yml up -d postgres redis
    ```
 
-2. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
-
-3. **Start infrastructure services**
-   ```bash
-   docker-compose up -d postgres redis rabbitmq
-   ```
-
-4. **Install dependencies and start services**
+2. **Install dependencies and start services**
    
    **Frontend:**
    ```bash
-   cd frontend
-   npm install
-   npm run dev
+   cd frontend && npm install && npm run dev
    ```
    
    **API Gateway:**
    ```bash
-   cd services/api-gateway
-   npm install
-   npm run start:dev
+   cd backend/api-gateway && npm install && npm run start:dev
+   ```
+   
+   **Game Sync Service:**
+   ```bash
+   cd backend/game-sync-service && npm install && npm run start:dev
    ```
    
    **Analysis Engine:**
    ```bash
-   cd services/analysis-engine
-   go mod download
-   go run cmd/server/main.go
-   ```
-   
-   **Metadata Service:**
-   ```bash
-   cd services/metadata-service
-   pip install -r requirements.txt
-   python src/main.py
+   cd backend/analysis-service && make build && ./bin/analysis-service
    ```
 
-5. **Access the application**
-   - Frontend: http://localhost:3000
-   - API Gateway: http://localhost:4000
-   - Analysis Engine: http://localhost:5000
-   - Metadata Service: http://localhost:6000
+</details>
 
-For detailed setup instructions, see [docs/deployment.md](docs/deployment.md).
+For detailed setup instructions, see [docs/local-setup.md](docs/local-setup.md).
 
 ## 📚 Documentation
 
+- [Local Development Setup](docs/local-setup.md)
 - [Architecture Overview](docs/architecture.md)
 - [System Design](docs/system-design.md)
 - [Services Documentation](docs/services.md)
