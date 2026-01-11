@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
     Container,
     Box,
@@ -101,7 +101,7 @@ const Login = () => {
                     <Box sx={{ mt: 2, textAlign: 'center' }}>
                         <Typography variant="body2" color="text.secondary">
                             Don't have an account?{' '}
-                            <Link href="#" underline="hover">
+                            <Link component={RouterLink} to="/signup" underline="hover">
                                 Sign up
                             </Link>
                         </Typography>

@@ -1,15 +1,20 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
 import { LoginDto, RegisterDto } from './dto/auth.dto';
+import { EmailService } from './email.service';
 
-// Mock user database (replace with real database later)
+// User interface with verification fields
 interface User {
     id: string;
     email: string;
     username: string;
     password: string;
+    isVerified: boolean;
+    verificationToken: string | null;
+    verificationExpires: Date | null;
     createdAt: Date;
 }
 
@@ -21,8 +26,9 @@ export class AuthService {
     constructor(
         private jwtService: JwtService,
         private configService: ConfigService,
+        private emailService: EmailService,
     ) {
-        // Create a demo user for testing
+        // Create a demo user for testing (pre-verified)
         this.createDemoUser();
     }
 
@@ -33,6 +39,9 @@ export class AuthService {
             email: 'demo@eloinsight.dev',
             username: 'demo',
             password: hashedPassword,
+            isVerified: true, // Demo user is pre-verified
+            verificationToken: null,
+            verificationExpires: null,
             createdAt: new Date(),
         });
     }
@@ -40,14 +49,24 @@ export class AuthService {
     async register(registerDto: RegisterDto) {
         const { email, username, password } = registerDto;
 
-        // Check if user already exists
-        const existingUser = this.users.find((u) => u.email === email);
-        if (existingUser) {
-            throw new UnauthorizedException('User already exists');
+        // Check if email already exists
+        const existingEmail = this.users.find((u) => u.email === email);
+        if (existingEmail) {
+            throw new BadRequestException('Email already registered');
+        }
+
+        // Check if username already exists
+        const existingUsername = this.users.find((u) => u.username === username);
+        if (existingUsername) {
+            throw new BadRequestException('Username already taken');
         }
 
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Generate verification token
+        const verificationToken = uuidv4();
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
         // Create user
         const user: User = {
@@ -55,13 +74,86 @@ export class AuthService {
             email,
             username,
             password: hashedPassword,
+            isVerified: false,
+            verificationToken,
+            verificationExpires,
             createdAt: new Date(),
         };
 
         this.users.push(user);
 
-        // Generate tokens
-        return this.generateTokens(user);
+        // Send verification email
+        try {
+            await this.emailService.sendVerificationEmail(email, verificationToken, username);
+        } catch (error) {
+            console.error('Failed to send verification email:', error);
+            // Don't fail registration if email fails, but log it
+        }
+
+        return {
+            message: 'Registration successful. Please check your email to verify your account.',
+            user: {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                isVerified: user.isVerified,
+            },
+        };
+    }
+
+    async verifyEmail(token: string) {
+        const user = this.users.find((u) => u.verificationToken === token);
+
+        if (!user) {
+            throw new BadRequestException('Invalid verification token');
+        }
+
+        if (user.verificationExpires && user.verificationExpires < new Date()) {
+            throw new BadRequestException('Verification token has expired');
+        }
+
+        // Mark user as verified
+        user.isVerified = true;
+        user.verificationToken = null;
+        user.verificationExpires = null;
+
+        return {
+            message: 'Email verified successfully. You can now log in.',
+            verified: true,
+        };
+    }
+
+    async resendVerification(email: string) {
+        const user = this.users.find((u) => u.email === email);
+
+        if (!user) {
+            // Don't reveal if email exists
+            return {
+                message: 'If this email is registered, a verification link has been sent.',
+            };
+        }
+
+        if (user.isVerified) {
+            throw new BadRequestException('Email is already verified');
+        }
+
+        // Generate new token
+        const verificationToken = uuidv4();
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        user.verificationToken = verificationToken;
+        user.verificationExpires = verificationExpires;
+
+        // Send verification email
+        try {
+            await this.emailService.sendVerificationEmail(email, verificationToken, user.username);
+        } catch (error) {
+            console.error('Failed to send verification email:', error);
+        }
+
+        return {
+            message: 'If this email is registered, a verification link has been sent.',
+        };
     }
 
     async login(loginDto: LoginDto) {
@@ -77,6 +169,11 @@ export class AuthService {
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
             throw new UnauthorizedException('Invalid credentials');
+        }
+
+        // Check if verified
+        if (!user.isVerified) {
+            throw new UnauthorizedException('Please verify your email before logging in');
         }
 
         // Generate tokens
@@ -122,6 +219,7 @@ export class AuthService {
                 id: user.id,
                 email: user.email,
                 username: user.username,
+                isVerified: user.isVerified,
             },
             tokens: {
                 accessToken,

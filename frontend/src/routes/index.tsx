@@ -1,30 +1,49 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
-import { authService } from '../services/authService';
-
-// Layouts
 import MainLayout from '../components/layout/MainLayout';
-
-// Pages
 import Login from '../pages/Login';
+import Signup from '../pages/Signup';
+import VerifyEmail from '../pages/VerifyEmail';
 import Dashboard from '../pages/Dashboard';
 import GamesList from '../pages/GamesList';
 import AnalysisViewer from '../pages/AnalysisViewer';
+import { authService } from '../services/authService';
 
-// Protected Route Component
+// Protected route wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-    const isAuthenticated = authService.isAuthenticated();
-
-    if (!isAuthenticated) {
+    if (!authService.isAuthenticated()) {
         return <Navigate to="/login" replace />;
     }
+    return <>{children}</>;
+};
 
+// Public route wrapper (redirects to dashboard if already logged in)
+const PublicRoute = ({ children }: { children: React.ReactNode }) => {
+    if (authService.isAuthenticated()) {
+        return <Navigate to="/dashboard" replace />;
+    }
     return <>{children}</>;
 };
 
 export const router = createBrowserRouter([
     {
         path: '/login',
-        element: <Login />,
+        element: (
+            <PublicRoute>
+                <Login />
+            </PublicRoute>
+        ),
+    },
+    {
+        path: '/signup',
+        element: (
+            <PublicRoute>
+                <Signup />
+            </PublicRoute>
+        ),
+    },
+    {
+        path: '/verify-email',
+        element: <VerifyEmail />,
     },
     {
         path: '/',
@@ -51,9 +70,5 @@ export const router = createBrowserRouter([
                 element: <AnalysisViewer />,
             },
         ],
-    },
-    {
-        path: '*',
-        element: <Navigate to="/dashboard" replace />,
     },
 ]);
