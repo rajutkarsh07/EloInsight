@@ -3,13 +3,11 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, LayoutDashboard, Gamepad2, LogOut, User, X } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { cn } from '../../lib/utils';
-import { useTheme } from 'next-themes';
 
 const MainLayout = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const { theme, setTheme } = useTheme();
 
     const handleLogout = () => {
         authService.logout();
@@ -34,14 +32,7 @@ const MainLayout = () => {
                     </button>
                     <span className="font-bold text-xl tracking-tight">EloInsight</span>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                        className="p-2 rounded-full hover:bg-accent transition-colors"
-                    >
-                        <div className="w-5 h-5 rounded-full border border-foreground/20 bg-foreground/10" />
-                    </button>
-                </div>
+                {/* Theme toggle removed - Dark mode enforced */}
             </header>
 
             {/* Sidebar */}
