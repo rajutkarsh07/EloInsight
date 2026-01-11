@@ -18,6 +18,77 @@ The Game Sync Service automatically fetches games from Chess.com and Lichess usi
 - **Rate Limiting**: Respect API rate limits
 - **Error Recovery**: Retry failed requests
 
+## NestJS Implementation
+
+The Game Sync Service is implemented as a standalone NestJS microservice located at `/backend/game-sync-service`.
+
+### Service Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    GAME SYNC SERVICE                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
+│   │  SyncModule │───▶│ ChessComMod │    │ LichessMod  │     │
+│   │  (Cron)     │    │             │    │             │     │
+│   └─────────────┘    └─────────────┘    └─────────────┘     │
+│          │                  │                  │             │
+│          ▼                  ▼                  ▼             │
+│   ┌─────────────────────────────────────────────────┐       │
+│   │              Common Services                     │       │
+│   │  ┌──────────────┐    ┌──────────────┐          │       │
+│   │  │ RateLimiter  │    │ RetryService │          │       │
+│   │  │ (Bottleneck) │    │ (Exp.Backoff)│          │       │
+│   │  └──────────────┘    └──────────────┘          │       │
+│   └─────────────────────────────────────────────────┘       │
+│          │                                                   │
+│          ▼                                                   │
+│   ┌─────────────┐                                           │
+│   │ PrismaModule│                                           │
+│   │ (Database)  │                                           │
+│   └─────────────┘                                           │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Quick Start
+
+```bash
+cd backend/game-sync-service
+npm install
+cp .env.example .env
+npm run start:dev
+```
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Service health check |
+| `POST` | `/sync/user/:userId` | Sync all accounts for user |
+| `POST` | `/sync/account/:accountId` | Sync specific account |
+| `GET` | `/sync/status/:userId` | Get sync job history |
+| `POST` | `/sync/scheduled` | Trigger scheduled sync |
+
+### Cron Configuration
+
+```typescript
+// Default: Every 6 hours
+@Cron(process.env.SYNC_CRON || '0 */6 * * *')
+async scheduledSync(): Promise<void> {
+  // Sync all users with auto-sync enabled
+}
+```
+
+### Key Services
+
+- **SyncService**: Orchestrates syncing, deduplication, database storage
+- **ChessComService**: Fetches from Chess.com API (archives + monthly games)
+- **LichessService**: Fetches from Lichess API (NDJSON streaming)
+- **RateLimiterService**: Bottleneck-based rate limiting
+- **RetryService**: Exponential backoff retry logic
+
 ## Chess.com Integration
 
 ### API Overview
