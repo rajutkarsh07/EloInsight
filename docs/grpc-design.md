@@ -689,6 +689,222 @@ func loggingInterceptor(
 }
 ```
 
+## NestJS gRPC Client Implementation
+
+The API Gateway connects to backend gRPC services using NestJS microservices.
+
+### Setup
+
+#### 1. Install Dependencies
+
+```bash
+npm install @nestjs/microservices @grpc/grpc-js @grpc/proto-loader
+```
+
+#### 2. Project Structure
+
+```
+api-gateway/
+├── proto/
+│   └── analysis.proto       # Shared proto file
+├── src/
+│   └── analysis/
+│       ├── analysis.module.ts
+│       ├── analysis.controller.ts
+│       ├── analysis-grpc.service.ts   # gRPC client
+│       └── dto/
+│           └── analysis.dto.ts
+```
+
+#### 3. gRPC Client Service
+
+```typescript
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { ClientProxyFactory, Transport, ClientGrpc } from '@nestjs/microservices';
+import { ConfigService } from '@nestjs/config';
+import { Observable, firstValueFrom, timeout } from 'rxjs';
+import { join } from 'path';
+import { Metadata } from '@grpc/grpc-js';
+
+@Injectable()
+export class AnalysisGrpcService implements OnModuleInit {
+  private analysisClient: AnalysisServiceClient;
+  private grpcClient: ClientGrpc;
+
+  constructor(private configService: ConfigService) {}
+
+  async onModuleInit() {
+    const host = this.configService.get('ANALYSIS_SERVICE_HOST', 'localhost');
+    const port = this.configService.get('ANALYSIS_SERVICE_PORT', 50051);
+
+    this.grpcClient = ClientProxyFactory.create({
+      transport: Transport.GRPC,
+      options: {
+        package: 'analysis',
+        protoPath: join(__dirname, '../../proto/analysis.proto'),
+        url: `${host}:${port}`,
+        loader: {
+          keepCase: false,  // Convert to camelCase
+          longs: Number,
+          enums: Number,
+          defaults: true,
+          oneofs: true,
+        },
+      },
+    }) as ClientGrpc;
+
+    this.analysisClient = this.grpcClient.getService('AnalysisService');
+  }
+
+  // Unary call with auth propagation
+  async analyzePosition(request: AnalyzePositionRequest, userId?: string) {
+    const metadata = new Metadata();
+    if (userId) metadata.set('x-user-id', userId);
+
+    return firstValueFrom(
+      this.analysisClient.analyzePosition(request, metadata).pipe(
+        timeout(60000),
+      ),
+    );
+  }
+
+  // Server streaming
+  analyzeGameStream(request: AnalyzeGameRequest): Observable<GameAnalysisProgress> {
+    return this.analysisClient.analyzeGameStream(request);
+  }
+}
+```
+
+### Auth Propagation
+
+Pass authentication context via gRPC metadata:
+
+```typescript
+private createMetadata(userId?: string, requestId?: string): Metadata {
+  const metadata = new Metadata();
+  if (userId) {
+    metadata.set('x-user-id', userId);
+  }
+  if (requestId) {
+    metadata.set('x-request-id', requestId);
+  }
+  metadata.set('x-client', 'api-gateway');
+  return metadata;
+}
+```
+
+### Error Handling
+
+Map gRPC status codes to HTTP exceptions:
+
+```typescript
+import { status } from '@grpc/grpc-js';
+import { HttpException, HttpStatus } from '@nestjs/common';
+
+private handleGrpcError(error: any): never {
+  const grpcStatus = error.code || status.UNKNOWN;
+
+  const statusMap: Record<number, HttpStatus> = {
+    [status.INVALID_ARGUMENT]: HttpStatus.BAD_REQUEST,
+    [status.NOT_FOUND]: HttpStatus.NOT_FOUND,
+    [status.UNAVAILABLE]: HttpStatus.SERVICE_UNAVAILABLE,
+    [status.DEADLINE_EXCEEDED]: HttpStatus.GATEWAY_TIMEOUT,
+    [status.RESOURCE_EXHAUSTED]: HttpStatus.TOO_MANY_REQUESTS,
+    [status.INTERNAL]: HttpStatus.INTERNAL_SERVER_ERROR,
+  };
+
+  throw new HttpException(
+    { message: error.details || 'Service error' },
+    statusMap[grpcStatus] || HttpStatus.INTERNAL_SERVER_ERROR,
+  );
+}
+```
+
+### Streaming with SSE
+
+Expose gRPC streams as Server-Sent Events:
+
+```typescript
+@Sse()
+@Post('game/:gameId/stream')
+analyzeGameStream(
+  @Param('gameId') gameId: string,
+  @Body() dto: AnalyzeGameDto,
+): Observable<MessageEvent> {
+  return this.analysisService.analyzeGameStream({
+    gameId,
+    pgn: dto.pgn,
+  }).pipe(
+    map((progress) => ({
+      data: {
+        currentMove: progress.currentMove,
+        totalMoves: progress.totalMoves,
+        status: progress.status,
+      },
+    } as MessageEvent)),
+    catchError((err) => of({
+      data: { error: err.message },
+    } as MessageEvent)),
+  );
+}
+```
+
+### Service Configuration
+
+Environment variables in `.env`:
+
+```bash
+# gRPC Services
+ANALYSIS_SERVICE_HOST=localhost
+ANALYSIS_SERVICE_PORT=50051
+ANALYSIS_TIMEOUT_MS=60000
+```
+
+### Testing gRPC Connections
+
+```bash
+# Test with grpcurl
+grpcurl -plaintext localhost:50051 list
+grpcurl -plaintext localhost:50051 analysis.AnalysisService/HealthCheck
+
+# Test with curl through API Gateway
+curl -X GET http://localhost:4000/api/v1/analysis/health
+```
+
+### Service Communication Flow
+
+```
+┌─────────────────┐     REST/SSE      ┌─────────────────┐
+│                 │◄─────────────────►│                 │
+│    Frontend     │                   │   API Gateway   │
+│   (Next.js)     │                   │    (NestJS)     │
+│                 │                   │                 │
+└─────────────────┘                   └────────┬────────┘
+                                               │
+                                               │ gRPC
+                                               │
+                    ┌──────────────────────────┼──────────────────────────┐
+                    │                          │                          │
+                    ▼                          ▼                          ▼
+           ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+           │                 │      │                 │      │                 │
+           │ Analysis Service│      │ Game Sync       │      │ User Service    │
+           │     (Go)        │      │ Service (NestJS)│      │   (NestJS)      │
+           │                 │      │                 │      │                 │
+           └────────┬────────┘      └────────┬────────┘      └────────┬────────┘
+                    │                        │                        │
+                    │                        │                        │
+                    ▼                        ▼                        ▼
+           ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+           │   Stockfish     │      │   Chess.com     │      │   PostgreSQL    │
+           │                 │      │   Lichess APIs  │      │                 │
+           └─────────────────┘      └─────────────────┘      └─────────────────┘
+```
+
 ---
 
-**Next Steps**: See [database-design.md](database-design.md) for database schema details.
+**Related Documentation:**
+- [Stockfish Integration](stockfish-integration.md) - Analysis service details
+- [Game Sync](game-sync.md) - Game sync service
+- [API Design](api-design.md) - REST API specifications
+
