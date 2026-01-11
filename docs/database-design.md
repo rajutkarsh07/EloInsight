@@ -19,6 +19,72 @@ EloInsight uses **PostgreSQL 15+** as the primary database for its ACID complian
 - **Audit Trails**: Track changes with timestamps
 - **UUID Primary Keys**: Distributed system friendly
 
+## Prisma ORM Implementation
+
+EloInsight uses **Prisma ORM** for type-safe database access with PostgreSQL.
+
+### Location
+```
+backend/database/
+├── prisma/
+│   ├── schema.prisma    # Database schema definition
+│   ├── seed.ts          # Database seeding script
+│   └── migrations/      # Auto-generated migrations
+├── src/
+│   ├── index.ts         # Main exports
+│   └── client.ts        # Prisma client singleton
+├── package.json
+└── .env.example
+```
+
+### Quick Setup
+```bash
+cd backend/database
+npm install
+cp .env.example .env
+# Edit .env with your DATABASE_URL
+npm run db:generate
+npm run db:migrate
+npm run db:seed
+```
+
+### Available Scripts
+| Script | Description |
+|--------|-------------|
+| `db:generate` | Generate Prisma Client types |
+| `db:migrate` | Run database migrations |
+| `db:seed` | Seed with sample data |
+| `db:studio` | Open Prisma Studio GUI |
+| `db:reset` | Reset and reseed database |
+
+### Usage Example
+```typescript
+import { prisma, User, Game, Platform } from '@eloinsight/database';
+
+// Create user with relations
+const user = await prisma.user.create({
+  data: {
+    email: 'player@chess.com',
+    username: 'chessmaster',
+    passwordHash: 'hashed',
+    profile: { create: { firstName: 'Magnus', country: 'NO' } },
+    settings: { create: { theme: 'DARK', analysisDepth: 25 } },
+  },
+  include: { profile: true, settings: true },
+});
+
+// Query games with filters
+const games = await prisma.game.findMany({
+  where: {
+    userId: user.id,
+    platform: Platform.CHESS_COM,
+    playedAt: { gte: new Date('2026-01-01') },
+  },
+  orderBy: { playedAt: 'desc' },
+  take: 10,
+});
+```
+
 ## Schema Design
 
 ### Users Domain

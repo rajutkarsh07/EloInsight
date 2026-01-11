@@ -1,0 +1,598 @@
+// This is your Prisma schema file for EloInsight
+// Learn more at: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER DOMAIN
+// ============================================
+
+/// Users table - Core user accounts
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique @db.VarChar(255)
+  username      String    @unique @db.VarChar(50)
+  passwordHash  String    @map("password_hash") @db.VarChar(255)
+  emailVerified Boolean   @default(false) @map("email_verified")
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  profile           UserProfile?
+  settings          UserSettings?
+  linkedAccounts    LinkedAccount[]
+  games             Game[]
+  userStatistics    UserStatistics[]
+  openingStatistics OpeningStatistics[]
+  syncJobs          SyncJob[]
+  analysisJobs      AnalysisJob[]
+
+  @@index([email], map: "idx_users_email")
+  @@index([username], map: "idx_users_username")
+  @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
+  @@map("users")
+}
+
+/// User profiles - Extended user information
+model UserProfile {
+  userId      String    @id @map("user_id") @db.Uuid
+  firstName   String?   @map("first_name") @db.VarChar(100)
+  lastName    String?   @map("last_name") @db.VarChar(100)
+  avatarUrl   String?   @map("avatar_url") @db.Text
+  bio         String?   @db.Text
+  country     String?   @db.VarChar(2) // ISO 3166-1 alpha-2
+  timezone    String?   @db.VarChar(50)
+  dateOfBirth DateTime? @map("date_of_birth") @db.Date
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([country], map: "idx_user_profiles_country")
+  @@map("user_profiles")
+}
+
+/// Linked chess platform accounts
+model LinkedAccount {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  platform         Platform
+  platformUsername String    @map("platform_username") @db.VarChar(100)
+  platformUserId   String?   @map("platform_user_id") @db.VarChar(100)
+  accessToken      String?   @map("access_token") @db.Text
+  refreshToken     String?   @map("refresh_token") @db.Text
+  tokenExpiresAt   DateTime? @map("token_expires_at") @db.Timestamptz
+  isActive         Boolean   @default(true) @map("is_active")
+  linkedAt         DateTime  @default(now()) @map("linked_at") @db.Timestamptz
+  lastSyncAt       DateTime? @map("last_sync_at") @db.Timestamptz
+  syncEnabled      Boolean   @default(true) @map("sync_enabled")
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  syncJobs SyncJob[]
+
+  @@unique([userId, platform])
+  @@index([userId], map: "idx_linked_accounts_user_id")
+  @@index([platform, platformUsername], map: "idx_linked_accounts_platform")
+  @@map("linked_accounts")
+}
+
+/// User application settings
+model UserSettings {
+  userId             String   @id @map("user_id") @db.Uuid
+  theme              Theme    @default(LIGHT)
+  boardStyle         String   @default("classic") @map("board_style") @db.VarChar(50)
+  pieceSet           String   @default("standard") @map("piece_set") @db.VarChar(50)
+  autoSync           Boolean  @default(true) @map("auto_sync")
+  syncFrequency      String   @default("daily") @map("sync_frequency") @db.VarChar(20)
+  emailNotifications Boolean  @default(true) @map("email_notifications")
+  analysisDepth      Int      @default(20) @map("analysis_depth")
+  showCoordinates    Boolean  @default(true) @map("show_coordinates")
+  highlightLastMove  Boolean  @default(true) @map("highlight_last_move")
+  autoPromoteQueen   Boolean  @default(true) @map("auto_promote_queen")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+// ============================================
+// GAMES DOMAIN
+// ============================================
+
+/// Chess games - Core game records
+model Game {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  platform   Platform
+  externalId String?  @map("external_id") @db.VarChar(100)
+  pgn        String   @db.Text
+  fenFinal   String?  @map("fen_final") @db.Text
+
+  // Players
+  whitePlayer String       @map("white_player") @db.VarChar(100)
+  blackPlayer String       @map("black_player") @db.VarChar(100)
+  whiteRating Int?         @map("white_rating")
+  blackRating Int?         @map("black_rating")
+  userColor   PlayerColor? @map("user_color")
+
+  // Game info
+  result      GameResult
+  termination String?    @db.VarChar(50)
+  timeControl String?    @map("time_control") @db.VarChar(50)
+  timeClass   TimeClass? @map("time_class")
+
+  // Opening
+  openingEco       String? @map("opening_eco") @db.VarChar(3)
+  openingName      String? @map("opening_name") @db.VarChar(200)
+  openingVariation String? @map("opening_variation") @db.VarChar(200)
+
+  // Metadata
+  eventName String?  @map("event_name") @db.VarChar(200)
+  site      String?  @db.VarChar(200)
+  round     String?  @db.VarChar(20)
+  playedAt  DateTime @map("played_at") @db.Timestamptz
+
+  // Analysis status
+  analysisStatus      AnalysisStatus @default(PENDING) @map("analysis_status")
+  analysisRequestedAt DateTime?      @map("analysis_requested_at") @db.Timestamptz
+
+  // Timestamps
+  syncedAt  DateTime @default(now()) @map("synced_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analysis     Analysis?
+  analysisJobs AnalysisJob[]
+  moves        Move[]
+
+  @@unique([platform, externalId])
+  @@index([userId], map: "idx_games_user_id")
+  @@index([platform, externalId], map: "idx_games_platform_external")
+  @@index([playedAt(sort: Desc)], map: "idx_games_played_at")
+  @@index([userId, playedAt(sort: Desc)], map: "idx_games_user_played")
+  @@index([analysisStatus], map: "idx_games_analysis_status")
+  @@index([openingEco], map: "idx_games_opening")
+  @@index([timeClass], map: "idx_games_time_class")
+  @@map("games")
+}
+
+/// Individual moves in a game
+model Move {
+  id         String      @id @default(uuid()) @db.Uuid
+  gameId     String      @map("game_id") @db.Uuid
+  moveNumber Int         @map("move_number")
+  halfMove   Int         @map("half_move") // Ply number (0-indexed)
+  color      PlayerColor
+  san        String      @db.VarChar(10) // Standard Algebraic Notation (e.g., "Nf3")
+  uci        String      @db.VarChar(10) // UCI format (e.g., "g1f3")
+  fenBefore  String      @map("fen_before") @db.Text
+  fenAfter   String      @map("fen_after") @db.Text
+  timeSpent  Int?        @map("time_spent") // Time in milliseconds
+  clockAfter String?     @map("clock_after") @db.VarChar(20) // Remaining clock time
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  game       Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  evaluation MoveEvaluation?
+
+  @@unique([gameId, halfMove])
+  @@index([gameId], map: "idx_moves_game_id")
+  @@index([gameId, moveNumber], map: "idx_moves_game_move")
+  @@map("moves")
+}
+
+// ============================================
+// ANALYSIS DOMAIN
+// ============================================
+
+/// Game analysis results - Summary metrics
+model Analysis {
+  id     String @id @default(uuid()) @db.Uuid
+  gameId String @unique @map("game_id") @db.Uuid
+
+  // Accuracy metrics (0-100)
+  accuracyWhite Decimal? @map("accuracy_white") @db.Decimal(5, 2)
+  accuracyBlack Decimal? @map("accuracy_black") @db.Decimal(5, 2)
+
+  // ACPL (Average Centipawn Loss)
+  acplWhite Decimal? @map("acpl_white") @db.Decimal(8, 2)
+  acplBlack Decimal? @map("acpl_black") @db.Decimal(8, 2)
+
+  // Move classifications
+  blundersWhite       Int @default(0) @map("blunders_white")
+  blundersBlack       Int @default(0) @map("blunders_black")
+  mistakesWhite       Int @default(0) @map("mistakes_white")
+  mistakesBlack       Int @default(0) @map("mistakes_black")
+  inaccuraciesWhite   Int @default(0) @map("inaccuracies_white")
+  inaccuraciesBlack   Int @default(0) @map("inaccuracies_black")
+  brilliantMovesWhite Int @default(0) @map("brilliant_moves_white")
+  brilliantMovesBlack Int @default(0) @map("brilliant_moves_black")
+  goodMovesWhite      Int @default(0) @map("good_moves_white")
+  goodMovesBlack      Int @default(0) @map("good_moves_black")
+  bookMovesWhite      Int @default(0) @map("book_moves_white")
+  bookMovesBlack      Int @default(0) @map("book_moves_black")
+
+  // Performance ratings
+  performanceRatingWhite Int? @map("performance_rating_white")
+  performanceRatingBlack Int? @map("performance_rating_black")
+
+  // Analysis metadata
+  analysisDepth  Int     @map("analysis_depth")
+  engineVersion  String? @map("engine_version") @db.VarChar(50)
+  totalPositions Int?    @map("total_positions")
+
+  // Timestamps
+  analyzedAt DateTime @default(now()) @map("analyzed_at") @db.Timestamptz
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  game             Game               @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  positionAnalyses PositionAnalysis[]
+
+  @@index([gameId], map: "idx_analysis_game_id")
+  @@index([analyzedAt(sort: Desc)], map: "idx_analysis_analyzed_at")
+  @@map("analysis")
+}
+
+/// Individual position analysis (per-move evaluations)
+model PositionAnalysis {
+  id         String @id @default(uuid()) @db.Uuid
+  analysisId String @map("analysis_id") @db.Uuid
+  moveNumber Int    @map("move_number")
+  halfMove   Int    @map("half_move")
+  fen        String @db.Text
+
+  // Evaluation
+  evaluation Int? // Centipawns (NULL for mate)
+  mateIn     Int? @map("mate_in") // Positive: white mates, Negative: black mates
+
+  // Moves
+  bestMove   String @map("best_move") @db.VarChar(10)
+  playedMove String @map("played_move") @db.VarChar(10)
+
+  // Classification flags
+  isBlunder      Boolean            @default(false) @map("is_blunder")
+  isMistake      Boolean            @default(false) @map("is_mistake")
+  isInaccuracy   Boolean            @default(false) @map("is_inaccuracy")
+  isBrilliant    Boolean            @default(false) @map("is_brilliant")
+  isGood         Boolean            @default(false) @map("is_good")
+  isBook         Boolean            @default(false) @map("is_book")
+  isBest         Boolean            @default(false) @map("is_best")
+  classification MoveClassification
+
+  // Centipawn loss
+  centipawnLoss Int? @map("centipawn_loss")
+
+  // Engine data
+  pv     Json? // Principal Variation (array of moves)
+  depth  Int?
+  nodes  BigInt?
+  timeMs Int?    @map("time_ms")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@index([analysisId], map: "idx_position_analysis_id")
+  @@index([analysisId, moveNumber], map: "idx_position_move")
+  @@index([classification], map: "idx_position_classification")
+  @@map("position_analysis")
+}
+
+/// Move-level evaluation (linked to Move)
+model MoveEvaluation {
+  id     String @id @default(uuid()) @db.Uuid
+  moveId String @unique @map("move_id") @db.Uuid
+
+  // Evaluation before move
+  evalBefore   Int? @map("eval_before") // Centipawns
+  mateInBefore Int? @map("mate_in_before")
+
+  // Evaluation after move
+  evalAfter   Int? @map("eval_after") // Centipawns
+  mateInAfter Int? @map("mate_in_after")
+
+  // Best move analysis
+  bestMove   String? @map("best_move") @db.VarChar(10)
+  isBestMove Boolean @default(false) @map("is_best_move")
+
+  // Classification
+  classification MoveClassification @default(NORMAL)
+  centipawnLoss  Int?               @map("centipawn_loss")
+
+  // Engine details
+  depth Int?
+  pv    Json? // Principal Variation
+  nodes BigInt?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  move Move @relation(fields: [moveId], references: [id], onDelete: Cascade)
+
+  @@index([moveId], map: "idx_move_evaluation_move_id")
+  @@index([classification], map: "idx_move_evaluation_classification")
+  @@map("move_evaluations")
+}
+
+// ============================================
+// STATISTICS DOMAIN
+// ============================================
+
+/// User statistics aggregates
+model UserStatistics {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  // Time period
+  periodType  PeriodType @map("period_type")
+  periodStart DateTime   @map("period_start") @db.Date
+  periodEnd   DateTime   @map("period_end") @db.Date
+
+  // Game counts
+  totalGames Int @default(0) @map("total_games")
+  wins       Int @default(0)
+  losses     Int @default(0)
+  draws      Int @default(0)
+
+  // Win rates
+  winRate      Decimal? @map("win_rate") @db.Decimal(5, 2)
+  winRateWhite Decimal? @map("win_rate_white") @db.Decimal(5, 2)
+  winRateBlack Decimal? @map("win_rate_black") @db.Decimal(5, 2)
+
+  // Accuracy
+  averageAccuracy      Decimal? @map("average_accuracy") @db.Decimal(5, 2)
+  averageAccuracyWhite Decimal? @map("average_accuracy_white") @db.Decimal(5, 2)
+  averageAccuracyBlack Decimal? @map("average_accuracy_black") @db.Decimal(5, 2)
+
+  // ACPL
+  averageAcpl      Decimal? @map("average_acpl") @db.Decimal(8, 2)
+  averageAcplWhite Decimal? @map("average_acpl_white") @db.Decimal(8, 2)
+  averageAcplBlack Decimal? @map("average_acpl_black") @db.Decimal(8, 2)
+
+  // Move classifications totals
+  totalBlunders     Int @default(0) @map("total_blunders")
+  totalMistakes     Int @default(0) @map("total_mistakes")
+  totalInaccuracies Int @default(0) @map("total_inaccuracies")
+
+  // Time controls breakdown
+  gamesByTimeControl Json? @map("games_by_time_control")
+
+  // Openings
+  favoriteOpening      String? @map("favorite_opening") @db.VarChar(200)
+  openingsDistribution Json?   @map("openings_distribution")
+
+  // Ratings
+  peakRating    Int? @map("peak_rating")
+  currentRating Int? @map("current_rating")
+  ratingChange  Int? @map("rating_change")
+
+  // Timestamps
+  calculatedAt DateTime @default(now()) @map("calculated_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, periodType, periodStart])
+  @@index([userId, periodType, periodStart(sort: Desc)], map: "idx_user_stats_user_period")
+  @@map("user_statistics")
+}
+
+/// Opening statistics per user
+model OpeningStatistics {
+  id          String @id @default(uuid()) @db.Uuid
+  userId      String @map("user_id") @db.Uuid
+  openingEco  String @map("opening_eco") @db.VarChar(3)
+  openingName String @map("opening_name") @db.VarChar(200)
+
+  // As White
+  gamesAsWhite         Int      @default(0) @map("games_as_white")
+  winsAsWhite          Int      @default(0) @map("wins_as_white")
+  lossesAsWhite        Int      @default(0) @map("losses_as_white")
+  drawsAsWhite         Int      @default(0) @map("draws_as_white")
+  winRateWhite         Decimal? @map("win_rate_white") @db.Decimal(5, 2)
+  averageAccuracyWhite Decimal? @map("average_accuracy_white") @db.Decimal(5, 2)
+
+  // As Black
+  gamesAsBlack         Int      @default(0) @map("games_as_black")
+  winsAsBlack          Int      @default(0) @map("wins_as_black")
+  lossesAsBlack        Int      @default(0) @map("losses_as_black")
+  drawsAsBlack         Int      @default(0) @map("draws_as_black")
+  winRateBlack         Decimal? @map("win_rate_black") @db.Decimal(5, 2)
+  averageAccuracyBlack Decimal? @map("average_accuracy_black") @db.Decimal(5, 2)
+
+  // Overall
+  totalGames      Int      @default(0) @map("total_games")
+  overallWinRate  Decimal? @map("overall_win_rate") @db.Decimal(5, 2)
+  averageAccuracy Decimal? @map("average_accuracy") @db.Decimal(5, 2)
+
+  // Variations
+  commonVariations Json? @map("common_variations")
+
+  // Timestamps
+  lastPlayedAt DateTime? @map("last_played_at") @db.Timestamptz
+  calculatedAt DateTime  @default(now()) @map("calculated_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, openingEco])
+  @@index([userId], map: "idx_opening_stats_user")
+  @@index([openingEco], map: "idx_opening_stats_eco")
+  @@index([userId, totalGames(sort: Desc)], map: "idx_opening_stats_games")
+  @@map("opening_statistics")
+}
+
+// ============================================
+// JOBS DOMAIN
+// ============================================
+
+/// Game sync jobs
+model SyncJob {
+  id              String @id @default(uuid()) @db.Uuid
+  userId          String @map("user_id") @db.Uuid
+  linkedAccountId String @map("linked_account_id") @db.Uuid
+
+  status JobStatus @default(QUEUED)
+
+  // Progress
+  totalGames     Int? @map("total_games")
+  processedGames Int  @default(0) @map("processed_games")
+  newGames       Int  @default(0) @map("new_games")
+  skippedGames   Int  @default(0) @map("skipped_games")
+
+  // Error handling
+  errorMessage String? @map("error_message") @db.Text
+  retryCount   Int     @default(0) @map("retry_count")
+
+  // Timestamps
+  startedAt   DateTime? @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linkedAccount LinkedAccount @relation(fields: [linkedAccountId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_sync_jobs_user")
+  @@index([status], map: "idx_sync_jobs_status")
+  @@index([createdAt(sort: Desc)], map: "idx_sync_jobs_created")
+  @@map("sync_jobs")
+}
+
+/// Analysis jobs
+model AnalysisJob {
+  id     String @id @default(uuid()) @db.Uuid
+  gameId String @map("game_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  status JobStatus @default(QUEUED)
+
+  // Configuration
+  depth    Int @default(20)
+  priority Int @default(5) // 1-10
+
+  // Progress
+  totalPositions    Int? @map("total_positions")
+  analyzedPositions Int  @default(0) @map("analyzed_positions")
+  currentMove       Int? @map("current_move")
+
+  // Error handling
+  errorMessage String? @map("error_message") @db.Text
+  retryCount   Int     @default(0) @map("retry_count")
+
+  // Timestamps
+  startedAt   DateTime? @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([gameId], map: "idx_analysis_jobs_game")
+  @@index([userId], map: "idx_analysis_jobs_user")
+  @@index([status, priority(sort: Desc)], map: "idx_analysis_jobs_status")
+  @@index([createdAt(sort: Desc)], map: "idx_analysis_jobs_created")
+  @@map("analysis_jobs")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum Platform {
+  CHESS_COM @map("chess.com")
+  LICHESS   @map("lichess")
+  MANUAL    @map("manual")
+}
+
+enum Theme {
+  LIGHT @map("light")
+  DARK  @map("dark")
+  AUTO  @map("auto")
+}
+
+enum PlayerColor {
+  WHITE @map("white")
+  BLACK @map("black")
+}
+
+enum GameResult {
+  WHITE_WIN @map("1-0")
+  BLACK_WIN @map("0-1")
+  DRAW      @map("1/2-1/2")
+  ONGOING   @map("*")
+}
+
+enum TimeClass {
+  ULTRABULLET @map("ultrabullet")
+  BULLET      @map("bullet")
+  BLITZ       @map("blitz")
+  RAPID       @map("rapid")
+  CLASSICAL   @map("classical")
+  DAILY       @map("daily")
+}
+
+enum AnalysisStatus {
+  PENDING    @map("pending")
+  QUEUED     @map("queued")
+  PROCESSING @map("processing")
+  COMPLETED  @map("completed")
+  FAILED     @map("failed")
+}
+
+enum MoveClassification {
+  BRILLIANT  @map("brilliant")
+  GREAT      @map("great")
+  BEST       @map("best")
+  EXCELLENT  @map("excellent")
+  GOOD       @map("good")
+  BOOK       @map("book")
+  NORMAL     @map("normal")
+  INACCURACY @map("inaccuracy")
+  MISTAKE    @map("mistake")
+  BLUNDER    @map("blunder")
+  MISSED_WIN @map("missed_win")
+}
+
+enum PeriodType {
+  DAILY    @map("daily")
+  WEEKLY   @map("weekly")
+  MONTHLY  @map("monthly")
+  YEARLY   @map("yearly")
+  ALL_TIME @map("all_time")
+}
+
+enum JobStatus {
+  QUEUED    @map("queued")
+  RUNNING   @map("running")
+  COMPLETED @map("completed")
+  FAILED    @map("failed")
+  CANCELLED @map("cancelled")
+}
