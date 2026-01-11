@@ -1,23 +1,130 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Cabinet Grotesk';
+  src: url('/cabinet-grotesk/CabinetGrotesk-Variable.woff2') format('woff2');
+  font-display: swap;
+  font-weight: 100 900;
 }
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  :root {
+    /* Light Mode */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3%;
+    --primary: 24 100% 42%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 3%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 3%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 85%;
+    --input: 0 0% 85%;
+    --ring: 24 100% 42%;
+    --radius: 0.75rem;
+
+    --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    --shadow-elevated: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
+
+  .dark {
+    /* Dark Mode */
+    --background: 0 0% 4%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 24 100% 55%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14%;
+    --input: 0 0% 14%;
+    --ring: 24 100% 55%;
+  }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 
-#root {
-  min-height: 100vh;
+@layer utilities {
+  .bg-grid {
+    background-size: 40px 40px;
+    background-image: linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px);
+  }
+
+  .gradient-overlay {
+    background: radial-gradient(circle at center, transparent 0%, hsl(var(--background)) 100%);
+  }
+
+  .link-hover {
+    @apply relative after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-full after:origin-bottom-right after:scale-x-0 after:bg-primary after:transition-transform after:duration-300 hover:after:origin-bottom-left hover:after:scale-x-100;
+  }
+
+  .card-hover {
+    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-lg;
+  }
+
+  .btn-glow {
+    @apply relative overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/20 after:to-transparent after:-translate-x-full hover:after:translate-x-full after:transition-transform after:duration-500;
+  }
+
+  .glass {
+    @apply bg-background/50 backdrop-blur-md border border-white/10;
+  }
+
+  /* Stagger animation helpers */
+  .stagger-children>* {
+    opacity: 0;
+    animation: fade-in-up 0.5s ease-out forwards;
+  }
+
+  .stagger-children>*:nth-child(1) {
+    animation-delay: 0.1s;
+  }
+
+  .stagger-children>*:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .stagger-children>*:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  .stagger-children>*:nth-child(4) {
+    animation-delay: 0.4s;
+  }
+
+  .stagger-children>*:nth-child(5) {
+    animation-delay: 0.5s;
+  }
+
+  .stagger-children>*:nth-child(6) {
+    animation-delay: 0.6s;
+  }
 }

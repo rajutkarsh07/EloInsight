@@ -1,15 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import {
-    Container,
-    Box,
-    Paper,
-    Typography,
-    CircularProgress,
-    Button,
-    Alert,
-} from '@mui/material';
-import { CheckCircle, Error as ErrorIcon } from '@mui/icons-material';
+import { CheckCircle, AlertTriangle, RotateCw } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 
 const VerifyEmail = () => {
@@ -48,76 +39,55 @@ const VerifyEmail = () => {
     }, [searchParams]);
 
     return (
-        <Container maxWidth="sm">
-            <Box
-                sx={{
-                    minHeight: '100vh',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                }}
-            >
-                <Paper elevation={3} sx={{ p: 4, width: '100%', textAlign: 'center' }}>
-                    {status === 'loading' && (
-                        <>
-                            <CircularProgress size={64} sx={{ mb: 3 }} />
-                            <Typography variant="h5" gutterBottom>
-                                Verifying Your Email
-                            </Typography>
-                            <Typography variant="body1" color="text.secondary">
-                                Please wait...
-                            </Typography>
-                        </>
-                    )}
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-card border rounded-2xl shadow-elevated p-8 text-center animate-fade-in-up">
+                {status === 'loading' && (
+                    <div className="flex flex-col items-center">
+                        <RotateCw className="h-16 w-16 text-primary animate-spin mb-4" />
+                        <h2 className="text-2xl font-bold mb-2">Verifying Your Email</h2>
+                        <p className="text-muted-foreground">Please wait...</p>
+                    </div>
+                )}
 
-                    {status === 'success' && (
-                        <>
-                            <CheckCircle sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
-                            <Typography variant="h5" gutterBottom>
-                                Email Verified!
-                            </Typography>
-                            <Typography variant="body1" color="text.secondary" paragraph>
-                                {message}
-                            </Typography>
-                            <Button
-                                variant="contained"
-                                size="large"
+                {status === 'success' && (
+                    <div className="flex flex-col items-center">
+                        <CheckCircle className="h-16 w-16 text-green-500 mb-4" />
+                        <h2 className="text-2xl font-bold mb-2">Email Verified!</h2>
+                        <p className="text-muted-foreground mb-6">{message}</p>
+                        <button
+                            onClick={() => navigate('/login')}
+                            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-2 rounded-md font-medium transition-colors btn-glow"
+                        >
+                            Go to Login
+                        </button>
+                    </div>
+                )}
+
+                {status === 'error' && (
+                    <div className="flex flex-col items-center">
+                        <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
+                        <h2 className="text-2xl font-bold mb-2">Verification Failed</h2>
+                        <div className="bg-destructive/10 border border-destructive/20 text-destructive p-3 rounded-lg w-full mb-6 text-sm">
+                            {message}
+                        </div>
+                        <div className="flex gap-4 w-full">
+                            <button
                                 onClick={() => navigate('/login')}
-                                sx={{ mt: 2 }}
+                                className="flex-1 border border-input bg-background hover:bg-accent text-foreground py-2 rounded-md font-medium transition-colors"
                             >
                                 Go to Login
-                            </Button>
-                        </>
-                    )}
-
-                    {status === 'error' && (
-                        <>
-                            <ErrorIcon sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
-                            <Typography variant="h5" gutterBottom>
-                                Verification Failed
-                            </Typography>
-                            <Alert severity="error" sx={{ mb: 3, textAlign: 'left' }}>
-                                {message}
-                            </Alert>
-                            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-                                <Button
-                                    variant="outlined"
-                                    onClick={() => navigate('/login')}
-                                >
-                                    Go to Login
-                                </Button>
-                                <Button
-                                    variant="contained"
-                                    onClick={() => navigate('/signup')}
-                                >
-                                    Sign Up Again
-                                </Button>
-                            </Box>
-                        </>
-                    )}
-                </Paper>
-            </Box>
-        </Container>
+                            </button>
+                            <button
+                                onClick={() => navigate('/signup')}
+                                className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 py-2 rounded-md font-medium transition-colors"
+                            >
+                                Sign Up Again
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
     );
 };
 

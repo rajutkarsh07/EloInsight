@@ -42,8 +42,13 @@ class ApiClient {
                             const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
                                 refreshToken,
                             });
-                            const { accessToken } = response.data;
+                            const { tokens } = response.data;
+                            const { accessToken, refreshToken: newRefreshToken } = tokens;
+
                             localStorage.setItem('accessToken', accessToken);
+                            if (newRefreshToken) {
+                                localStorage.setItem('refreshToken', newRefreshToken);
+                            }
 
                             // Retry original request
                             if (error.config) {

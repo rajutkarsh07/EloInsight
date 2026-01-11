@@ -1,49 +1,15 @@
 import { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
-import {
-    Box,
-    AppBar,
-    Toolbar,
-    Typography,
-    IconButton,
-    Drawer,
-    List,
-    ListItem,
-    ListItemButton,
-    ListItemIcon,
-    ListItemText,
-    Divider,
-    Avatar,
-    Menu,
-    MenuItem,
-} from '@mui/material';
-import {
-    Menu as MenuIcon,
-    Dashboard as DashboardIcon,
-    SportsEsports as GamesIcon,
-    Logout as LogoutIcon,
-    AccountCircle,
-} from '@mui/icons-material';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Menu, LayoutDashboard, Gamepad2, LogOut, User, X } from 'lucide-react';
 import { authService } from '../../services/authService';
-
-const drawerWidth = 240;
+import { cn } from '../../lib/utils';
+import { useTheme } from 'next-themes';
 
 const MainLayout = () => {
     const navigate = useNavigate();
-    const [mobileOpen, setMobileOpen] = useState(false);
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-
-    const handleDrawerToggle = () => {
-        setMobileOpen(!mobileOpen);
-    };
-
-    const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-        setAnchorEl(event.currentTarget);
-    };
-
-    const handleMenuClose = () => {
-        setAnchorEl(null);
-    };
+    const location = useLocation();
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const { theme, setTheme } = useTheme();
 
     const handleLogout = () => {
         authService.logout();
@@ -51,121 +17,114 @@ const MainLayout = () => {
     };
 
     const menuItems = [
-        { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-        { text: 'Games', icon: <GamesIcon />, path: '/games' },
+        { text: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard' },
+        { text: 'Games', icon: <Gamepad2 size={20} />, path: '/games' },
     ];
 
-    const drawer = (
-        <Box>
-            <Toolbar>
-                <Typography variant="h6" noWrap component="div">
-                    ♟️ EloInsight
-                </Typography>
-            </Toolbar>
-            <Divider />
-            <List>
-                {menuItems.map((item) => (
-                    <ListItem key={item.text} disablePadding>
-                        <ListItemButton onClick={() => navigate(item.path)}>
-                            <ListItemIcon>{item.icon}</ListItemIcon>
-                            <ListItemText primary={item.text} />
-                        </ListItemButton>
-                    </ListItem>
-                ))}
-            </List>
-        </Box>
-    );
-
     return (
-        <Box sx={{ display: 'flex' }}>
-            <AppBar
-                position="fixed"
-                sx={{
-                    width: { sm: `calc(100% - ${drawerWidth}px)` },
-                    ml: { sm: `${drawerWidth}px` },
-                }}
-            >
-                <Toolbar>
-                    <IconButton
-                        color="inherit"
-                        aria-label="open drawer"
-                        edge="start"
-                        onClick={handleDrawerToggle}
-                        sx={{ mr: 2, display: { sm: 'none' } }}
+        <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary selection:text-primary-foreground">
+            {/* Mobile Header */}
+            <header className="fixed top-0 left-0 right-0 h-16 border-b bg-background/80 backdrop-blur-md z-40 lg:hidden px-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setSidebarOpen(true)}
+                        className="p-2 hover:bg-accent rounded-md transition-colors"
                     >
-                        <MenuIcon />
-                    </IconButton>
-                    <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-                        Chess Analysis Platform
-                    </Typography>
-                    <IconButton color="inherit" onClick={handleMenuOpen}>
-                        <Avatar sx={{ width: 32, height: 32 }}>
-                            <AccountCircle />
-                        </Avatar>
-                    </IconButton>
-                    <Menu
-                        anchorEl={anchorEl}
-                        open={Boolean(anchorEl)}
-                        onClose={handleMenuClose}
+                        <Menu size={24} />
+                    </button>
+                    <span className="font-bold text-xl tracking-tight">EloInsight</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                        className="p-2 rounded-full hover:bg-accent transition-colors"
                     >
-                        <MenuItem onClick={handleLogout}>
-                            <ListItemIcon>
-                                <LogoutIcon fontSize="small" />
-                            </ListItemIcon>
-                            Logout
-                        </MenuItem>
-                    </Menu>
-                </Toolbar>
-            </AppBar>
+                        <div className="w-5 h-5 rounded-full border border-foreground/20 bg-foreground/10" />
+                    </button>
+                </div>
+            </header>
 
-            <Box
-                component="nav"
-                sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+            {/* Sidebar */}
+            <aside
+                className={cn(
+                    "fixed top-0 left-0 bottom-0 z-50 w-64 bg-card border-r transition-transform duration-300 lg:translate-x-0",
+                    sidebarOpen ? "translate-x-0" : "-translate-x-full"
+                )}
             >
-                <Drawer
-                    variant="temporary"
-                    open={mobileOpen}
-                    onClose={handleDrawerToggle}
-                    ModalProps={{
-                        keepMounted: true,
-                    }}
-                    sx={{
-                        display: { xs: 'block', sm: 'none' },
-                        '& .MuiDrawer-paper': {
-                            boxSizing: 'border-box',
-                            width: drawerWidth,
-                        },
-                    }}
-                >
-                    {drawer}
-                </Drawer>
-                <Drawer
-                    variant="permanent"
-                    sx={{
-                        display: { xs: 'none', sm: 'block' },
-                        '& .MuiDrawer-paper': {
-                            boxSizing: 'border-box',
-                            width: drawerWidth,
-                        },
-                    }}
-                    open
-                >
-                    {drawer}
-                </Drawer>
-            </Box>
+                <div className="h-full flex flex-col">
+                    <div className="h-16 flex items-center justify-between px-6 border-b">
+                        <div className="flex items-center gap-2 text-primary font-extrabold text-2xl tracking-tighter">
+                            <span>♟️</span>
+                            <span>EloInsight</span>
+                        </div>
+                        <button
+                            onClick={() => setSidebarOpen(false)}
+                            className="lg:hidden p-2 hover:bg-accent rounded-md"
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
 
-            <Box
-                component="main"
-                sx={{
-                    flexGrow: 1,
-                    p: 3,
-                    width: { sm: `calc(100% - ${drawerWidth}px)` },
-                    mt: 8,
-                }}
-            >
-                <Outlet />
-            </Box>
-        </Box>
+                    <nav className="flex-1 p-4 space-y-1">
+                        {menuItems.map((item) => {
+                            const isActive = location.pathname === item.path;
+                            return (
+                                <button
+                                    key={item.path}
+                                    onClick={() => {
+                                        navigate(item.path);
+                                        setSidebarOpen(false);
+                                    }}
+                                    className={cn(
+                                        "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200",
+                                        isActive
+                                            ? "bg-primary text-primary-foreground shadow-md"
+                                            : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                    )}
+                                >
+                                    {item.icon}
+                                    {item.text}
+                                </button>
+                            );
+                        })}
+                    </nav>
+
+                    <div className="p-4 border-t space-y-2">
+                        <div className="flex items-center gap-3 px-4 py-3">
+                            <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+                                <User size={16} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">User</p>
+                                <p className="text-xs text-muted-foreground truncate">user@example.com</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleLogout}
+                            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                        >
+                            <LogOut size={18} />
+                            Log Out
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            {/* Overlay */}
+            {sidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden"
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
+
+            {/* Main Content */}
+            <main className="lg:pl-64 pt-16 lg:pt-0 min-h-screen transition-all duration-300">
+                <div className="container mx-auto p-4 lg:p-8 max-w-7xl animate-fade-in-up">
+                    <Outlet />
+                </div>
+            </main>
+        </div>
     );
 };
 

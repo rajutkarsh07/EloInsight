@@ -1,22 +1,12 @@
 import { useState, useEffect } from 'react';
 import {
-    Container,
-    Grid,
-    Paper,
-    Typography,
-    Box,
-    Card,
-    CardContent,
-    LinearProgress,
-    Skeleton,
-} from '@mui/material';
-import {
     TrendingUp,
-    SportsEsports,
-    Assessment,
-    EmojiEvents,
-} from '@mui/icons-material';
+    Gamepad2,
+    Activity,
+    Trophy,
+} from 'lucide-react';
 import { apiClient } from '../services/apiClient';
+import { cn } from '../lib/utils';
 
 interface UserStats {
     userId: string;
@@ -51,134 +41,106 @@ const Dashboard = () => {
         title,
         value,
         icon,
-        color,
+        colorClass,
         loading: isLoading,
     }: {
         title: string;
         value: string | number;
         icon: React.ReactNode;
-        color: string;
+        colorClass: string;
         loading?: boolean;
     }) => (
-        <Card>
-            <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <Box
-                        sx={{
-                            bgcolor: `${color}.light`,
-                            color: `${color}.dark`,
-                            p: 1,
-                            borderRadius: 1,
-                            mr: 2,
-                        }}
-                    >
-                        {icon}
-                    </Box>
-                    <Typography variant="h6" component="div">
-                        {title}
-                    </Typography>
-                </Box>
-                {isLoading ? (
-                    <Skeleton variant="text" width={80} height={40} />
-                ) : (
-                    <Typography variant="h4" component="div" sx={{ mb: 1 }}>
-                        {value}
-                    </Typography>
-                )}
-            </CardContent>
-        </Card>
+        <div className="bg-card text-card-foreground rounded-xl border shadow-card p-6 card-hover">
+            <div className="flex items-center gap-4 mb-4">
+                <div className={cn("p-2 rounded-lg", colorClass)}>
+                    {icon}
+                </div>
+                <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                    {title}
+                </h3>
+            </div>
+            {isLoading ? (
+                <div className="h-8 w-20 bg-muted animate-pulse rounded" />
+            ) : (
+                <div className="text-3xl font-bold tracking-tight">
+                    {value}
+                </div>
+            )}
+        </div>
     );
 
     return (
-        <Container maxWidth="lg">
-            <Typography variant="h4" gutterBottom>
-                Dashboard
-            </Typography>
-            <Typography variant="body1" color="text.secondary" paragraph>
-                Welcome back! Here's an overview of your chess performance.
-            </Typography>
+        <div className="space-y-8">
+            <div className="flex flex-col gap-2">
+                <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+                <p className="text-muted-foreground">
+                    Welcome back! Here's an overview of your chess performance.
+                </p>
+            </div>
 
             {error && (
-                <Box sx={{ mb: 3, p: 2, bgcolor: 'error.light', borderRadius: 1 }}>
-                    <Typography color="error.dark">{error}</Typography>
-                </Box>
+                <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive">
+                    {error}
+                </div>
             )}
 
-            <Grid container spacing={3} sx={{ mb: 4 }}>
-                <Grid item xs={12} sm={6} md={3}>
-                    <StatCard
-                        title="Total Games"
-                        value={stats?.totalGames ?? 0}
-                        icon={<SportsEsports />}
-                        color="primary"
-                        loading={loading}
-                    />
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                    <StatCard
-                        title="Win Rate"
-                        value={`${stats?.winRate ?? 0}%`}
-                        icon={<EmojiEvents />}
-                        color="success"
-                        loading={loading}
-                    />
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                    <StatCard
-                        title="Avg Accuracy"
-                        value={`${stats?.averageAccuracy ?? 0}%`}
-                        icon={<Assessment />}
-                        color="info"
-                        loading={loading}
-                    />
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                    <StatCard
-                        title="Recent Games"
-                        value={stats?.recentGames ?? 0}
-                        icon={<TrendingUp />}
-                        color="warning"
-                        loading={loading}
-                    />
-                </Grid>
-            </Grid>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
+                <StatCard
+                    title="Total Games"
+                    value={stats?.totalGames ?? 0}
+                    icon={<Gamepad2 size={24} className="text-blue-500" />}
+                    colorClass="bg-blue-500/10 text-blue-500"
+                    loading={loading}
+                />
+                <StatCard
+                    title="Win Rate"
+                    value={`${stats?.winRate ?? 0}%`}
+                    icon={<Trophy size={24} className="text-yellow-500" />}
+                    colorClass="bg-yellow-500/10 text-yellow-500"
+                    loading={loading}
+                />
+                <StatCard
+                    title="Avg Accuracy"
+                    value={`${stats?.averageAccuracy ?? 0}%`}
+                    icon={<Activity size={24} className="text-green-500" />}
+                    colorClass="bg-green-500/10 text-green-500"
+                    loading={loading}
+                />
+                <StatCard
+                    title="Recent Games"
+                    value={stats?.recentGames ?? 0}
+                    icon={<TrendingUp size={24} className="text-orange-500" />}
+                    colorClass="bg-orange-500/10 text-orange-500"
+                    loading={loading}
+                />
+            </div>
 
-            <Grid container spacing={3}>
-                <Grid item xs={12} md={8}>
-                    <Paper sx={{ p: 3 }}>
-                        <Typography variant="h6" gutterBottom>
-                            Rating Progression
-                        </Typography>
-                        <Box sx={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Typography color="text.secondary">
-                                Chart will be displayed here
-                            </Typography>
-                        </Box>
-                    </Paper>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                    <Paper sx={{ p: 3 }}>
-                        <Typography variant="h6" gutterBottom>
-                            Recent Activity
-                        </Typography>
-                        <Box sx={{ mt: 2 }}>
-                            {[1, 2, 3, 4, 5].map((item) => (
-                                <Box key={item} sx={{ mb: 2 }}>
-                                    <Typography variant="body2">
-                                        Game analyzed #{item}
-                                    </Typography>
-                                    <LinearProgress
-                                        variant="determinate"
-                                        value={100}
-                                        sx={{ mt: 1 }}
-                                    />
-                                </Box>
-                            ))}
-                        </Box>
-                    </Paper>
-                </Grid>
-            </Grid>
-        </Container>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+                <div className="md:col-span-2 bg-card rounded-xl border shadow-card p-6">
+                    <h3 className="text-lg font-semibold mb-6">Rating Progression</h3>
+                    <div className="h-[300px] flex items-center justify-center border-2 border-dashed border-muted rounded-lg bg-muted/20">
+                        <p className="text-muted-foreground">Chart will be displayed here</p>
+                    </div>
+                </div>
+
+                <div className="bg-card rounded-xl border shadow-card p-6">
+                    <h3 className="text-lg font-semibold mb-6">Recent Activity</h3>
+                    <div className="space-y-6">
+                        {[1, 2, 3, 4, 5].map((item) => (
+                            <div key={item} className="space-y-2">
+                                <div className="flex justify-between text-sm">
+                                    <span>Game analyzed #{item}</span>
+                                    <span className="text-muted-foreground">Just now</span>
+                                </div>
+                                <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                                    <div className="h-full bg-primary w-full animate-float" style={{ animationDuration: '3s' }} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 };
 

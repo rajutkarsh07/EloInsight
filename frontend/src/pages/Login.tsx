@@ -1,16 +1,8 @@
 import { useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import {
-    Container,
-    Box,
-    Paper,
-    TextField,
-    Button,
-    Typography,
-    Alert,
-    Link,
-} from '@mui/material';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { cn } from '../lib/utils';
+import { AlertCircle } from 'lucide-react';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -40,84 +32,89 @@ const Login = () => {
     };
 
     return (
-        <Container maxWidth="sm">
-            <Box
-                sx={{
-                    minHeight: '100vh',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                }}
-            >
-                <Paper elevation={3} sx={{ p: 4, width: '100%' }}>
-                    <Box sx={{ mb: 3, textAlign: 'center' }}>
-                        <Typography variant="h4" component="h1" gutterBottom>
-                            ♟️ EloInsight
-                        </Typography>
-                        <Typography variant="body1" color="text.secondary">
-                            Sign in to analyze your chess games
-                        </Typography>
-                    </Box>
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4 bg-grid relative overflow-hidden">
+            <div className="absolute inset-0 gradient-overlay pointer-events-none" />
 
-                    {error && (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                            {error}
-                        </Alert>
-                    )}
+            <div className="w-full max-w-md bg-card/80 backdrop-blur-sm border rounded-2xl shadow-elevated p-8 relative z-10 animate-fade-in-up">
+                <div className="text-center mb-8">
+                    <h1 className="text-4xl font-extrabold tracking-tight mb-2">
+                        ♟️ EloInsight
+                    </h1>
+                    <p className="text-muted-foreground">
+                        Sign in to analyze your chess games
+                    </p>
+                </div>
 
-                    <form onSubmit={handleSubmit}>
-                        <TextField
-                            fullWidth
-                            label="Email"
+                {error && (
+                    <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
+                        <AlertCircle size={16} />
+                        {error}
+                    </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email">
+                            Email
+                        </label>
+                        <input
+                            id="email"
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            margin="normal"
                             required
                             autoComplete="email"
                             autoFocus
                         />
-                        <TextField
-                            fullWidth
-                            label="Password"
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="password">
+                            Password
+                        </label>
+                        <input
+                            id="password"
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            margin="normal"
                             required
                             autoComplete="current-password"
                         />
-                        <Button
-                            type="submit"
-                            fullWidth
-                            variant="contained"
-                            size="large"
-                            sx={{ mt: 3, mb: 2 }}
-                            disabled={loading}
-                        >
-                            {loading ? 'Signing in...' : 'Sign In'}
-                        </Button>
-                    </form>
+                    </div>
 
-                    <Box sx={{ mt: 2, textAlign: 'center' }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Don't have an account?{' '}
-                            <Link component={RouterLink} to="/signup" underline="hover">
-                                Sign up
-                            </Link>
-                        </Typography>
-                    </Box>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className={cn(
+                            "w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                            "bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 mt-6 btn-glow"
+                        )}
+                    >
+                        {loading ? (
+                            <div className="flex items-center gap-2">
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                Signing in...
+                            </div>
+                        ) : 'Sign In'}
+                    </button>
+                </form>
 
-                    <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
-                        <Typography variant="caption" color="text.secondary">
-                            <strong>Test Credentials:</strong><br />
-                            Email: demo@eloinsight.dev<br />
-                            Password: password123
-                        </Typography>
-                    </Box>
-                </Paper>
-            </Box>
-        </Container>
+                <div className="mt-6 text-center text-sm">
+                    <span className="text-muted-foreground">Don't have an account? </span>
+                    <Link to="/signup" className="font-medium text-primary hover:underline underline-offset-4 link-hover">
+                        Sign up
+                    </Link>
+                </div>
+
+                <div className="mt-8 p-4 bg-muted/50 rounded-lg border border-border/50 text-xs text-muted-foreground">
+                    <p className="font-semibold mb-1">Test Credentials:</p>
+                    <p>Email: demo@eloinsight.dev</p>
+                    <p>Password: password123</p>
+                </div>
+            </div>
+        </div>
     );
 };
 

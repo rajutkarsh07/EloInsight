@@ -7,21 +7,13 @@ import Dashboard from '../pages/Dashboard';
 import GamesList from '../pages/GamesList';
 import AnalysisViewer from '../pages/AnalysisViewer';
 import { useAuth } from '../contexts/AuthContext';
-import { Box, CircularProgress } from '@mui/material';
+import { RotateCw } from 'lucide-react';
 
 // Loading spinner component
 const LoadingScreen = () => (
-    <Box
-        sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            height: '100vh',
-            width: '100vw',
-        }}
-    >
-        <CircularProgress size={60} />
-    </Box>
+    <div className="flex justify-center items-center h-screen w-screen bg-background text-foreground">
+        <RotateCw className="animate-spin h-12 w-12 text-primary" />
+    </div>
 );
 
 // Protected route wrapper

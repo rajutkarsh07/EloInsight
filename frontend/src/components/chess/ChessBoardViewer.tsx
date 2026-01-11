@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { Chess } from 'chess.js';
-import { Box, Paper, Typography } from '@mui/material';
 
 interface ChessBoardViewerProps {
     fen?: string;
@@ -50,21 +49,19 @@ const ChessBoardViewer = ({
     };
 
     return (
-        <Paper elevation={3} sx={{ p: 2 }}>
-            <Box sx={{ maxWidth: 600, margin: '0 auto' }}>
-                <Typography variant="h6" gutterBottom>
-                    Chess Board
-                </Typography>
-                {/* @ts-ignore - react-chessboard types may not be up to date */}
-                <Chessboard
-                    position={position}
-                    onPieceDrop={onDrop}
-                />
-                <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
-                    FEN: {position}
-                </Typography>
-            </Box>
-        </Paper>
+        <div className="bg-card border rounded-lg p-4 max-w-[600px] mx-auto shadow-card">
+            <h3 className="font-semibold text-lg mb-2">Chess Board</h3>
+            {/* @ts-ignore - react-chessboard types may not be up to date */}
+            <Chessboard
+                position={position}
+                onPieceDrop={onDrop}
+                customDarkSquareStyle={{ backgroundColor: '#779556' }}
+                customLightSquareStyle={{ backgroundColor: '#ebecd0' }}
+            />
+            <p className="text-xs text-muted-foreground mt-2 font-mono break-all">
+                FEN: {position}
+            </p>
+        </div>
     );
 };
 
