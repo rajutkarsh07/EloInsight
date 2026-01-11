@@ -166,11 +166,17 @@ export class AnalysisGrpcService implements OnModuleInit {
         // Create gRPC client dynamically
         const { ClientProxyFactory } = await import('@nestjs/microservices');
 
+        // Proto file is at api-gateway/proto/analysis.proto
+        // In development: process.cwd() = api-gateway
+        // In production: process.cwd() = api-gateway (or container root)
+        const protoPath = join(process.cwd(), 'proto', 'analysis.proto');
+        this.logger.log(`Loading proto from: ${protoPath}`);
+
         this.grpcClient = ClientProxyFactory.create({
             transport: Transport.GRPC,
             options: {
                 package: 'analysis',
-                protoPath: join(__dirname, '../../proto/analysis.proto'),
+                protoPath: protoPath,
                 url: `${host}:${port}`,
                 loader: {
                     keepCase: false,
