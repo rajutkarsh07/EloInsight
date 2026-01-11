@@ -1,0 +1,244 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  GO_VERSION: '1.21'
+
+jobs:
+  # ==========================================================================
+  # Frontend
+  # ==========================================================================
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test -- --passWithNoTests
+
+  # ==========================================================================
+  # API Gateway
+  # ==========================================================================
+  api-gateway:
+    name: API Gateway
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/api-gateway
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/api-gateway/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test -- --passWithNoTests
+
+  # ==========================================================================
+  # Game Sync Service
+  # ==========================================================================
+  game-sync:
+    name: Game Sync Service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/game-sync-service
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/game-sync-service/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test -- --passWithNoTests
+
+  # ==========================================================================
+  # Analysis Service (Go)
+  # ==========================================================================
+  analysis-service:
+    name: Analysis Service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/analysis-service
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/analysis-service/go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          working-directory: backend/analysis-service
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: backend/analysis-service/coverage.txt
+          flags: analysis-service
+
+  # ==========================================================================
+  # Database
+  # ==========================================================================
+  database:
+    name: Database Schema
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/database
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/database/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npm run db:generate
+
+      - name: Validate schema
+        run: npx prisma validate
+
+  # ==========================================================================
+  # Docker Build
+  # ==========================================================================
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [frontend, api-gateway, game-sync, analysis-service]
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: false
+          tags: eloinsight/frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build API Gateway
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/api-gateway
+          push: false
+          tags: eloinsight/api-gateway:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Game Sync
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/game-sync-service
+          push: false
+          tags: eloinsight/game-sync:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Analysis Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/analysis-service
+          push: false
+          tags: eloinsight/analysis-service:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
