@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import {
     Container,
@@ -9,26 +10,52 @@ import {
     CardContent,
     Chip,
     Divider,
+    CircularProgress,
 } from '@mui/material';
 import ChessBoardViewer from '../components/chess/ChessBoardViewer';
+import { apiClient } from '../services/apiClient';
+
+interface Analysis {
+    id: string;
+    gameId: string;
+    accuracyWhite: number;
+    accuracyBlack: number;
+    acplWhite: number;
+    acplBlack: number;
+    blundersWhite: number;
+    blundersBlack: number;
+    mistakesWhite: number;
+    mistakesBlack: number;
+    inaccuraciesWhite: number;
+    inaccuraciesBlack: number;
+    performanceRatingWhite?: number;
+    performanceRatingBlack?: number;
+    analyzedAt: string;
+}
 
 const AnalysisViewer = () => {
     const { gameId } = useParams();
+    const [analysis, setAnalysis] = useState<Analysis | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
-    // Mock data - will be replaced with real API calls
-    const analysis = {
-        gameId,
-        accuracyWhite: 92.5,
-        accuracyBlack: 85.3,
-        acplWhite: 15.2,
-        acplBlack: 28.7,
-        blundersWhite: 0,
-        blundersBlack: 2,
-        mistakesWhite: 1,
-        mistakesBlack: 3,
-        inaccuraciesWhite: 2,
-        inaccuraciesBlack: 4,
-    };
+    useEffect(() => {
+        const fetchAnalysis = async () => {
+            try {
+                const data = await apiClient.get<Analysis>(`/analysis/${gameId}`);
+                setAnalysis(data);
+            } catch (err) {
+                setError('Failed to load analysis');
+                console.error('Error fetching analysis:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (gameId) {
+            fetchAnalysis();
+        }
+    }, [gameId]);
 
     const MetricCard = ({
         title,
@@ -71,6 +98,26 @@ const AnalysisViewer = () => {
         </Card>
     );
 
+    if (loading) {
+        return (
+            <Container maxWidth="lg">
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+                    <CircularProgress />
+                </Box>
+            </Container>
+        );
+    }
+
+    if (error || !analysis) {
+        return (
+            <Container maxWidth="lg">
+                <Box sx={{ p: 4, textAlign: 'center' }}>
+                    <Typography color="error">{error || 'Analysis not found'}</Typography>
+                </Box>
+            </Container>
+        );
+    }
+
     return (
         <Container maxWidth="lg">
             <Box sx={{ mb: 3 }}>
@@ -102,7 +149,7 @@ const AnalysisViewer = () => {
                                         key={index}
                                         label={move}
                                         variant="outlined"
-                                        onClick={() => alert(`Jump to move: ${move}`)}
+                                        onClick={() => console.log(`Jump to move: ${move}`)}
                                     />
                                 )
                             )}
@@ -156,12 +203,6 @@ const AnalysisViewer = () => {
                     </Paper>
                 </Grid>
             </Grid>
-
-            <Box sx={{ mt: 3, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
-                <Typography variant="body2" color="info.dark">
-                    <strong>Demo Mode:</strong> Showing mock analysis data. Connect to backend for real game analysis.
-                </Typography>
-            </Box>
         </Container>
     );
 };

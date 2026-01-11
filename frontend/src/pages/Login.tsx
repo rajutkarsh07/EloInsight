@@ -28,7 +28,11 @@ const Login = () => {
             await authService.login({ email, password });
             navigate('/dashboard');
         } catch (err: unknown) {
-            setError('Invalid email or password');
+            if (err instanceof Error) {
+                setError(err.message || 'Invalid email or password');
+            } else {
+                setError('Invalid email or password');
+            }
         } finally {
             setLoading(false);
         }
@@ -103,9 +107,11 @@ const Login = () => {
                         </Typography>
                     </Box>
 
-                    <Box sx={{ mt: 3, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
-                        <Typography variant="caption" color="info.dark">
-                            <strong>Demo Mode:</strong> Backend not connected yet. Use any email/password to continue.
+                    <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                            <strong>Test Credentials:</strong><br />
+                            Email: demo@eloinsight.dev<br />
+                            Password: password123
                         </Typography>
                     </Box>
                 </Paper>

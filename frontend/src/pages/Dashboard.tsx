@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
     Container,
     Grid,
@@ -7,6 +8,7 @@ import {
     Card,
     CardContent,
     LinearProgress,
+    Skeleton,
 } from '@mui/material';
 import {
     TrendingUp,
@@ -14,26 +16,49 @@ import {
     Assessment,
     EmojiEvents,
 } from '@mui/icons-material';
+import { apiClient } from '../services/apiClient';
+
+interface UserStats {
+    userId: string;
+    totalGames: number;
+    winRate: number;
+    averageAccuracy: number;
+    recentGames: number;
+}
 
 const Dashboard = () => {
-    // Mock data - will be replaced with real API calls
-    const stats = {
-        totalGames: 150,
-        winRate: 52.3,
-        averageAccuracy: 88.5,
-        recentGames: 10,
-    };
+    const [stats, setStats] = useState<UserStats | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const data = await apiClient.get<UserStats>('/users/stats');
+                setStats(data);
+            } catch (err) {
+                setError('Failed to load statistics');
+                console.error('Error fetching stats:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchStats();
+    }, []);
 
     const StatCard = ({
         title,
         value,
         icon,
         color,
+        loading: isLoading,
     }: {
         title: string;
         value: string | number;
         icon: React.ReactNode;
         color: string;
+        loading?: boolean;
     }) => (
         <Card>
             <CardContent>
@@ -53,9 +78,13 @@ const Dashboard = () => {
                         {title}
                     </Typography>
                 </Box>
-                <Typography variant="h4" component="div" sx={{ mb: 1 }}>
-                    {value}
-                </Typography>
+                {isLoading ? (
+                    <Skeleton variant="text" width={80} height={40} />
+                ) : (
+                    <Typography variant="h4" component="div" sx={{ mb: 1 }}>
+                        {value}
+                    </Typography>
+                )}
             </CardContent>
         </Card>
     );
@@ -69,37 +98,47 @@ const Dashboard = () => {
                 Welcome back! Here's an overview of your chess performance.
             </Typography>
 
+            {error && (
+                <Box sx={{ mb: 3, p: 2, bgcolor: 'error.light', borderRadius: 1 }}>
+                    <Typography color="error.dark">{error}</Typography>
+                </Box>
+            )}
+
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12} sm={6} md={3}>
                     <StatCard
                         title="Total Games"
-                        value={stats.totalGames}
+                        value={stats?.totalGames ?? 0}
                         icon={<SportsEsports />}
                         color="primary"
+                        loading={loading}
                     />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                     <StatCard
                         title="Win Rate"
-                        value={`${stats.winRate}%`}
+                        value={`${stats?.winRate ?? 0}%`}
                         icon={<EmojiEvents />}
                         color="success"
+                        loading={loading}
                     />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                     <StatCard
                         title="Avg Accuracy"
-                        value={`${stats.averageAccuracy}%`}
+                        value={`${stats?.averageAccuracy ?? 0}%`}
                         icon={<Assessment />}
                         color="info"
+                        loading={loading}
                     />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                     <StatCard
                         title="Recent Games"
-                        value={stats.recentGames}
+                        value={stats?.recentGames ?? 0}
                         icon={<TrendingUp />}
                         color="warning"
+                        loading={loading}
                     />
                 </Grid>
             </Grid>
@@ -139,12 +178,6 @@ const Dashboard = () => {
                     </Paper>
                 </Grid>
             </Grid>
-
-            <Box sx={{ mt: 3, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
-                <Typography variant="body2" color="info.dark">
-                    <strong>Demo Mode:</strong> This is placeholder data. Connect to the backend to see your real statistics.
-                </Typography>
-            </Box>
         </Container>
     );
 };

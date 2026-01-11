@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Container,
@@ -16,51 +16,76 @@ import {
     TextField,
     MenuItem,
     IconButton,
+    CircularProgress,
 } from '@mui/material';
 import {
     Visibility,
     Sync,
     FilterList,
 } from '@mui/icons-material';
+import { apiClient } from '../services/apiClient';
+
+interface Game {
+    id: string;
+    platform: string;
+    whitePlayer: string;
+    blackPlayer: string;
+    result: string;
+    timeControl: string;
+    playedAt: string;
+    analysisStatus: string;
+    accuracy?: { white: number; black: number };
+}
+
+interface GamesResponse {
+    data: Game[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+    };
+}
 
 const GamesList = () => {
     const navigate = useNavigate();
     const [platform, setPlatform] = useState('all');
+    const [games, setGames] = useState<Game[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [syncing, setSyncing] = useState(false);
+    const [error, setError] = useState('');
 
-    // Mock data - will be replaced with real API calls
-    const games = [
-        {
-            id: '1',
-            platform: 'chess.com',
-            whitePlayer: 'Player1',
-            blackPlayer: 'Player2',
-            result: '1-0',
-            timeControl: '10+0',
-            playedAt: '2026-01-10',
-            analysisStatus: 'completed',
-            accuracy: { white: 92.5, black: 85.3 },
-        },
-        {
-            id: '2',
-            platform: 'lichess',
-            whitePlayer: 'Player3',
-            blackPlayer: 'Player4',
-            result: '0-1',
-            timeControl: '5+3',
-            playedAt: '2026-01-09',
-            analysisStatus: 'pending',
-        },
-        {
-            id: '3',
-            platform: 'chess.com',
-            whitePlayer: 'Player5',
-            blackPlayer: 'Player6',
-            result: '1/2-1/2',
-            timeControl: '15+10',
-            playedAt: '2026-01-08',
-            analysisStatus: 'processing',
-        },
-    ];
+    const fetchGames = async () => {
+        try {
+            setLoading(true);
+            const params = platform !== 'all' ? `?platform=${platform}` : '';
+            const response = await apiClient.get<GamesResponse>(`/games${params}`);
+            setGames(response.data);
+        } catch (err) {
+            setError('Failed to load games');
+            console.error('Error fetching games:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchGames();
+    }, [platform]);
+
+    const handleSync = async () => {
+        try {
+            setSyncing(true);
+            await apiClient.post('/games/sync', { platform: 'chess.com' });
+            // Refresh games after sync
+            await fetchGames();
+        } catch (err) {
+            setError('Failed to sync games');
+            console.error('Error syncing games:', err);
+        } finally {
+            setSyncing(false);
+        }
+    };
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -98,12 +123,19 @@ const GamesList = () => {
                 </Typography>
                 <Button
                     variant="contained"
-                    startIcon={<Sync />}
-                    onClick={() => alert('Sync games functionality')}
+                    startIcon={syncing ? <CircularProgress size={20} color="inherit" /> : <Sync />}
+                    onClick={handleSync}
+                    disabled={syncing}
                 >
-                    Sync Games
+                    {syncing ? 'Syncing...' : 'Sync Games'}
                 </Button>
             </Box>
+
+            {error && (
+                <Box sx={{ mb: 3, p: 2, bgcolor: 'error.light', borderRadius: 1 }}>
+                    <Typography color="error.dark">{error}</Typography>
+                </Box>
+            )}
 
             <Paper sx={{ p: 2, mb: 3 }}>
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
@@ -124,82 +156,91 @@ const GamesList = () => {
             </Paper>
 
             <TableContainer component={Paper}>
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>Platform</TableCell>
-                            <TableCell>White</TableCell>
-                            <TableCell>Black</TableCell>
-                            <TableCell>Result</TableCell>
-                            <TableCell>Time Control</TableCell>
-                            <TableCell>Date</TableCell>
-                            <TableCell>Accuracy</TableCell>
-                            <TableCell>Status</TableCell>
-                            <TableCell>Actions</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {games.map((game) => (
-                            <TableRow key={game.id} hover>
-                                <TableCell>
-                                    <Chip
-                                        label={game.platform}
-                                        size="small"
-                                        color={game.platform === 'chess.com' ? 'primary' : 'secondary'}
-                                    />
-                                </TableCell>
-                                <TableCell>{game.whitePlayer}</TableCell>
-                                <TableCell>{game.blackPlayer}</TableCell>
-                                <TableCell>
-                                    <Chip
-                                        label={game.result}
-                                        size="small"
-                                        color={getResultColor(game.result)}
-                                    />
-                                </TableCell>
-                                <TableCell>{game.timeControl}</TableCell>
-                                <TableCell>{game.playedAt}</TableCell>
-                                <TableCell>
-                                    {game.accuracy ? (
-                                        <Box>
-                                            <Typography variant="caption" display="block">
-                                                W: {game.accuracy.white}%
-                                            </Typography>
-                                            <Typography variant="caption" display="block">
-                                                B: {game.accuracy.black}%
-                                            </Typography>
-                                        </Box>
-                                    ) : (
-                                        '-'
-                                    )}
-                                </TableCell>
-                                <TableCell>
-                                    <Chip
-                                        label={game.analysisStatus}
-                                        size="small"
-                                        color={getStatusColor(game.analysisStatus)}
-                                    />
-                                </TableCell>
-                                <TableCell>
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => navigate(`/games/${game.id}/analysis`)}
-                                        disabled={game.analysisStatus !== 'completed'}
-                                    >
-                                        <Visibility />
-                                    </IconButton>
-                                </TableCell>
+                {loading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                        <CircularProgress />
+                    </Box>
+                ) : (
+                    <Table>
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Platform</TableCell>
+                                <TableCell>White</TableCell>
+                                <TableCell>Black</TableCell>
+                                <TableCell>Result</TableCell>
+                                <TableCell>Time Control</TableCell>
+                                <TableCell>Date</TableCell>
+                                <TableCell>Accuracy</TableCell>
+                                <TableCell>Status</TableCell>
+                                <TableCell>Actions</TableCell>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                        </TableHead>
+                        <TableBody>
+                            {games.map((game) => (
+                                <TableRow key={game.id} hover>
+                                    <TableCell>
+                                        <Chip
+                                            label={game.platform}
+                                            size="small"
+                                            color={game.platform === 'chess.com' ? 'primary' : 'secondary'}
+                                        />
+                                    </TableCell>
+                                    <TableCell>{game.whitePlayer}</TableCell>
+                                    <TableCell>{game.blackPlayer}</TableCell>
+                                    <TableCell>
+                                        <Chip
+                                            label={game.result}
+                                            size="small"
+                                            color={getResultColor(game.result)}
+                                        />
+                                    </TableCell>
+                                    <TableCell>{game.timeControl}</TableCell>
+                                    <TableCell>{game.playedAt}</TableCell>
+                                    <TableCell>
+                                        {game.accuracy ? (
+                                            <Box>
+                                                <Typography variant="caption" display="block">
+                                                    W: {game.accuracy.white}%
+                                                </Typography>
+                                                <Typography variant="caption" display="block">
+                                                    B: {game.accuracy.black}%
+                                                </Typography>
+                                            </Box>
+                                        ) : (
+                                            '-'
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Chip
+                                            label={game.analysisStatus}
+                                            size="small"
+                                            color={getStatusColor(game.analysisStatus)}
+                                        />
+                                    </TableCell>
+                                    <TableCell>
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => navigate(`/games/${game.id}/analysis`)}
+                                            disabled={game.analysisStatus !== 'completed'}
+                                        >
+                                            <Visibility />
+                                        </IconButton>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                            {games.length === 0 && !loading && (
+                                <TableRow>
+                                    <TableCell colSpan={9} align="center">
+                                        <Typography color="text.secondary" sx={{ py: 4 }}>
+                                            No games found. Click "Sync Games" to import your games.
+                                        </Typography>
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                )}
             </TableContainer>
-
-            <Box sx={{ mt: 3, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
-                <Typography variant="body2" color="info.dark">
-                    <strong>Demo Mode:</strong> Showing mock data. Connect to backend to see your actual games.
-                </Typography>
-            </Box>
         </Container>
     );
 };
