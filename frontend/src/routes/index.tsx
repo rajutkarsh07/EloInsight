@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import MainLayout from '../components/layout/MainLayout';
 import Login from '../pages/Login';
 import Signup from '../pages/Signup';
@@ -6,68 +6,96 @@ import VerifyEmail from '../pages/VerifyEmail';
 import Dashboard from '../pages/Dashboard';
 import GamesList from '../pages/GamesList';
 import AnalysisViewer from '../pages/AnalysisViewer';
-import { authService } from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
+import { Box, CircularProgress } from '@mui/material';
+
+// Loading spinner component
+const LoadingScreen = () => (
+    <Box
+        sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: '100vh',
+            width: '100vw',
+        }}
+    >
+        <CircularProgress size={60} />
+    </Box>
+);
 
 // Protected route wrapper
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-    if (!authService.isAuthenticated()) {
+const ProtectedRoute = () => {
+    const { isAuthenticated, isLoading } = useAuth();
+
+    if (isLoading) {
+        return <LoadingScreen />;
+    }
+
+    if (!isAuthenticated) {
         return <Navigate to="/login" replace />;
     }
-    return <>{children}</>;
+
+    return <Outlet />;
 };
 
 // Public route wrapper (redirects to dashboard if already logged in)
-const PublicRoute = ({ children }: { children: React.ReactNode }) => {
-    if (authService.isAuthenticated()) {
+const PublicRoute = () => {
+    const { isAuthenticated, isLoading } = useAuth();
+
+    if (isLoading) {
+        return <LoadingScreen />;
+    }
+
+    if (isAuthenticated) {
         return <Navigate to="/dashboard" replace />;
     }
-    return <>{children}</>;
+
+    return <Outlet />;
 };
 
 export const router = createBrowserRouter([
     {
-        path: '/login',
-        element: (
-            <PublicRoute>
-                <Login />
-            </PublicRoute>
-        ),
-    },
-    {
-        path: '/signup',
-        element: (
-            <PublicRoute>
-                <Signup />
-            </PublicRoute>
-        ),
+        element: <PublicRoute />,
+        children: [
+            {
+                path: '/login',
+                element: <Login />,
+            },
+            {
+                path: '/signup',
+                element: <Signup />,
+            },
+        ],
     },
     {
         path: '/verify-email',
         element: <VerifyEmail />,
     },
     {
-        path: '/',
-        element: (
-            <ProtectedRoute>
-                <MainLayout />
-            </ProtectedRoute>
-        ),
+        element: <ProtectedRoute />,
         children: [
             {
-                index: true,
-                element: <Navigate to="/dashboard" replace />,
-            },
-            {
-                path: 'dashboard',
-                element: <Dashboard />,
-            },
-            {
-                path: 'games',
-                element: <GamesList />,
-            },
-            {
-                path: 'games/:gameId/analysis',
-                element: <AnalysisViewer />,
+                path: '/',
+                element: <MainLayout />,
+                children: [
+                    {
+                        index: true,
+                        element: <Navigate to="/dashboard" replace />,
+                    },
+                    {
+                        path: 'dashboard',
+                        element: <Dashboard />,
+                    },
+                    {
+                        path: 'games',
+                        element: <GamesList />,
+                    },
+                    {
+                        path: 'games/:gameId/analysis',
+                        element: <AnalysisViewer />,
+                    },
+                ],
             },
         ],
     },

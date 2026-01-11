@@ -10,10 +10,11 @@ import {
     Alert,
     Link,
 } from '@mui/material';
-import { authService } from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
 
 const Login = () => {
     const navigate = useNavigate();
+    const { login } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -25,8 +26,8 @@ const Login = () => {
         setLoading(true);
 
         try {
-            await authService.login({ email, password });
-            navigate('/dashboard');
+            await login({ email, password });
+            navigate('/dashboard', { replace: true });
         } catch (err: unknown) {
             if (err instanceof Error) {
                 setError(err.message || 'Invalid email or password');
