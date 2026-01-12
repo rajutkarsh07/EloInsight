@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Eye, RotateCw, Target, TrendingUp } from 'lucide-react';
+import { BarChart3, Eye, RotateCw, Target, TrendingUp, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
 
@@ -228,13 +228,14 @@ const AnalysisList = () => {
                                 games.map((game, i) => (
                                     <tr
                                         key={game.id}
-                                        className="hover:bg-muted/50 transition-colors cursor-pointer"
+                                        className="bg-emerald-500/5 hover:bg-emerald-500/10 border-l-2 border-l-emerald-500 transition-colors cursor-pointer animate-fade-in"
                                         onClick={() => navigate(`/analysis/${game.id}`)}
                                         style={{ animationDelay: `${i * 0.05}s` }}
                                     >
                                         <td className="px-6 py-4">
                                             <div className="flex flex-col gap-1">
                                                 <div className="flex items-center gap-2">
+                                                    <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0" />
                                                     {getPlatformBadge(game.platform)}
                                                     <span className="text-xs text-muted-foreground font-mono">
                                                         {formatTimeControl(game.timeControl)}
@@ -308,7 +309,7 @@ const AnalysisList = () => {
                                                     e.stopPropagation();
                                                     navigate(`/analysis/${game.id}`);
                                                 }}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-md transition-colors"
+                                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-400 bg-emerald-500/20 hover:bg-emerald-500/30 rounded-md transition-colors border border-emerald-500/30"
                                             >
                                                 <Eye size={16} />
                                                 View
