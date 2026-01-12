@@ -87,8 +87,10 @@ class ApiClient {
         return response.data;
     }
 
-    async post<T>(url: string, data?: unknown, config = {}) {
-        const response = await this.client.post<T>(url, data, config);
+    async post<T>(url: string, data?: unknown, config: { timeout?: number } & Record<string, unknown> = {}) {
+        // Use longer timeout for analysis endpoints (5 minutes)
+        const timeout = url.includes('/analysis/') ? 300000 : config.timeout;
+        const response = await this.client.post<T>(url, data, { ...config, timeout });
         return response.data;
     }
 
