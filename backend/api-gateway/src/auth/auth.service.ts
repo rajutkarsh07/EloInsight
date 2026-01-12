@@ -171,7 +171,7 @@ export class AuthService {
         });
 
         // Map linked accounts to flat fields for compatibility
-        const chessComAccount = user.linkedAccounts?.find((a: any) => a.platform === 'CHESSCOM');
+        const chessComAccount = user.linkedAccounts?.find((a: any) => a.platform === 'CHESS_COM');
         const lichessAccount = user.linkedAccounts?.find((a: any) => a.platform === 'LICHESS');
 
         return {
@@ -199,7 +199,7 @@ export class AuthService {
 
         if (!user) return null;
 
-        const chessComAccount = user.linkedAccounts?.find((a: any) => a.platform === 'CHESSCOM');
+        const chessComAccount = user.linkedAccounts?.find((a: any) => a.platform === 'CHESS_COM');
         const lichessAccount = user.linkedAccounts?.find((a: any) => a.platform === 'LICHESS');
 
         return {
@@ -210,8 +210,67 @@ export class AuthService {
     }
 
     async updateProfile(userId: string, data: { chessComUsername?: string; lichessUsername?: string }) {
-        // This would update linkedAccounts or profile in the real schema
-        // For now, returning not implemented to safely migrate auth first
-        return { message: "Profile update via Auth service deprecated, use User service" };
+        // Update or create Chess.com linked account
+        if (data.chessComUsername !== undefined) {
+            if (data.chessComUsername) {
+                await this.prisma.linkedAccount.upsert({
+                    where: {
+                        userId_platform: {
+                            userId,
+                            platform: 'CHESS_COM',
+                        },
+                    },
+                    update: {
+                        platformUsername: data.chessComUsername,
+                    },
+                    create: {
+                        userId,
+                        platform: 'CHESS_COM',
+                        platformUsername: data.chessComUsername,
+                    },
+                });
+            } else {
+                // If empty string, delete the linked account
+                await this.prisma.linkedAccount.deleteMany({
+                    where: {
+                        userId,
+                        platform: 'CHESS_COM',
+                    },
+                });
+            }
+        }
+
+        // Update or create Lichess linked account
+        if (data.lichessUsername !== undefined) {
+            if (data.lichessUsername) {
+                await this.prisma.linkedAccount.upsert({
+                    where: {
+                        userId_platform: {
+                            userId,
+                            platform: 'LICHESS',
+                        },
+                    },
+                    update: {
+                        platformUsername: data.lichessUsername,
+                    },
+                    create: {
+                        userId,
+                        platform: 'LICHESS',
+                        platformUsername: data.lichessUsername,
+                    },
+                });
+            } else {
+                // If empty string, delete the linked account
+                await this.prisma.linkedAccount.deleteMany({
+                    where: {
+                        userId,
+                        platform: 'LICHESS',
+                    },
+                });
+            }
+        }
+
+        // Return updated user with linked accounts
+        return this.getUserById(userId);
     }
 }
