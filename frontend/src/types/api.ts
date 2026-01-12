@@ -3,6 +3,8 @@ export interface User {
     id: string;
     email: string;
     username: string;
+    chessComUsername?: string;
+    lichessUsername?: string;
     createdAt: string;
 }
 

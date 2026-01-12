@@ -7,6 +7,7 @@ import { LoginDto, RegisterDto } from './dto/auth.dto';
 import { EmailService } from './email.service';
 
 // User interface with verification fields
+// User interface with verification fields
 interface User {
     id: string;
     email: string;
@@ -16,6 +17,8 @@ interface User {
     verificationToken: string | null;
     verificationExpires: Date | null;
     createdAt: Date;
+    chessComUsername?: string;
+    lichessUsername?: string;
 }
 
 @Injectable()
@@ -43,6 +46,8 @@ export class AuthService {
             verificationToken: null,
             verificationExpires: null,
             createdAt: new Date(),
+            chessComUsername: 'magnuscarlsen', // Mock data
+            lichessUsername: 'DrNykterstein',  // Mock data
         });
     }
 
@@ -220,6 +225,8 @@ export class AuthService {
                 email: user.email,
                 username: user.username,
                 isVerified: user.isVerified,
+                chessComUsername: user.chessComUsername,
+                lichessUsername: user.lichessUsername,
             },
             tokens: {
                 accessToken,
@@ -229,6 +236,31 @@ export class AuthService {
         };
     }
 
+    // Helper to get user by ID
+    async getUserById(id: string): Promise<User | null> {
+        return this.users.find(u => u.id === id) || null;
+    }
+
+    // Update user profile
+    async updateProfile(userId: string, data: { chessComUsername?: string; lichessUsername?: string }) {
+        const user = this.users.find(u => u.id === userId);
+        if (!user) {
+            throw new BadRequestException('User not found');
+        }
+
+        if (data.chessComUsername !== undefined) user.chessComUsername = data.chessComUsername;
+        if (data.lichessUsername !== undefined) user.lichessUsername = data.lichessUsername;
+
+        return {
+            id: user.id,
+            email: user.email,
+            username: user.username,
+            chessComUsername: user.chessComUsername,
+            lichessUsername: user.lichessUsername,
+        };
+    }
+
+    // ... (existing validateUser)
     async validateUser(email: string): Promise<User | null> {
         return this.users.find((u) => u.email === email) || null;
     }

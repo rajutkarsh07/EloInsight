@@ -6,6 +6,7 @@ import VerifyEmail from '../pages/VerifyEmail';
 import Dashboard from '../pages/Dashboard';
 import GamesList from '../pages/GamesList';
 import AnalysisViewer from '../pages/AnalysisViewer';
+import Settings from '../pages/Settings';
 import { useAuth } from '../contexts/AuthContext';
 import { RotateCw } from 'lucide-react';
 
@@ -86,6 +87,10 @@ export const router = createBrowserRouter([
                     {
                         path: 'games/:gameId/analysis',
                         element: <AnalysisViewer />,
+                    },
+                    {
+                        path: 'settings',
+                        element: <Settings />,
                     },
                 ],
             },

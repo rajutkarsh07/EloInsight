@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, LayoutDashboard, Gamepad2, LogOut, User, X } from 'lucide-react';
+import { Menu, LayoutDashboard, Gamepad2, LogOut, User, X, Settings as SettingsIcon } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { cn } from '../../lib/utils';
 
@@ -17,6 +17,7 @@ const MainLayout = () => {
     const menuItems = [
         { text: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard' },
         { text: 'Games', icon: <Gamepad2 size={20} />, path: '/games' },
+        { text: 'Settings', icon: <SettingsIcon size={20} />, path: '/settings' },
     ];
 
     return (

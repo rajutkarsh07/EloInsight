@@ -40,6 +40,11 @@ export const authService = {
         localStorage.removeItem('refreshToken');
     },
 
+    async updateProfile(data: { chessComUsername?: string; lichessUsername?: string }): Promise<User> {
+        const response = await apiClient.patch<User>('/users/profile', data);
+        return response;
+    },
+
     async getCurrentUser(): Promise<User> {
         return apiClient.get<User>('/users/me');
     },
