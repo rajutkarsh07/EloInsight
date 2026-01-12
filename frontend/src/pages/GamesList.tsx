@@ -4,6 +4,7 @@ import { Eye, RotateCw, Filter, X, Play, Loader2 } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
+import { useGames } from '../contexts/GamesContext';
 
 interface Game {
     id: string;
@@ -19,16 +20,6 @@ interface Game {
     openingName?: string;
 }
 
-interface GamesResponse {
-    data: Game[];
-    pagination: {
-        page: number;
-        limit: number;
-        total: number;
-        totalPages: number;
-    };
-}
-
 interface Filters {
     platform: string;
     result: string;
@@ -36,35 +27,33 @@ interface Filters {
     status: string;
 }
 
-interface Pagination {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-}
-
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const GamesList = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { 
+        games, 
+        pagination, 
+        loading, 
+        error: contextError, 
+        syncing, 
+        hasFetched,
+        fetchGames, 
+        syncGames, 
+        updateGame 
+    } = useGames();
+    
     const [filters, setFilters] = useState<Filters>({
         platform: 'all',
         result: 'all',
         timeControl: 'all',
         status: 'all',
     });
-    const [games, setGames] = useState<Game[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [syncing, setSyncing] = useState(false);
-    const [error, setError] = useState('');
+    const [localError, setLocalError] = useState('');
     const [analyzingGames, setAnalyzingGames] = useState<Set<string>>(new Set());
-    const [pagination, setPagination] = useState<Pagination>({
-        page: 1,
-        limit: 20,
-        total: 0,
-        totalPages: 0,
-    });
+
+    const error = localError || contextError;
 
     // Get all possible usernames for the current user
     const getUsernames = useCallback(() => {
@@ -131,39 +120,31 @@ const GamesList = () => {
         return 'classical';
     };
 
-    const fetchGames = useCallback(async (page: number, limit: number) => {
-        try {
-            setLoading(true);
-            const params = new URLSearchParams();
-            params.set('page', page.toString());
-            params.set('limit', limit.toString());
-            if (filters.platform !== 'all') {
-                params.set('platform', filters.platform);
-            }
-            const response = await apiClient.get<GamesResponse>(`/games?${params.toString()}`);
-            setGames(response.data);
-            setPagination(response.pagination);
-        } catch (err) {
-            setError('Failed to load games');
-            console.error('Error fetching games:', err);
-        } finally {
-            setLoading(false);
-        }
-    }, [filters.platform]);
-
+    // Fetch games only if not already fetched (cache check)
     useEffect(() => {
-        fetchGames(1, pagination.limit); // Reset to page 1 when platform filter changes
-    }, [fetchGames, pagination.limit]);
+        if (!hasFetched) {
+            const platform = filters.platform !== 'all' ? filters.platform : undefined;
+            fetchGames(1, pagination.limit, platform);
+        }
+    }, [hasFetched, fetchGames, filters.platform, pagination.limit]);
+
+    // Handle platform filter change - this needs to refetch from server
+    const handlePlatformChange = (platform: string) => {
+        setFilters(prev => ({ ...prev, platform }));
+        const platformValue = platform !== 'all' ? platform : undefined;
+        fetchGames(1, pagination.limit, platformValue, true); // Force refresh for platform change
+    };
 
     const handlePageChange = (newPage: number) => {
         if (newPage >= 1 && newPage <= pagination.totalPages) {
-            fetchGames(newPage, pagination.limit);
+            const platform = filters.platform !== 'all' ? filters.platform : undefined;
+            fetchGames(newPage, pagination.limit, platform);
         }
     };
 
     const handlePageSizeChange = (newLimit: number) => {
-        setPagination(prev => ({ ...prev, limit: newLimit, page: 1 }));
-        fetchGames(1, newLimit);
+        const platform = filters.platform !== 'all' ? filters.platform : undefined;
+        fetchGames(1, newLimit, platform, true);
     };
 
     // Apply client-side filters
@@ -191,7 +172,11 @@ const GamesList = () => {
     }, [games, filters, getUserResult]);
 
     const updateFilter = (key: keyof Filters, value: string) => {
-        setFilters(prev => ({ ...prev, [key]: value }));
+        if (key === 'platform') {
+            handlePlatformChange(value);
+        } else {
+            setFilters(prev => ({ ...prev, [key]: value }));
+        }
     };
 
     const clearFilters = () => {
@@ -206,27 +191,24 @@ const GamesList = () => {
     const hasActiveFilters = Object.values(filters).some(v => v !== 'all');
 
     const handleSync = async () => {
-        try {
-            setSyncing(true);
-            await apiClient.post('/games/sync', { platform: 'chess.com' });
-            // Refresh games after sync
-            await fetchGames(pagination.page, pagination.limit);
-        } catch (err) {
-            setError('Failed to sync games');
-            console.error('Error syncing games:', err);
-        } finally {
-            setSyncing(false);
-        }
+        setLocalError('');
+        await syncGames();
     };
 
     const handleAnalyze = async (game: Game) => {
+        // If analysis already exists, navigate directly to the analysis page
+        if (game.analysisStatus === 'completed') {
+            navigate(`/analysis/${game.id}`);
+            return;
+        }
+
         // Add to analyzing set
         setAnalyzingGames(prev => new Set(prev).add(game.id));
-        setError('');
+        setLocalError('');
 
         try {
             // Step 1: Save game to database
-            const saveResponse = await apiClient.post<{ id: string; alreadyExists: boolean }>('/games', {
+            const saveResponse = await apiClient.post<{ id: string; analysisStatus?: string }>('/games', {
                 platform: game.platform,
                 externalId: game.id,
                 pgn: game.pgn || '',
@@ -240,6 +222,12 @@ const GamesList = () => {
 
             const gameId = saveResponse.id;
 
+            // If analysis already exists for this game, navigate directly
+            if (saveResponse.analysisStatus === 'COMPLETED') {
+                navigate(`/analysis/${gameId}`);
+                return;
+            }
+
             // Step 2: Trigger analysis
             await apiClient.post(`/analysis/game/${gameId}`, {
                 pgn: game.pgn || '',
@@ -247,12 +235,8 @@ const GamesList = () => {
                 includeBookMoves: true,
             });
 
-            // Update local game state to show completed
-            setGames(prev => prev.map(g => 
-                g.id === game.id 
-                    ? { ...g, analysisStatus: 'completed', id: gameId }
-                    : g
-            ));
+            // Update game in context cache
+            updateGame(game.id, { analysisStatus: 'completed', id: gameId });
 
             // Navigate to analysis viewer
             navigate(`/analysis/${gameId}`);
@@ -260,14 +244,10 @@ const GamesList = () => {
         } catch (err) {
             console.error('Error analyzing game:', err);
             const error = err as { response?: { data?: { message?: string } } };
-            setError(error.response?.data?.message || 'Failed to analyze game. Please try again.');
+            setLocalError(error.response?.data?.message || 'Failed to analyze game. Please try again.');
             
             // Update local state to show failed
-            setGames(prev => prev.map(g => 
-                g.id === game.id 
-                    ? { ...g, analysisStatus: 'failed' }
-                    : g
-            ));
+            updateGame(game.id, { analysisStatus: 'failed' });
         } finally {
             // Remove from analyzing set
             setAnalyzingGames(prev => {

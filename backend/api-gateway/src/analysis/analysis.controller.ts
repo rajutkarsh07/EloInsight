@@ -169,32 +169,40 @@ export class AnalysisController {
         const whiteMetrics = result.whiteMetrics || {};
         const blackMetrics = result.blackMetrics || {};
 
-        // Create analysis record
-        const analysis = await this.prisma.analysis.create({
-            data: {
-                gameId,
-                accuracyWhite: whiteMetrics.accuracy || 0,
-                accuracyBlack: blackMetrics.accuracy || 0,
-                acplWhite: whiteMetrics.acpl || 0,
-                acplBlack: blackMetrics.acpl || 0,
-                blundersWhite: whiteMetrics.blunders || 0,
-                blundersBlack: blackMetrics.blunders || 0,
-                mistakesWhite: whiteMetrics.mistakes || 0,
-                mistakesBlack: blackMetrics.mistakes || 0,
-                inaccuraciesWhite: whiteMetrics.inaccuracies || 0,
-                inaccuraciesBlack: blackMetrics.inaccuracies || 0,
-                brilliantMovesWhite: whiteMetrics.brilliantMoves || 0,
-                brilliantMovesBlack: blackMetrics.brilliantMoves || 0,
-                goodMovesWhite: whiteMetrics.goodMoves || 0,
-                goodMovesBlack: blackMetrics.goodMoves || 0,
-                bookMovesWhite: whiteMetrics.bookMoves || 0,
-                bookMovesBlack: blackMetrics.bookMoves || 0,
-                performanceRatingWhite: whiteMetrics.performanceRating || null,
-                performanceRatingBlack: blackMetrics.performanceRating || null,
-                analysisDepth: depth,
-                engineVersion: result.engineVersion || 'Stockfish 16',
-                totalPositions: result.moves?.length || 0,
-            },
+        // Delete existing position analyses if re-analyzing
+        await this.prisma.positionAnalysis.deleteMany({
+            where: { analysis: { gameId } },
+        });
+
+        // Upsert analysis record (create or update if already exists)
+        const analysisData = {
+            accuracyWhite: whiteMetrics.accuracy || 0,
+            accuracyBlack: blackMetrics.accuracy || 0,
+            acplWhite: whiteMetrics.acpl || 0,
+            acplBlack: blackMetrics.acpl || 0,
+            blundersWhite: whiteMetrics.blunders || 0,
+            blundersBlack: blackMetrics.blunders || 0,
+            mistakesWhite: whiteMetrics.mistakes || 0,
+            mistakesBlack: blackMetrics.mistakes || 0,
+            inaccuraciesWhite: whiteMetrics.inaccuracies || 0,
+            inaccuraciesBlack: blackMetrics.inaccuracies || 0,
+            brilliantMovesWhite: whiteMetrics.brilliantMoves || 0,
+            brilliantMovesBlack: blackMetrics.brilliantMoves || 0,
+            goodMovesWhite: whiteMetrics.goodMoves || 0,
+            goodMovesBlack: blackMetrics.goodMoves || 0,
+            bookMovesWhite: whiteMetrics.bookMoves || 0,
+            bookMovesBlack: blackMetrics.bookMoves || 0,
+            performanceRatingWhite: whiteMetrics.performanceRating || null,
+            performanceRatingBlack: blackMetrics.performanceRating || null,
+            analysisDepth: depth,
+            engineVersion: result.engineVersion || 'Stockfish 16',
+            totalPositions: result.moves?.length || 0,
+        };
+
+        const analysis = await this.prisma.analysis.upsert({
+            where: { gameId },
+            update: analysisData,
+            create: { gameId, ...analysisData },
         });
 
         // Save position analyses (move-by-move)
