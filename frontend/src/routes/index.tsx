@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet, useRoutes } from 'react-router-dom';
 import MainLayout from '../components/layout/MainLayout';
 import Login from '../pages/Login';
 import Signup from '../pages/Signup';
@@ -47,7 +47,8 @@ const PublicRoute = () => {
     return <Outlet />;
 };
 
-export const router = createBrowserRouter([
+// Route definitions
+const routeConfig = [
     {
         element: <PublicRoute />,
         children: [
@@ -96,4 +97,12 @@ export const router = createBrowserRouter([
             },
         ],
     },
-]);
+];
+
+// AppRoutes component that uses useRoutes hook - must be used inside AuthProvider
+export const AppRoutes = () => {
+    return useRoutes(routeConfig);
+};
+
+// Also export router for RouterProvider usage
+export const router = createBrowserRouter(routeConfig);

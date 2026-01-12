@@ -10,9 +10,14 @@ async function bootstrap() {
     const apiPrefix = process.env.API_PREFIX || 'api/v1';
     app.setGlobalPrefix(apiPrefix);
 
-    // CORS
+    // CORS - Handle single or multiple origins
+    const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
+    const allowedOrigins = corsOrigin.includes(',')
+        ? corsOrigin.split(',').map(origin => origin.trim())
+        : corsOrigin;
+
     app.enableCors({
-        origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+        origin: allowedOrigins,
         credentials: true,
     });
 

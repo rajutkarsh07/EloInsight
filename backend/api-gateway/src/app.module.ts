@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { GamesModule } from './games/games.module';
 import { AnalysisModule } from './analysis/analysis.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
     imports: [
@@ -11,6 +12,7 @@ import { AnalysisModule } from './analysis/analysis.module';
             isGlobal: true,
             envFilePath: '.env',
         }),
+        PrismaModule,
         AuthModule,
         UsersModule,
         GamesModule,

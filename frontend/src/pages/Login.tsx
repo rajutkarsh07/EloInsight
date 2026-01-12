@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react'; import { toast } from 'sonner';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -12,20 +12,21 @@ const Login = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async () => {
         setError('');
         setLoading(true);
-
+        console.log(email, password);
         try {
             await login({ email, password });
+            toast.success('✅ Logged in successfully!');
             navigate('/dashboard', { replace: true });
         } catch (err: unknown) {
+            let msg = 'Invalid credentials';
             if (err instanceof Error) {
-                setError(err.message || 'Invalid email or password');
-            } else {
-                setError('Invalid email or password');
+                msg = err.message || msg;
             }
+            toast.error(`❌ ${msg}`);
+            setError(msg);
         } finally {
             setLoading(false);
         }
@@ -52,7 +53,7 @@ const Login = () => {
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
                     <div className="space-y-2">
                         <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email">
                             Email
@@ -85,8 +86,9 @@ const Login = () => {
                     </div>
 
                     <button
-                        type="submit"
+                        type="button"
                         disabled={loading}
+                        onClick={handleSubmit}
                         className={cn(
                             "w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
                             "bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 mt-6 btn-glow"
