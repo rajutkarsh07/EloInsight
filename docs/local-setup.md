@@ -1,338 +1,550 @@
 # Local Development Setup
 
-Complete guide to running EloInsight locally using Docker.
+Complete guide to running EloInsight locally **without Docker** (native development).
+
+---
 
 ## Prerequisites
 
-- **Docker Desktop** (v20.10+) - [Install](https://docs.docker.com/get-docker/)
-- **Docker Compose** (v2.0+) - Included with Docker Desktop
-- **Git** - [Install](https://git-scm.com/)
-- **Make** (optional) - For convenience commands
+Install the following tools on your system:
 
-### Optional (for non-Docker development)
-- **Node.js** (v20+)
-- **Go** (v1.21+)
-- **Stockfish** chess engine
+| Tool | Version | Installation |
+|------|---------|--------------|
+| **Node.js** | v20+ | [Download](https://nodejs.org/) or `brew install node` |
+| **Go** | v1.21+ | [Download](https://golang.org/dl/) or `brew install go` |
+| **PostgreSQL** | v15+ | `brew install postgresql@15` |
+| **Stockfish** | v16+ | `brew install stockfish` |
+| **Protobuf** | v3.21+ | `brew install protobuf` |
+| **Git** | Latest | `brew install git` |
 
-## Quick Start
-
-### One-Command Startup
-
-```bash
-# Clone repository
-git clone https://github.com/eloinsight/eloinsight.git
-cd eloinsight
-
-# Copy environment file
-cp .env.example .env
-
-# Start everything
-make dev
-```
-
-### Without Make
+### Verify Installations
 
 ```bash
-# Start with Docker Compose
-docker-compose -f docker-compose.dev.yml up -d
+node --version    # Should be v20+
+npm --version     # Should be v10+
+go version        # Should be go1.21+
+psql --version    # Should be 15+
+stockfish         # Should print Stockfish version
+protoc --version  # Should be libprotoc 3.21+
 ```
 
-### Service URLs
+---
+
+## Quick Start (All Commands)
+
+Run these commands in order from the project root:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/yourusername/EloInsight.git
+cd EloInsight
+
+# 2. Start PostgreSQL (if not running)
+brew services start postgresql@15
+
+# 3. Create database
+createdb eloinsight
+
+# 4. Setup API Gateway
+cd backend/api-gateway
+npm install
+cp .env.example .env   # Then edit .env with your values
+npx prisma generate
+npx prisma migrate dev
+cd ../..
+
+# 5. Setup Game Sync Service
+cd backend/game-sync-service
+npm install
+cp .env.example .env   # Then edit .env with your values
+npx prisma generate
+cd ../..
+
+# 6. Setup Analysis Service (Go)
+cd backend/analysis-service
+go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+export PATH="$PATH:$(go env GOPATH)/bin"
+make proto
+go mod tidy
+go build -o bin/analysis-service ./cmd/server
+cd ../..
+
+# 7. Setup Frontend
+cd frontend
+npm install
+cd ..
+```
+
+---
+
+## Detailed Setup
+
+### Step 1: Database Setup
+
+```bash
+# Start PostgreSQL
+brew services start postgresql@15
+
+# Create database
+createdb eloinsight
+
+# Verify connection
+psql -d eloinsight -c "SELECT version();"
+```
+
+---
+
+### Step 2: API Gateway Setup
+
+```bash
+cd backend/api-gateway
+npm install
+```
+
+Create `.env` file:
+
+```bash
+# backend/api-gateway/.env
+
+# Database
+DATABASE_URL="postgresql://localhost:5432/eloinsight?schema=public"
+
+# JWT Authentication
+JWT_SECRET="your-super-secret-jwt-key-change-in-production"
+JWT_EXPIRES_IN="1h"
+
+# Server
+PORT=4000
+API_PREFIX="api/v1"
+CORS_ORIGIN="http://localhost:5173"
+
+# Analysis Service (gRPC)
+ANALYSIS_SERVICE_URL="localhost:50051"
+
+# Node environment
+NODE_ENV="development"
+```
+
+Run migrations:
+
+```bash
+npx prisma generate
+npx prisma migrate dev --name init
+```
+
+Start the service:
+
+```bash
+npm run start:dev
+```
+
+The API Gateway will be available at: `http://localhost:4000/api/v1`  
+Swagger docs: `http://localhost:4000/api/docs`
+
+---
+
+### Step 3: Game Sync Service Setup
+
+```bash
+cd backend/game-sync-service
+npm install
+```
+
+Create `.env` file:
+
+```bash
+# backend/game-sync-service/.env
+
+# Database (same as API Gateway)
+DATABASE_URL="postgresql://localhost:5432/eloinsight?schema=public"
+
+# Server
+PORT=3002
+CORS_ORIGIN="http://localhost:5173,http://localhost:4000"
+
+# Sync settings
+SYNC_CRON="0 */6 * * *"
+
+# Node environment
+NODE_ENV="development"
+```
+
+Generate Prisma client:
+
+```bash
+npx prisma generate
+```
+
+Start the service:
+
+```bash
+npm run start:dev
+```
+
+The Game Sync Service will be available at: `http://localhost:3002`
+
+---
+
+### Step 4: Analysis Service Setup (Go)
+
+```bash
+cd backend/analysis-service
+```
+
+#### Install Go gRPC tools:
+
+```bash
+go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+```
+
+#### Add Go bin to PATH:
+
+For **zsh** (default on Mac):
+```bash
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+For **bash**:
+```bash
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+#### Verify tools installed:
+
+```bash
+which protoc-gen-go
+which protoc-gen-go-grpc
+```
+
+#### Generate proto files and build:
+
+```bash
+make proto
+go mod tidy
+go build -o bin/analysis-service ./cmd/server
+```
+
+Create `.env` file (optional - defaults work fine):
+
+```bash
+# backend/analysis-service/.env
+
+# gRPC Server
+GRPC_PORT=50051
+
+# Stockfish Configuration
+STOCKFISH_PATH="/opt/homebrew/bin/stockfish"  # Run: which stockfish
+STOCKFISH_THREADS=4
+STOCKFISH_HASH=2048
+
+# Analysis Settings
+DEFAULT_DEPTH=20
+MAX_DEPTH=30
+WORKER_POOL_SIZE=4
+
+# Logging
+LOG_LEVEL="info"
+```
+
+Start the service:
+
+```bash
+./bin/analysis-service
+```
+
+The Analysis Service will be available at: `grpc://localhost:50051`
+
+---
+
+### Step 5: Frontend Setup
+
+```bash
+cd frontend
+npm install
+```
+
+Create `.env` file:
+
+```bash
+# frontend/.env
+
+VITE_API_URL="http://localhost:4000/api/v1"
+```
+
+Start the frontend:
+
+```bash
+npm run dev
+```
+
+The frontend will be available at: `http://localhost:5173`
+
+---
+
+## Running All Services
+
+Open **5 terminal windows** and run:
+
+| Terminal | Directory | Command |
+|----------|-----------|---------|
+| 1 | `backend/analysis-service` | `./bin/analysis-service` |
+| 2 | `backend/api-gateway` | `npm run start:dev` |
+| 3 | `backend/game-sync-service` | `npm run start:dev` |
+| 4 | `frontend` | `npm run dev` |
+| 5 | (optional) | Database tools / logs |
+
+---
+
+## Service URLs
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Frontend | http://localhost:3000 | Next.js web app |
+| Frontend | http://localhost:5173 | React web app |
 | API Gateway | http://localhost:4000/api/v1 | REST API |
 | Swagger Docs | http://localhost:4000/api/docs | API documentation |
 | Game Sync | http://localhost:3002 | Game sync service |
 | Analysis | grpc://localhost:50051 | gRPC analysis |
 | PostgreSQL | localhost:5432 | Database |
-| Redis | localhost:6379 | Cache |
 
-## Development Modes
+---
 
-### 1. Full Docker (Recommended)
+## Create a Test User
 
-All services run in Docker with hot reloading.
-
-```bash
-make dev
-```
-
-### 2. Infrastructure Only
-
-Run only Postgres and Redis in Docker, services locally.
+After all services are running:
 
 ```bash
-# Start infrastructure
-make dev-infra
+cd backend/api-gateway
+npx ts-node -e "
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcrypt');
 
-# In separate terminals:
-cd frontend && npm run dev
-cd backend/api-gateway && npm run start:dev
-cd backend/game-sync-service && npm run start:dev
-cd backend/analysis-service && make run
+const prisma = new PrismaClient();
+
+async function main() {
+  const hash = await bcrypt.hash('password123', 10);
+  const user = await prisma.user.create({
+    data: {
+      email: 'test@example.com',
+      username: 'testuser',
+      passwordHash: hash,
+      emailVerified: true,
+    },
+  });
+  console.log('Created user:', user.email);
+}
+
+main().finally(() => prisma.\$disconnect());
+"
 ```
 
-### 3. Production Build
+Then login at `http://localhost:5173` with:
+- Email: `test@example.com`
+- Password: `password123`
 
-Build and run production containers.
-
-```bash
-make prod
-```
-
-## Docker Compose Files
-
-| File | Purpose |
-|------|---------|
-| `docker-compose.yml` | Production build |
-| `docker-compose.dev.yml` | Development with hot reload |
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and configure:
-
-```bash
-# PostgreSQL
-POSTGRES_USER=eloinsight
-POSTGRES_PASSWORD=eloinsight_dev
-POSTGRES_DB=eloinsight
-POSTGRES_PORT=5432
-
-# Redis
-REDIS_PORT=6379
-
-# API Gateway
-API_PORT=4000
-JWT_SECRET=your-secret-key
-
-# Services
-GAME_SYNC_PORT=3002
-ANALYSIS_PORT=50051
-
-# Frontend
-FRONTEND_PORT=3000
-```
-
-## Common Commands
-
-### Makefile Commands
-
-```bash
-make help          # Show all commands
-make dev           # Start development environment
-make dev-infra     # Start only Postgres + Redis
-make down          # Stop all containers
-make logs          # View all logs
-make logs-api      # View API Gateway logs
-make db-migrate    # Run database migrations
-make db-seed       # Seed sample data
-make db-studio     # Open Prisma Studio
-make test          # Run all tests
-make clean         # Remove containers and volumes
-make status        # Show container status
-```
-
-### Docker Compose Commands
-
-```bash
-# Start services
-docker-compose -f docker-compose.dev.yml up -d
-
-# Stop services
-docker-compose -f docker-compose.dev.yml down
-
-# View logs
-docker-compose -f docker-compose.dev.yml logs -f
-
-# Restart specific service
-docker-compose -f docker-compose.dev.yml restart api-gateway
-
-# Rebuild and start
-docker-compose -f docker-compose.dev.yml up -d --build
-
-# Remove volumes (reset data)
-docker-compose -f docker-compose.dev.yml down -v
-```
-
-## Database Setup
-
-### Initial Migration
-
-```bash
-# With Docker running
-cd backend/database
-npm install
-npm run db:migrate
-```
-
-### Seed Sample Data
-
-```bash
-cd backend/database
-npm run db:seed
-```
-
-### Prisma Studio (GUI)
-
-```bash
-cd backend/database
-npm run db:studio
-# Opens at http://localhost:5555
-```
-
-### Direct Database Access
-
-```bash
-# Using psql
-docker exec -it eloinsight-postgres-dev psql -U eloinsight -d eloinsight
-
-# Common queries
-\dt              # List tables
-\d users         # Describe users table
-SELECT * FROM users;
-```
-
-## Service Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        docker-compose                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
-│   │  Frontend   │  │ API Gateway │  │  Analysis   │             │
-│   │  :3000      │  │  :4000      │  │  :50051     │             │
-│   │  (Next.js)  │  │  (NestJS)   │  │  (Go+SF)    │             │
-│   └──────┬──────┘  └──────┬──────┘  └──────┬──────┘             │
-│          │                │                │                     │
-│          │     ┌──────────┴─────────┐      │                     │
-│          │     │                    │      │                     │
-│   ┌──────▼─────▼────┐   ┌──────────▼──────▼─────┐               │
-│   │   Game Sync     │   │       PostgreSQL       │               │
-│   │   :3002         │   │       :5432            │               │
-│   │   (NestJS)      │   └──────────┬─────────────┘               │
-│   └─────────────────┘              │                             │
-│                          ┌─────────▼─────────┐                   │
-│                          │       Redis       │                   │
-│                          │       :6379       │                   │
-│                          └───────────────────┘                   │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+---
 
 ## Troubleshooting
 
-### Container Won't Start
+### `protoc-gen-go: program not found`
 
 ```bash
-# Check logs
-docker-compose -f docker-compose.dev.yml logs <service-name>
-
-# Check container status
-docker ps -a
-
-# Restart with rebuild
-docker-compose -f docker-compose.dev.yml up -d --build <service-name>
+go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+export PATH="$PATH:$(go env GOPATH)/bin"
 ```
 
-### Port Already in Use
+### `Port already in use`
 
 ```bash
 # Find process using port
 lsof -i :4000
 
-# Kill process
+# Kill it
+kill -9 <PID>
+```
+
+### `Database connection refused`
+
+```bash
+# Check PostgreSQL is running
+brew services list
+
+# Start if not running
+brew services start postgresql@15
+```
+
+### `Stockfish not found`
+
+```bash
+# Install Stockfish
+brew install stockfish
+
+# Find path
+which stockfish
+
+# Update .env with correct path
+STOCKFISH_PATH="/opt/homebrew/bin/stockfish"
+```
+
+### Prisma migration errors
+
+```bash
+# Reset database (WARNING: deletes all data)
+npx prisma migrate reset
+
+# Re-run migrations
+npx prisma migrate dev
+```
+
+### `EADDRINUSE: address already in use`
+
+```bash
+# Find and kill process on specific port
+lsof -i :4000
 kill -9 <PID>
 
-# Or change port in .env
-API_PORT=4001
+# Or kill all node processes
+pkill -f node
 ```
 
-### Database Connection Issues
+### Go module errors
 
 ```bash
-# Check Postgres is healthy
-docker-compose -f docker-compose.dev.yml ps postgres
-
-# Check connection from host
-psql -h localhost -U eloinsight -d eloinsight
-
-# Reset database
-docker-compose -f docker-compose.dev.yml down -v
-docker-compose -f docker-compose.dev.yml up -d postgres
+cd backend/analysis-service
+go mod tidy
+go mod download
 ```
-
-### Node Modules Issues
-
-```bash
-# Clear node_modules in container
-docker-compose -f docker-compose.dev.yml exec api-gateway rm -rf node_modules
-docker-compose -f docker-compose.dev.yml restart api-gateway
-```
-
-### Analysis Service Not Responding
-
-```bash
-# Check gRPC health
-grpcurl -plaintext localhost:50051 list
-
-# Check service logs
-make logs-analysis
-
-# Verify Stockfish installed
-docker exec eloinsight-analysis-dev stockfish
-```
-
-## Development Workflow
-
-### 1. Start Development Environment
-
-```bash
-make dev
-```
-
-### 2. Make Code Changes
-
-- Frontend: Changes auto-reload (Next.js Fast Refresh)
-- Backend: Changes auto-reload (NestJS watch mode)
-- Analysis: Requires rebuild (`docker-compose restart analysis-service`)
-
-### 3. Run Tests
-
-```bash
-make test
-```
-
-### 4. View Logs
-
-```bash
-make logs
-```
-
-### 5. Stop When Done
-
-```bash
-make down
-```
-
-## Resource Requirements
-
-| Service | RAM | CPU | Notes |
-|---------|-----|-----|-------|
-| PostgreSQL | 256MB | 0.5 | Persistent data |
-| Redis | 64MB | 0.1 | Cache |
-| API Gateway | 256MB | 0.5 | Node.js |
-| Game Sync | 256MB | 0.5 | Node.js |
-| Analysis | 2GB | 2.0 | Stockfish engine |
-| Frontend | 512MB | 1.0 | Next.js dev |
-
-**Total Recommended**: 4GB RAM, 4 CPU cores
 
 ---
 
-**Related Documentation:**
-- [Database Design](database-design.md)
-- [Services Overview](services.md)
-- [Deployment Guide](deployment.md)
+## Environment Variables Summary
+
+### API Gateway (`backend/api-gateway/.env`)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DATABASE_URL` | ✅ | - | PostgreSQL connection string |
+| `JWT_SECRET` | ✅ | - | Secret for JWT tokens |
+| `JWT_EXPIRES_IN` | ❌ | 1h | JWT token expiration |
+| `PORT` | ❌ | 4000 | Server port |
+| `API_PREFIX` | ❌ | api/v1 | API route prefix |
+| `CORS_ORIGIN` | ❌ | http://localhost:5173 | Allowed CORS origins |
+| `ANALYSIS_SERVICE_URL` | ❌ | localhost:50051 | gRPC analysis service |
+| `NODE_ENV` | ❌ | development | Environment mode |
+
+### Game Sync (`backend/game-sync-service/.env`)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DATABASE_URL` | ✅ | - | PostgreSQL connection string |
+| `PORT` | ❌ | 3002 | Server port |
+| `CORS_ORIGIN` | ❌ | * | Allowed CORS origins |
+| `SYNC_CRON` | ❌ | 0 */6 * * * | Cron schedule for auto-sync |
+| `NODE_ENV` | ❌ | development | Environment mode |
+
+### Analysis Service (`backend/analysis-service/.env`)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `GRPC_PORT` | ❌ | 50051 | gRPC server port |
+| `STOCKFISH_PATH` | ❌ | /usr/local/bin/stockfish | Path to Stockfish binary |
+| `STOCKFISH_THREADS` | ❌ | 4 | CPU threads for engine |
+| `STOCKFISH_HASH` | ❌ | 2048 | Hash table size (MB) |
+| `DEFAULT_DEPTH` | ❌ | 20 | Default analysis depth |
+| `MAX_DEPTH` | ❌ | 30 | Maximum analysis depth |
+| `WORKER_POOL_SIZE` | ❌ | 4 | Number of worker threads |
+| `LOG_LEVEL` | ❌ | info | Logging level |
+
+### Frontend (`frontend/.env`)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `VITE_API_URL` | ✅ | - | Backend API URL |
+
+---
+
+## Development Tips
+
+### Hot Reloading
+
+- **Frontend**: Changes auto-reload (Vite HMR)
+- **API Gateway**: Changes auto-reload (`npm run start:dev` uses nodemon)
+- **Game Sync**: Changes auto-reload (`npm run start:dev` uses nodemon)
+- **Analysis Service**: Requires rebuild (`go build` and restart)
+
+### Database GUI
+
+```bash
+cd backend/api-gateway
+npx prisma studio
+# Opens at http://localhost:5555
+```
+
+### View Logs
+
+All services output logs to their terminal windows. For more verbose logging:
+
+```bash
+# API Gateway / Game Sync
+LOG_LEVEL=debug npm run start:dev
+
+# Analysis Service
+LOG_LEVEL=debug ./bin/analysis-service
+```
+
+### Testing gRPC Analysis Service
+
+```bash
+# Install grpcurl
+brew install grpcurl
+
+# List services
+grpcurl -plaintext localhost:50051 list
+
+# Test health
+grpcurl -plaintext localhost:50051 grpc.health.v1.Health/Check
+```
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     EloInsight Architecture                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   ┌─────────────┐                                               │
+│   │  Frontend   │  React + Vite                                 │
+│   │  :5173      │  User Interface                               │
+│   └──────┬──────┘                                               │
+│          │ HTTP                                                  │
+│          ▼                                                       │
+│   ┌─────────────┐      gRPC      ┌─────────────┐               │
+│   │ API Gateway │ ◄────────────► │  Analysis   │               │
+│   │  :4000      │                │  :50051     │               │
+│   │  (NestJS)   │                │  (Go+SF)    │               │
+│   └──────┬──────┘                └─────────────┘               │
+│          │                                                       │
+│          │ Prisma ORM                                           │
+│          ▼                                                       │
+│   ┌─────────────┐      ┌─────────────┐                         │
+│   │ PostgreSQL  │      │  Game Sync  │                         │
+│   │  :5432      │ ◄────│  :3002      │                         │
+│   │  Database   │      │  (NestJS)   │                         │
+│   └─────────────┘      └─────────────┘                         │
+│                              │                                   │
+│                              ▼                                   │
+│                        Chess.com API                            │
+│                        Lichess API                              │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+**Need help?** Check the [GitHub Issues](https://github.com/yourusername/EloInsight/issues) or create a new one.
