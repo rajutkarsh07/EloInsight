@@ -10,6 +10,7 @@ require (
 )
 
 require (
+	github.com/notnil/chess v1.10.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect

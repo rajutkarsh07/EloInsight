@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/eloinsight/analysis-service/internal/engine"
 	"github.com/eloinsight/analysis-service/internal/pool"
+	"github.com/notnil/chess"
 	"go.uber.org/zap"
 )
 
@@ -231,12 +231,13 @@ func (a *Analyzer) createMoveAnalysis(
 	}
 	moveNumber := (ply / 2) + 1
 
+	// The played move is stored in nextPos (the position AFTER the move was made)
 	analysis := MoveAnalysis{
 		MoveNumber:    moveNumber,
 		Ply:           ply,
 		Color:         color,
-		PlayedMove:    currentPos.MoveSAN,
-		PlayedMoveUCI: currentPos.MoveUCI,
+		PlayedMove:    nextPos.MoveSAN,
+		PlayedMoveUCI: nextPos.MoveUCI,
 		BestMoveUCI:   bestMoveUCI,
 		FENBefore:     currentPos.FEN,
 		FENAfter:      nextPos.FEN,
@@ -262,8 +263,8 @@ func (a *Analyzer) createMoveAnalysis(
 		}
 	}
 
-	// Classify the move
-	analysis.Classification = a.classifyMove(analysis.CentipawnLoss, currentPos.MoveUCI == bestMoveUCI)
+	// Classify the move (compare played move UCI with best move UCI)
+	analysis.Classification = a.classifyMove(analysis.CentipawnLoss, nextPos.MoveUCI == bestMoveUCI)
 
 	return analysis
 }
@@ -346,63 +347,102 @@ type Position struct {
 	MoveUCI string
 }
 
-// ParsePGN parses a PGN and returns the list of positions
+// ParsePGN parses a PGN and returns the list of positions with proper FEN strings
+// Handles both Chess.com format (full PGN with headers) and Lichess format (moves only)
 func ParsePGN(pgn string) ([]Position, error) {
 	positions := make([]Position, 0)
 
-	// Extract moves from PGN (simplified parser)
-	// Remove headers
-	headerRegex := regexp.MustCompile(`\[[^\]]+\]`)
-	movesSection := headerRegex.ReplaceAllString(pgn, "")
+	// Clean the PGN - handle Lichess format (moves only, no headers)
+	cleanedPGN := cleanPGNForParsing(pgn)
 
-	// Remove comments
-	commentRegex := regexp.MustCompile(`\{[^}]*\}`)
-	movesSection = commentRegex.ReplaceAllString(movesSection, "")
-
-	// Remove variations
-	variationRegex := regexp.MustCompile(`\([^)]*\)`)
-	movesSection = variationRegex.ReplaceAllString(movesSection, "")
-
-	// Remove result
-	resultRegex := regexp.MustCompile(`(1-0|0-1|1\/2-1\/2|\*)`)
-	movesSection = resultRegex.ReplaceAllString(movesSection, "")
-
-	// Remove move numbers
-	moveNumRegex := regexp.MustCompile(`\d+\.+`)
-	movesSection = moveNumRegex.ReplaceAllString(movesSection, "")
-
-	// Clean up whitespace
-	movesSection = strings.TrimSpace(movesSection)
-	movesSection = regexp.MustCompile(`\s+`).ReplaceAllString(movesSection, " ")
-
-	if movesSection == "" {
-		return positions, nil
+	// Use the chess library to parse PGN
+	reader := strings.NewReader(cleanedPGN)
+	pgnReader, err := chess.PGN(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse PGN: %w", err)
 	}
 
-	// Starting position
-	startFEN := "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-	positions = append(positions, Position{FEN: startFEN})
+	game := chess.NewGame(pgnReader)
 
-	// For a real implementation, we would need a chess library to:
-	// 1. Parse each SAN move
-	// 2. Apply it to the board
-	// 3. Generate the resulting FEN
-	// For now, we'll return the moves as placeholders
+	// Add starting position
+	positions = append(positions, Position{
+		FEN:     chess.StartingPosition().String(),
+		MoveSAN: "",
+		MoveUCI: "",
+	})
 
-	moves := strings.Fields(movesSection)
-	for i, move := range moves {
-		if move == "" {
-			continue
+	// Get all positions from the game
+	moveHistory := game.Moves()
+
+	// Create a new game to replay moves and track FEN at each position
+	replayGame := chess.NewGame()
+
+	for _, move := range moveHistory {
+		// Get move in SAN and UCI notation
+		moveSAN := chess.AlgebraicNotation{}.Encode(replayGame.Position(), move)
+		moveUCI := move.String()
+
+		// Make the move
+		err := replayGame.Move(move)
+		if err != nil {
+			return nil, fmt.Errorf("failed to replay move %s: %w", moveSAN, err)
 		}
-		// In a real implementation, we would calculate the FEN here
+
+		// Get FEN after the move
+		fenAfter := replayGame.Position().String()
+
+		// Store position with the move that was played
 		positions = append(positions, Position{
-			FEN:     fmt.Sprintf("position_%d", i), // Placeholder
-			MoveSAN: move,
-			MoveUCI: move, // Would need conversion
+			FEN:     fenAfter,
+			MoveSAN: moveSAN,
+			MoveUCI: moveUCI,
 		})
 	}
 
 	return positions, nil
+}
+
+// cleanPGNForParsing converts various PGN formats to a standard format the chess library can parse
+func cleanPGNForParsing(pgn string) string {
+	pgn = strings.TrimSpace(pgn)
+
+	// Check if it's a Lichess-style PGN (just moves, no headers)
+	// Lichess format: "e4 c5 Nf3 Nc6 Bb5..."
+	if !strings.Contains(pgn, "[") {
+		// No headers, this is likely Lichess format - add minimal headers
+		// Convert space-separated moves to numbered moves
+		moves := strings.Fields(pgn)
+		if len(moves) == 0 {
+			return pgn
+		}
+
+		// Build a proper PGN with move numbers
+		var builder strings.Builder
+		builder.WriteString("[Event \"?\"]\n")
+		builder.WriteString("[Site \"?\"]\n")
+		builder.WriteString("[Date \"????.??.??\"]\n")
+		builder.WriteString("[Round \"?\"]\n")
+		builder.WriteString("[White \"?\"]\n")
+		builder.WriteString("[Black \"?\"]\n")
+		builder.WriteString("[Result \"*\"]\n\n")
+
+		moveNum := 1
+		for i, move := range moves {
+			if i%2 == 0 {
+				// White's move
+				builder.WriteString(fmt.Sprintf("%d. %s ", moveNum, move))
+			} else {
+				// Black's move
+				builder.WriteString(fmt.Sprintf("%s ", move))
+				moveNum++
+			}
+		}
+		builder.WriteString("*")
+		return builder.String()
+	}
+
+	// Chess.com format with headers - return as-is, the library handles it
+	return pgn
 }
 
 // GetBestMoves returns the top N moves for a position
