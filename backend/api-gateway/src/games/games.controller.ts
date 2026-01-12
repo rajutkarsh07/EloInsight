@@ -369,6 +369,7 @@ export class GamesController {
                 id: existingGame.id,
                 message: 'Game already exists',
                 alreadyExists: true,
+                analysisStatus: existingGame.analysisStatus,
             };
         }
 
