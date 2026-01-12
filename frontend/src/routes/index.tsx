@@ -5,6 +5,7 @@ import Signup from '../pages/Signup';
 import VerifyEmail from '../pages/VerifyEmail';
 import Dashboard from '../pages/Dashboard';
 import GamesList from '../pages/GamesList';
+import AnalysisList from '../pages/AnalysisList';
 import AnalysisViewer from '../pages/AnalysisViewer';
 import Settings from '../pages/Settings';
 import { useAuth } from '../contexts/AuthContext';
@@ -86,7 +87,11 @@ const routeConfig = [
                         element: <GamesList />,
                     },
                     {
-                        path: 'games/:gameId/analysis',
+                        path: 'analysis',
+                        element: <AnalysisList />,
+                    },
+                    {
+                        path: 'analysis/:gameId',
                         element: <AnalysisViewer />,
                     },
                     {

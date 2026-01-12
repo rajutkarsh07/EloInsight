@@ -15,7 +15,6 @@ const Login = () => {
     const handleSubmit = async () => {
         setError('');
         setLoading(true);
-        console.log(email, password);
         try {
             await login({ email, password });
             toast.success('✅ Logged in successfully!');

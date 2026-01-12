@@ -201,9 +201,10 @@ export class LichessService {
     }
 
     private formatTimeControl(clock?: { initial: number; increment: number }): string {
-        if (!clock) return '-';
+        if (!clock || clock.initial == null) return '-';
         const minutes = Math.floor(clock.initial / 60);
-        return `${minutes}+${clock.increment}`;
+        const increment = clock.increment ?? 0;
+        return `${minutes}+${increment}`;
     }
 
     private mapTermination(status: string): string {
