@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, Star, Zap, Check, ArrowLeft, Trophy } from 'lucide-react';
 import ChessBoardViewer from '../components/chess/ChessBoardViewer';
@@ -117,12 +117,18 @@ const AnalysisViewer = () => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [handleKeyDown]);
 
-    const getCurrentFen = () => {
-        if (!analysis) return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-        if (currentMoveIndex === 0) return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    const currentFen = useMemo(() => {
+        const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+        if (!analysis || currentMoveIndex === 0) return startingFen;
+        
         const move = analysis.moves[currentMoveIndex - 1];
-        return move?.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    };
+        const fen = move?.fen;
+        
+        if (fen && typeof fen === 'string' && fen.trim().length > 0) {
+            return fen;
+        }
+        return startingFen;
+    }, [analysis, currentMoveIndex]);
 
     const getClassificationIcon = (classification: string) => {
         switch (classification) {
@@ -375,7 +381,7 @@ const AnalysisViewer = () => {
                     {/* Chessboard */}
                     <div className="bg-card border rounded-xl shadow-card overflow-hidden">
                         <ChessBoardViewer
-                            fen={getCurrentFen()}
+                            fen={currentFen}
                             interactive={false}
                         />
                     </div>
@@ -398,7 +404,7 @@ const AnalysisViewer = () => {
                             <ChevronLeft className="h-5 w-5" />
                         </button>
                         <span className="px-4 py-2 text-sm font-medium bg-muted rounded-md min-w-[100px] text-center">
-                            Move {Math.ceil(currentMoveIndex / 2)} / {Math.ceil(analysis.moves.length / 2)}
+                            Move {currentMoveIndex} / {analysis.moves.length}
                         </span>
                         <button
                             onClick={() => goToMove(currentMoveIndex + 1)}

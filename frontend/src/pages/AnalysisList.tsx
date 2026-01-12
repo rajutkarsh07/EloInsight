@@ -1,8 +1,46 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Eye, RotateCw, Target, TrendingUp, CheckCircle2 } from 'lucide-react';
+import { BarChart3, Eye, RotateCw, Target, TrendingUp, CheckCircle2, Filter, X } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
+
+interface Filters {
+    platform: string;
+    timeControl: string;
+    accuracy: string;
+    dateRange: string;
+}
+
+// Get time control category
+const getTimeControlCategory = (timeControl: string): string => {
+    if (!timeControl || timeControl === '-') return 'unknown';
+    const parts = timeControl.split('+');
+    const baseValue = parseInt(parts[0], 10);
+    if (isNaN(baseValue)) return 'unknown';
+    const minutes = baseValue >= 60 ? Math.floor(baseValue / 60) : baseValue;
+    const increment = parts[1] ? parseInt(parts[1], 10) : 0;
+    const totalTime = minutes + (increment * 40 / 60);
+    if (totalTime < 3) return 'bullet';
+    if (totalTime < 10) return 'blitz';
+    if (totalTime < 30) return 'rapid';
+    return 'classical';
+};
+
+// Check if date is within range
+const isWithinDateRange = (dateStr: string, range: string): boolean => {
+    if (range === 'all') return true;
+    const gameDate = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - gameDate.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    switch (range) {
+        case 'day': return diffDays <= 1;
+        case 'week': return diffDays <= 7;
+        case 'month': return diffDays <= 30;
+        case '6months': return diffDays <= 180;
+        default: return true;
+    }
+};
 
 interface AnalysisMetrics {
     accuracyWhite: number;
@@ -54,6 +92,12 @@ const AnalysisList = () => {
         total: 0,
         totalPages: 0,
     });
+    const [filters, setFilters] = useState<Filters>({
+        platform: 'all',
+        timeControl: 'all',
+        accuracy: 'all',
+        dateRange: 'all',
+    });
 
     const fetchAnalyzedGames = useCallback(async (page: number, limit: number) => {
         try {
@@ -81,6 +125,54 @@ const AnalysisList = () => {
             fetchAnalyzedGames(newPage, pagination.limit);
         }
     };
+
+    const updateFilter = (key: keyof Filters, value: string) => {
+        setFilters(prev => ({ ...prev, [key]: value }));
+    };
+
+    const clearFilters = () => {
+        setFilters({
+            platform: 'all',
+            timeControl: 'all',
+            accuracy: 'all',
+            dateRange: 'all',
+        });
+    };
+
+    const hasActiveFilters = Object.values(filters).some(v => v !== 'all');
+
+    // Apply client-side filters
+    const filteredGames = useMemo(() => {
+        return games.filter(game => {
+            // Platform filter
+            if (filters.platform !== 'all') {
+                if (game.platform !== filters.platform) return false;
+            }
+            
+            // Time control filter
+            if (filters.timeControl !== 'all') {
+                const category = getTimeControlCategory(game.timeControl);
+                if (category !== filters.timeControl) return false;
+            }
+            
+            // Accuracy filter (uses max of white/black accuracy)
+            if (filters.accuracy !== 'all' && game.analysis) {
+                const maxAccuracy = Math.max(game.analysis.accuracyWhite, game.analysis.accuracyBlack);
+                switch (filters.accuracy) {
+                    case 'high': if (maxAccuracy < 80) return false; break;
+                    case 'medium': if (maxAccuracy < 60 || maxAccuracy >= 80) return false; break;
+                    case 'low': if (maxAccuracy >= 60) return false; break;
+                }
+            }
+            
+            // Date range filter
+            if (filters.dateRange !== 'all') {
+                if (!isWithinDateRange(game.playedAt, filters.dateRange)) return false;
+            }
+            
+            return true;
+        });
+    }, [games, filters]);
 
     const getAccuracyColor = (accuracy: number): string => {
         if (accuracy >= 90) return 'text-emerald-400';
@@ -187,6 +279,101 @@ const AnalysisList = () => {
                 </div>
             )}
 
+            {/* Filters */}
+            <div className="p-4 bg-card border rounded-lg shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Filter size={16} className="text-muted-foreground" />
+                        <span className="text-sm font-medium">Filters</span>
+                        {hasActiveFilters && (
+                            <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs">
+                                {Object.values(filters).filter(v => v !== 'all').length} active
+                            </span>
+                        )}
+                    </div>
+                    {hasActiveFilters && (
+                        <button
+                            onClick={clearFilters}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            <X size={14} />
+                            Clear all
+                        </button>
+                    )}
+                </div>
+                
+                <div className="flex flex-wrap gap-3">
+                    {/* Platform Filter */}
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-xs text-muted-foreground uppercase tracking-wide">Platform</label>
+                        <select
+                            value={filters.platform}
+                            onChange={(e) => updateFilter('platform', e.target.value)}
+                            className="h-9 w-[140px] rounded-md border border-input bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        >
+                            <option value="all">All</option>
+                            <option value="chess.com">Chess.com</option>
+                            <option value="lichess">Lichess</option>
+                        </select>
+                    </div>
+
+                    {/* Time Control Filter */}
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-xs text-muted-foreground uppercase tracking-wide">Time Control</label>
+                        <select
+                            value={filters.timeControl}
+                            onChange={(e) => updateFilter('timeControl', e.target.value)}
+                            className="h-9 w-[140px] rounded-md border border-input bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        >
+                            <option value="all">All</option>
+                            <option value="bullet">Bullet</option>
+                            <option value="blitz">Blitz</option>
+                            <option value="rapid">Rapid</option>
+                            <option value="classical">Classical</option>
+                        </select>
+                    </div>
+
+                    {/* Accuracy Filter */}
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-xs text-muted-foreground uppercase tracking-wide">Accuracy</label>
+                        <select
+                            value={filters.accuracy}
+                            onChange={(e) => updateFilter('accuracy', e.target.value)}
+                            className="h-9 w-[140px] rounded-md border border-input bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        >
+                            <option value="all">All</option>
+                            <option value="high">High (80%+)</option>
+                            <option value="medium">Medium (60-80%)</option>
+                            <option value="low">Low (&lt;60%)</option>
+                        </select>
+                    </div>
+
+                    {/* Date Range Filter */}
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-xs text-muted-foreground uppercase tracking-wide">Date</label>
+                        <select
+                            value={filters.dateRange}
+                            onChange={(e) => updateFilter('dateRange', e.target.value)}
+                            className="h-9 w-[140px] rounded-md border border-input bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        >
+                            <option value="all">All Time</option>
+                            <option value="day">Last 24 Hours</option>
+                            <option value="week">Last 7 Days</option>
+                            <option value="month">Last 30 Days</option>
+                            <option value="6months">Last 6 Months</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* Results count */}
+                <div className="text-xs text-muted-foreground pt-1">
+                    {hasActiveFilters
+                        ? `Showing ${filteredGames.length} of ${games.length} analyzed games`
+                        : `Total: ${pagination.total} analyzed games`
+                    }
+                </div>
+            </div>
+
             <div className="rounded-xl border bg-card shadow-card overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -210,22 +397,26 @@ const AnalysisList = () => {
                                         </div>
                                     </td>
                                 </tr>
-                            ) : games.length === 0 ? (
+                            ) : filteredGames.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className="px-6 py-12 text-center">
                                         <div className="flex flex-col items-center gap-3">
                                             <BarChart3 className="h-12 w-12 text-muted-foreground/50" />
                                             <div>
-                                                <p className="text-muted-foreground">No analyzed games yet</p>
-                                                <p className="text-sm text-muted-foreground/70">
-                                                    Go to <button onClick={() => navigate('/games')} className="text-primary hover:underline">Games</button> and click "Analyze" on a game
+                                                <p className="text-muted-foreground">
+                                                    {games.length === 0 ? 'No analyzed games yet' : 'No games match your filters'}
                                                 </p>
+                                                {games.length === 0 && (
+                                                    <p className="text-sm text-muted-foreground/70">
+                                                        Go to <button onClick={() => navigate('/games')} className="text-primary hover:underline">Games</button> and click "Analyze" on a game
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
                                     </td>
                                 </tr>
                             ) : (
-                                games.map((game, i) => (
+                                filteredGames.map((game, i) => (
                                     <tr
                                         key={game.id}
                                         className="bg-emerald-500/5 hover:bg-emerald-500/10 border-l-2 border-l-emerald-500 transition-colors cursor-pointer animate-fade-in"
