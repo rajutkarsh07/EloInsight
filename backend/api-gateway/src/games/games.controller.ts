@@ -118,9 +118,9 @@ export class GamesController {
         // Create a map for quick lookup: externalId -> stored game info
         const storedGamesMap = new Map<string, { id: string; analysisStatus: string }>();
         storedGames.forEach(g => {
-            storedGamesMap.set(g.externalId, { 
-                id: g.id, 
-                analysisStatus: g.analysisStatus.toLowerCase() 
+            storedGamesMap.set(g.externalId, {
+                id: g.id,
+                analysisStatus: g.analysisStatus.toLowerCase()
             });
         });
 
@@ -167,7 +167,7 @@ export class GamesController {
             if (archives && archives.length > 0) {
                 const allGames: any[] = [];
                 const targetLimit = Math.min(Number(limit) * 3, 300); // Cap at 300 games
-                
+
                 // Fetch from recent archives until we have enough games (max 3 months)
                 const maxArchives = Math.min(3, archives.length);
                 for (let i = archives.length - 1; i >= archives.length - maxArchives && allGames.length < targetLimit; i--) {
@@ -178,10 +178,10 @@ export class GamesController {
                                 timeout: 30000,
                             })
                         );
-                        
+
                         const rawGames = gamesRes.data.games || [];
                         allGames.push(...rawGames.reverse());
-                        
+
                         // Small delay between requests to avoid rate limiting
                         await new Promise(resolve => setTimeout(resolve, 200));
                     } catch (archiveError) {
@@ -195,6 +195,8 @@ export class GamesController {
                     platform: 'chess.com',
                     whitePlayer: g.white.username,
                     blackPlayer: g.black.username,
+                    whiteRating: g.white.rating,
+                    blackRating: g.black.rating,
                     result: this.mapChessComResult(g.white.result, g.black.result),
                     timeControl: g.time_control,
                     playedAt: new Date(g.end_time * 1000).toISOString(),
@@ -214,7 +216,7 @@ export class GamesController {
             const response = await firstValueFrom(
                 this.httpService.get(`https://lichess.org/api/games/user/${username}`, {
                     params: { max: maxGames, opening: 'true' },
-                    headers: { 
+                    headers: {
                         'Accept': 'application/x-ndjson',
                         'User-Agent': 'EloInsight/1.0 (contact@eloinsight.com)'
                     },
@@ -226,7 +228,7 @@ export class GamesController {
             // Parse NDJSON (newline delimited JSON)
             const data = response.data?.toString() || '';
             if (!data.trim()) return [];
-            
+
             const rawGames = data.trim().split('\n')
                 .filter(line => line.trim())
                 .map(line => {
@@ -243,6 +245,8 @@ export class GamesController {
                 platform: 'lichess',
                 whitePlayer: g.players.white?.user?.name || 'Anonymous',
                 blackPlayer: g.players.black?.user?.name || 'Anonymous',
+                whiteRating: g.players.white?.rating,
+                blackRating: g.players.black?.rating,
                 result: this.mapLichessResult(g.winner),
                 timeControl: this.formatLichessTimeControl(g.clock),
                 playedAt: new Date(g.createdAt).toISOString(),
@@ -371,7 +375,7 @@ export class GamesController {
         @Body() dto: CreateGameDto,
     ) {
         const userId = req.user.id;
-        
+
         // Map result string to enum
         const resultMap: Record<string, 'WHITE_WIN' | 'BLACK_WIN' | 'DRAW' | 'ONGOING'> = {
             '1-0': 'WHITE_WIN',
@@ -442,7 +446,7 @@ export class GamesController {
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     async getGame(@Request() req, @Param('id') id: string) {
         const userId = req.user.id;
-        
+
         const game = await this.prisma.game.findFirst({
             where: {
                 id,
