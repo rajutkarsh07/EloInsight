@@ -1,22 +1,24 @@
 import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, LayoutDashboard, Gamepad2, LogOut, User, X, Settings as SettingsIcon } from 'lucide-react';
-import { authService } from '../../services/authService';
+import { Menu, LayoutDashboard, Gamepad2, LogOut, User, X, Settings as SettingsIcon, BarChart3 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../contexts/AuthContext';
 
 const MainLayout = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { user, logout } = useAuth();
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     const handleLogout = () => {
-        authService.logout();
+        logout();
         navigate('/login');
     };
 
     const menuItems = [
         { text: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard' },
         { text: 'Games', icon: <Gamepad2 size={20} />, path: '/games' },
+        { text: 'Analysis', icon: <BarChart3 size={20} />, path: '/analysis' },
         { text: 'Settings', icon: <SettingsIcon size={20} />, path: '/settings' },
     ];
 
@@ -87,8 +89,8 @@ const MainLayout = () => {
                                 <User size={16} />
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">User</p>
-                                <p className="text-xs text-muted-foreground truncate">user@example.com</p>
+                                <p className="text-sm font-medium truncate">{user?.username || 'User'}</p>
+                                <p className="text-xs text-muted-foreground truncate">{user?.email || ''}</p>
                             </div>
                         </div>
                         <button

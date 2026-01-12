@@ -22,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AnalysisGrpcService, MoveClassification } from './analysis-grpc.service';
+import { PrismaService } from '../prisma/prisma.service';
 import {
     AnalyzePositionDto,
     AnalyzeGameDto,
@@ -38,7 +39,10 @@ import { Observable, map, catchError, of } from 'rxjs';
 export class AnalysisController {
     private readonly logger = new Logger(AnalysisController.name);
 
-    constructor(private readonly analysisService: AnalysisGrpcService) { }
+    constructor(
+        private readonly analysisService: AnalysisGrpcService,
+        private readonly prisma: PrismaService,
+    ) { }
 
     // === POSITION ANALYSIS ===
 
@@ -118,6 +122,16 @@ export class AnalysisController {
         @Request() req: any,
     ): Promise<GameAnalysisResponseDto> {
         try {
+            // Update game status to PROCESSING
+            await this.prisma.game.update({
+                where: { id: gameId },
+                data: {
+                    analysisStatus: 'PROCESSING',
+                    analysisRequestedAt: new Date(),
+                },
+            });
+
+            // Run analysis via gRPC
             const result = await this.analysisService.analyzeGame(
                 {
                     gameId,
@@ -128,10 +142,108 @@ export class AnalysisController {
                 req.user?.id,
             );
 
+            // Save analysis results to database
+            await this.saveAnalysisToDatabase(gameId, result, dto.depth || 20);
+
+            // Update game status to COMPLETED
+            await this.prisma.game.update({
+                where: { id: gameId },
+                data: { analysisStatus: 'COMPLETED' },
+            });
+
+            this.logger.log(`Analysis completed and saved for game ${gameId}`);
+
             return this.mapGameAnalysis(result);
         } catch (error) {
+            // Update game status to FAILED
+            await this.prisma.game.update({
+                where: { id: gameId },
+                data: { analysisStatus: 'FAILED' },
+            }).catch(() => {}); // Ignore if game doesn't exist
+
             this.handleGrpcError(error);
         }
+    }
+
+    private async saveAnalysisToDatabase(gameId: string, result: any, depth: number) {
+        const whiteMetrics = result.whiteMetrics || {};
+        const blackMetrics = result.blackMetrics || {};
+
+        // Create analysis record
+        const analysis = await this.prisma.analysis.create({
+            data: {
+                gameId,
+                accuracyWhite: whiteMetrics.accuracy || 0,
+                accuracyBlack: blackMetrics.accuracy || 0,
+                acplWhite: whiteMetrics.acpl || 0,
+                acplBlack: blackMetrics.acpl || 0,
+                blundersWhite: whiteMetrics.blunders || 0,
+                blundersBlack: blackMetrics.blunders || 0,
+                mistakesWhite: whiteMetrics.mistakes || 0,
+                mistakesBlack: blackMetrics.mistakes || 0,
+                inaccuraciesWhite: whiteMetrics.inaccuracies || 0,
+                inaccuraciesBlack: blackMetrics.inaccuracies || 0,
+                brilliantMovesWhite: whiteMetrics.brilliantMoves || 0,
+                brilliantMovesBlack: blackMetrics.brilliantMoves || 0,
+                goodMovesWhite: whiteMetrics.goodMoves || 0,
+                goodMovesBlack: blackMetrics.goodMoves || 0,
+                bookMovesWhite: whiteMetrics.bookMoves || 0,
+                bookMovesBlack: blackMetrics.bookMoves || 0,
+                performanceRatingWhite: whiteMetrics.performanceRating || null,
+                performanceRatingBlack: blackMetrics.performanceRating || null,
+                analysisDepth: depth,
+                engineVersion: result.engineVersion || 'Stockfish 16',
+                totalPositions: result.moves?.length || 0,
+            },
+        });
+
+        // Save position analyses (move-by-move)
+        if (result.moves && result.moves.length > 0) {
+            const positionData = result.moves.map((move: any) => ({
+                analysisId: analysis.id,
+                moveNumber: move.moveNumber,
+                halfMove: move.ply,
+                fen: move.fenAfter || move.fenBefore,
+                evaluation: move.evalAfter?.centipawns ?? null,
+                mateIn: move.evalAfter?.mateIn ?? null,
+                bestMove: move.bestMove,
+                playedMove: move.playedMove,
+                isBlunder: move.classification === 10,
+                isMistake: move.classification === 9,
+                isInaccuracy: move.classification === 8,
+                isBrilliant: move.classification === 1,
+                isGood: move.classification === 5,
+                isBook: move.classification === 6,
+                isBest: move.classification === 3,
+                classification: this.mapClassificationToEnum(move.classification),
+                centipawnLoss: move.centipawnLoss ?? null,
+                pv: move.pv || [],
+                depth: move.depth,
+            }));
+
+            await this.prisma.positionAnalysis.createMany({
+                data: positionData,
+            });
+        }
+
+        return analysis;
+    }
+
+    private mapClassificationToEnum(classification: number): string {
+        const classMap: Record<number, string> = {
+            1: 'BRILLIANT',
+            2: 'GREAT',
+            3: 'BEST',
+            4: 'EXCELLENT',
+            5: 'GOOD',
+            6: 'BOOK',
+            7: 'NORMAL',
+            8: 'INACCURACY',
+            9: 'MISTAKE',
+            10: 'BLUNDER',
+            11: 'MISSED_WIN',
+        };
+        return classMap[classification] || 'NORMAL';
     }
 
     @Post('game/:gameId/stream')
@@ -184,14 +296,107 @@ export class AnalysisController {
     @ApiParam({ name: 'gameId', description: 'Game identifier' })
     @ApiResponse({ status: 200, description: 'Analysis retrieved successfully' })
     @ApiResponse({ status: 404, description: 'Analysis not found' })
-    async getGameAnalysis(@Param('gameId') gameId: string) {
-        // TODO: Fetch from database
-        // For now, return a stub indicating analysis should be requested
+    async getGameAnalysis(@Param('gameId') gameId: string, @Request() req: any) {
+        // Fetch game with analysis from database
+        const game = await this.prisma.game.findFirst({
+            where: {
+                id: gameId,
+                userId: req.user.id,
+            },
+            include: {
+                analysis: {
+                    include: {
+                        positionAnalyses: {
+                            orderBy: { halfMove: 'asc' },
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!game) {
+            throw new HttpException('Game not found', HttpStatus.NOT_FOUND);
+        }
+
+        if (!game.analysis) {
+            return {
+                gameId,
+                status: 'not_analyzed',
+                message: 'Use POST /analysis/game/:gameId to request analysis',
+            };
+        }
+
+        const analysis = game.analysis;
+
         return {
             gameId,
-            status: 'not_analyzed',
-            message: 'Use POST /analysis/game/:gameId to request analysis',
+            status: 'completed',
+            game: {
+                id: game.id,
+                platform: game.platform === 'CHESS_COM' ? 'chess.com' : 'lichess',
+                whitePlayer: game.whitePlayer,
+                blackPlayer: game.blackPlayer,
+                result: this.mapGameResultToString(game.result),
+                timeControl: game.timeControl,
+                playedAt: game.playedAt.toISOString(),
+                openingName: game.openingName,
+                pgn: game.pgn,
+            },
+            whiteMetrics: {
+                accuracy: Number(analysis.accuracyWhite) || 0,
+                acpl: Number(analysis.acplWhite) || 0,
+                blunders: analysis.blundersWhite,
+                mistakes: analysis.mistakesWhite,
+                inaccuracies: analysis.inaccuraciesWhite,
+                brilliantMoves: analysis.brilliantMovesWhite,
+                goodMoves: analysis.goodMovesWhite,
+                bookMoves: analysis.bookMovesWhite,
+                performanceRating: analysis.performanceRatingWhite,
+            },
+            blackMetrics: {
+                accuracy: Number(analysis.accuracyBlack) || 0,
+                acpl: Number(analysis.acplBlack) || 0,
+                blunders: analysis.blundersBlack,
+                mistakes: analysis.mistakesBlack,
+                inaccuracies: analysis.inaccuraciesBlack,
+                brilliantMoves: analysis.brilliantMovesBlack,
+                goodMoves: analysis.goodMovesBlack,
+                bookMoves: analysis.bookMovesBlack,
+                performanceRating: analysis.performanceRatingBlack,
+            },
+            moves: analysis.positionAnalyses.map(pos => ({
+                moveNumber: pos.moveNumber,
+                halfMove: pos.halfMove,
+                fen: pos.fen,
+                evaluation: pos.evaluation,
+                mateIn: pos.mateIn,
+                bestMove: pos.bestMove,
+                playedMove: pos.playedMove,
+                classification: pos.classification.toLowerCase(),
+                centipawnLoss: pos.centipawnLoss,
+                isBlunder: pos.isBlunder,
+                isMistake: pos.isMistake,
+                isInaccuracy: pos.isInaccuracy,
+                isBrilliant: pos.isBrilliant,
+                isGood: pos.isGood,
+                isBest: pos.isBest,
+                pv: pos.pv,
+                depth: pos.depth,
+            })),
+            analysisDepth: analysis.analysisDepth,
+            engineVersion: analysis.engineVersion,
+            analyzedAt: analysis.analyzedAt.toISOString(),
         };
+    }
+
+    private mapGameResultToString(result: string): string {
+        const resultMap: Record<string, string> = {
+            'WHITE_WIN': '1-0',
+            'BLACK_WIN': '0-1',
+            'DRAW': '1/2-1/2',
+            'ONGOING': '*',
+        };
+        return resultMap[result] || result;
     }
 
     // === BEST MOVES ===
