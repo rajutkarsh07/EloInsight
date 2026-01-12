@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, RotateCw, Filter } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Game {
     id: string;
@@ -28,11 +29,52 @@ interface GamesResponse {
 
 const GamesList = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [platform, setPlatform] = useState('all');
     const [games, setGames] = useState<Game[]>([]);
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
     const [error, setError] = useState('');
+
+    // Get all possible usernames for the current user
+    const getUsernames = () => {
+        const usernames: string[] = [];
+        if (user?.username) usernames.push(user.username.toLowerCase());
+        if (user?.chessComUsername) usernames.push(user.chessComUsername.toLowerCase());
+        if (user?.lichessUsername) usernames.push(user.lichessUsername.toLowerCase());
+        return usernames;
+    };
+
+    // Format time control from seconds to standard chess notation (e.g., "180+2" -> "3+2")
+    const formatTimeControl = (timeControl: string): string => {
+        // Handle formats like "180+2", "600", "300+0"
+        const parts = timeControl.split('+');
+        const baseSeconds = parseInt(parts[0], 10);
+        const increment = parts[1] ? parseInt(parts[1], 10) : 0;
+        
+        if (isNaN(baseSeconds)) return timeControl;
+        
+        const minutes = Math.floor(baseSeconds / 60);
+        return `${minutes}+${increment}`;
+    };
+
+    // Determine if the user won, lost, or drew
+    const getUserResult = (game: Game): 'win' | 'loss' | 'draw' => {
+        const usernames = getUsernames();
+        const isWhite = usernames.includes(game.whitePlayer.toLowerCase());
+        const isBlack = usernames.includes(game.blackPlayer.toLowerCase());
+        
+        if (game.result === '1/2-1/2' || game.result === '½-½') return 'draw';
+        
+        if (isWhite) {
+            return game.result === '1-0' ? 'win' : 'loss';
+        } else if (isBlack) {
+            return game.result === '0-1' ? 'win' : 'loss';
+        }
+        
+        // Fallback: can't determine, show based on result
+        return 'draw';
+    };
 
     const fetchGames = async () => {
         try {
@@ -67,23 +109,32 @@ const GamesList = () => {
     };
 
     const getStatusBadge = (status: string) => {
-        const baseClass = "px-2 py-0.5 rounded-full text-xs font-medium";
+        const baseClass = "px-2.5 py-1 rounded text-xs font-medium";
         switch (status) {
-            case 'completed': return <span className={cn(baseClass, "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400")}>Completed</span>;
-            case 'processing': return <span className={cn(baseClass, "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400")}>Processing</span>;
-            case 'pending': return <span className={cn(baseClass, "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400")}>Pending</span>;
-            case 'failed': return <span className={cn(baseClass, "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400")}>Failed</span>;
-            default: return <span className={cn(baseClass, "bg-gray-100 text-gray-700")}>{status}</span>;
+            case 'completed': return <span className={cn(baseClass, "bg-emerald-500/20 text-emerald-400")}>Completed</span>;
+            case 'processing': return <span className={cn(baseClass, "bg-amber-500/20 text-amber-400")}>Processing</span>;
+            case 'pending': return <span className={cn(baseClass, "bg-zinc-500/20 text-zinc-400")}>Pending</span>;
+            case 'failed': return <span className={cn(baseClass, "bg-red-500/20 text-red-400")}>Failed</span>;
+            default: return <span className={cn(baseClass, "bg-zinc-500/20 text-zinc-400")}>{status}</span>;
         }
     };
 
-    const getResultBadge = (result: string) => {
-        const baseClass = "px-2 py-0.5 rounded-full text-xs font-medium border";
+    const getResultBadge = (game: Game) => {
+        const result = getUserResult(game);
+        const baseClass = "px-3 py-1 rounded text-xs font-bold uppercase tracking-wide";
         switch (result) {
-            case '1-0': return <span className={cn(baseClass, "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400")}>1-0</span>;
-            case '0-1': return <span className={cn(baseClass, "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400")}>0-1</span>;
-            default: return <span className={cn(baseClass, "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400")}>½-½</span>;
+            case 'win': return <span className={cn(baseClass, "bg-emerald-500/20 text-emerald-400")}>Win</span>;
+            case 'loss': return <span className={cn(baseClass, "bg-red-500/20 text-red-400")}>Loss</span>;
+            default: return <span className={cn(baseClass, "bg-zinc-500/20 text-zinc-400")}>Draw</span>;
         }
+    };
+
+    const getPlatformBadge = (platform: string) => {
+        const baseClass = "px-2.5 py-1 rounded text-xs font-medium";
+        if (platform === 'chess.com') {
+            return <span className={cn(baseClass, "bg-emerald-500/20 text-emerald-400")}>chess.com</span>;
+        }
+        return <span className={cn(baseClass, "bg-violet-500/20 text-violet-400")}>lichess</span>;
     };
 
     return (
@@ -157,14 +208,7 @@ const GamesList = () => {
                                         style={{ animationDelay: `${i * 0.05}s` }}
                                     >
                                         <td className="px-6 py-4">
-                                            <span className={cn(
-                                                "px-2 py-0.5 rounded-full text-xs font-medium border",
-                                                game.platform === 'chess.com'
-                                                    ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-400 dark:border-green-800"
-                                                    : "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
-                                            )}>
-                                                {game.platform}
-                                            </span>
+                                            {getPlatformBadge(game.platform)}
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex flex-col">
@@ -173,10 +217,10 @@ const GamesList = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            {getResultBadge(game.result)}
+                                            {getResultBadge(game)}
                                         </td>
-                                        <td className="px-6 py-4 text-muted-foreground">
-                                            {game.timeControl}
+                                        <td className="px-6 py-4 text-muted-foreground font-mono">
+                                            {formatTimeControl(game.timeControl)}
                                         </td>
                                         <td className="px-6 py-4 text-muted-foreground whitespace-nowrap">
                                             {new Date(game.playedAt).toLocaleDateString()}
