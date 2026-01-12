@@ -67,9 +67,47 @@ interface Filters {
     platform: string;
     result: string;
     timeControl: string;
+    wonBy: string;
+    analyzed: string;
+    dateRange: string;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+// Helper to get termination category for filtering
+const getTerminationCategory = (termination: string | undefined): string => {
+    if (!termination) return 'unknown';
+    const lower = termination.toLowerCase();
+    
+    if (lower.includes('checkmate')) return 'checkmate';
+    if (lower.includes('resignation') || lower.includes('resigned')) return 'resignation';
+    if (lower.includes('timeout') || lower.includes('time')) return 'timeout';
+    if (lower.includes('abandoned')) return 'abandoned';
+    if (lower.includes('stalemate')) return 'stalemate';
+    if (lower.includes('repetition')) return 'repetition';
+    if (lower.includes('insufficient')) return 'insufficient';
+    if (lower.includes('agreement') || lower.includes('agreed')) return 'agreement';
+    
+    return 'other';
+};
+
+// Helper to check if date is within range
+const isWithinDateRange = (dateStr: string, range: string): boolean => {
+    if (range === 'all') return true;
+    
+    const gameDate = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - gameDate.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    
+    switch (range) {
+        case 'day': return diffDays <= 1;
+        case 'week': return diffDays <= 7;
+        case 'month': return diffDays <= 30;
+        case '6months': return diffDays <= 180;
+        default: return true;
+    }
+};
 
 const GamesList = () => {
     const navigate = useNavigate();
@@ -90,6 +128,9 @@ const GamesList = () => {
         platform: 'all',
         result: 'all',
         timeControl: 'all',
+        wonBy: 'all',
+        analyzed: 'all',
+        dateRange: 'all',
     });
     const [localError, setLocalError] = useState('');
     const [analyzingGames, setAnalyzingGames] = useState<Set<string>>(new Set());
@@ -203,6 +244,26 @@ const GamesList = () => {
                 if (category !== filters.timeControl) return false;
             }
             
+            // Won By filter
+            if (filters.wonBy !== 'all') {
+                const pgnData = parsePgnHeaders(game.pgn);
+                const termination = game.termination || pgnData.termination;
+                const category = getTerminationCategory(termination);
+                if (category !== filters.wonBy) return false;
+            }
+            
+            // Analyzed filter
+            if (filters.analyzed !== 'all') {
+                const isAnalyzed = game.analysisStatus === 'completed';
+                if (filters.analyzed === 'yes' && !isAnalyzed) return false;
+                if (filters.analyzed === 'no' && isAnalyzed) return false;
+            }
+            
+            // Date range filter
+            if (filters.dateRange !== 'all') {
+                if (!isWithinDateRange(game.playedAt, filters.dateRange)) return false;
+            }
+            
             return true;
         });
     }, [games, filters, getUserResult]);
@@ -220,6 +281,9 @@ const GamesList = () => {
             platform: 'all',
             result: 'all',
             timeControl: 'all',
+            wonBy: 'all',
+            analyzed: 'all',
+            dateRange: 'all',
         });
     };
 
@@ -403,6 +467,56 @@ const GamesList = () => {
                             <option value="blitz">Blitz</option>
                             <option value="rapid">Rapid</option>
                             <option value="classical">Classical</option>
+                        </select>
+                    </div>
+
+                    {/* Won By Filter */}
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-xs text-muted-foreground uppercase tracking-wide">Won By</label>
+                        <select
+                            value={filters.wonBy}
+                            onChange={(e) => updateFilter('wonBy', e.target.value)}
+                            className="h-9 w-[140px] rounded-md border border-input bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        >
+                            <option value="all">All</option>
+                            <option value="checkmate">Checkmate</option>
+                            <option value="resignation">Resignation</option>
+                            <option value="timeout">Timeout</option>
+                            <option value="abandoned">Abandoned</option>
+                            <option value="stalemate">Stalemate</option>
+                            <option value="repetition">Repetition</option>
+                            <option value="agreement">Agreement</option>
+                            <option value="insufficient">Insufficient</option>
+                        </select>
+                    </div>
+
+                    {/* Analyzed Filter */}
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-xs text-muted-foreground uppercase tracking-wide">Analyzed</label>
+                        <select
+                            value={filters.analyzed}
+                            onChange={(e) => updateFilter('analyzed', e.target.value)}
+                            className="h-9 w-[140px] rounded-md border border-input bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        >
+                            <option value="all">All</option>
+                            <option value="yes">Analyzed</option>
+                            <option value="no">Not Analyzed</option>
+                        </select>
+                    </div>
+
+                    {/* Date Range Filter */}
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-xs text-muted-foreground uppercase tracking-wide">Date</label>
+                        <select
+                            value={filters.dateRange}
+                            onChange={(e) => updateFilter('dateRange', e.target.value)}
+                            className="h-9 w-[140px] rounded-md border border-input bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        >
+                            <option value="all">All Time</option>
+                            <option value="day">Last 24 Hours</option>
+                            <option value="week">Last 7 Days</option>
+                            <option value="month">Last 30 Days</option>
+                            <option value="6months">Last 6 Months</option>
                         </select>
                     </div>
                 </div>
