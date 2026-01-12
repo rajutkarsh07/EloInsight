@@ -86,6 +86,7 @@ export class GamesController {
         @Query('platform') platform?: string,
     ) {
         const user = await this.authService.getUserById(req.user.id);
+        const userId = req.user.id;
         const gamePromises: Promise<any[]>[] = [];
 
         // Fetch Chess.com games
@@ -99,9 +100,42 @@ export class GamesController {
         }
 
         const results = await Promise.all(gamePromises);
-        const allGames = results.flat().sort((a, b) =>
+        let allGames = results.flat().sort((a, b) =>
             new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime()
         );
+
+        // Fetch stored games from database to get analysis status
+        const storedGames = await this.prisma.game.findMany({
+            where: { userId },
+            select: {
+                id: true,
+                externalId: true,
+                platform: true,
+                analysisStatus: true,
+            },
+        });
+
+        // Create a map for quick lookup: externalId -> stored game info
+        const storedGamesMap = new Map<string, { id: string; analysisStatus: string }>();
+        storedGames.forEach(g => {
+            storedGamesMap.set(g.externalId, { 
+                id: g.id, 
+                analysisStatus: g.analysisStatus.toLowerCase() 
+            });
+        });
+
+        // Merge analysis status from database into fetched games
+        allGames = allGames.map(game => {
+            const stored = storedGamesMap.get(game.id);
+            if (stored) {
+                return {
+                    ...game,
+                    id: stored.id, // Use database ID for navigation
+                    analysisStatus: stored.analysisStatus,
+                };
+            }
+            return game;
+        });
 
         // Pagination (local)
         const startIndex = (Number(page) - 1) * Number(limit);

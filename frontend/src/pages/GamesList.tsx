@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, RotateCw, Filter, X, Play, Loader2 } from 'lucide-react';
+import { Eye, RotateCw, Filter, X, Play, Loader2, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,13 +18,55 @@ interface Game {
     accuracy?: { white: number; black: number };
     pgn?: string;
     openingName?: string;
+    whiteElo?: number;
+    blackElo?: number;
+    termination?: string;
 }
+
+// Parse PGN headers to extract Elo ratings and termination reason
+const parsePgnHeaders = (pgn: string | undefined): { whiteElo?: number; blackElo?: number; termination?: string } => {
+    if (!pgn) return {};
+    
+    const whiteEloMatch = pgn.match(/\[WhiteElo\s+"(\d+)"\]/);
+    const blackEloMatch = pgn.match(/\[BlackElo\s+"(\d+)"\]/);
+    const terminationMatch = pgn.match(/\[Termination\s+"([^"]+)"\]/);
+    
+    return {
+        whiteElo: whiteEloMatch ? parseInt(whiteEloMatch[1], 10) : undefined,
+        blackElo: blackEloMatch ? parseInt(blackEloMatch[1], 10) : undefined,
+        termination: terminationMatch ? terminationMatch[1] : undefined,
+    };
+};
+
+// Extract the termination reason (e.g., "resignation", "checkmate", "timeout")
+const getTerminationReason = (termination: string | undefined): string => {
+    if (!termination) return '-';
+    
+    const lower = termination.toLowerCase();
+    
+    if (lower.includes('checkmate')) return 'Checkmate';
+    if (lower.includes('resignation') || lower.includes('resigned')) return 'Resignation';
+    if (lower.includes('timeout') || lower.includes('time')) return 'Timeout';
+    if (lower.includes('abandoned')) return 'Abandoned';
+    if (lower.includes('stalemate')) return 'Stalemate';
+    if (lower.includes('repetition')) return 'Repetition';
+    if (lower.includes('insufficient')) return 'Insufficient';
+    if (lower.includes('agreement') || lower.includes('agreed')) return 'Agreement';
+    if (lower.includes('50') || lower.includes('fifty')) return '50-move rule';
+    
+    // Try to extract the key word after "won by" or "drawn by"
+    const wonByMatch = lower.match(/won by (\w+)/);
+    if (wonByMatch) {
+        return wonByMatch[1].charAt(0).toUpperCase() + wonByMatch[1].slice(1);
+    }
+    
+    return termination.length > 20 ? termination.slice(0, 20) + '...' : termination;
+};
 
 interface Filters {
     platform: string;
     result: string;
     timeControl: string;
-    status: string;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
@@ -48,7 +90,6 @@ const GamesList = () => {
         platform: 'all',
         result: 'all',
         timeControl: 'all',
-        status: 'all',
     });
     const [localError, setLocalError] = useState('');
     const [analyzingGames, setAnalyzingGames] = useState<Set<string>>(new Set());
@@ -162,11 +203,6 @@ const GamesList = () => {
                 if (category !== filters.timeControl) return false;
             }
             
-            // Status filter
-            if (filters.status !== 'all') {
-                if (game.analysisStatus !== filters.status) return false;
-            }
-            
             return true;
         });
     }, [games, filters, getUserResult]);
@@ -184,7 +220,6 @@ const GamesList = () => {
             platform: 'all',
             result: 'all',
             timeControl: 'all',
-            status: 'all',
         });
     };
 
@@ -201,6 +236,13 @@ const GamesList = () => {
             navigate(`/analysis/${game.id}`);
             return;
         }
+
+        // Log the PGN for debugging
+        console.log('=== ANALYZING GAME ===');
+        console.log('Game ID:', game.id);
+        console.log('Players:', game.whitePlayer, 'vs', game.blackPlayer);
+        console.log('PGN:', game.pgn);
+        console.log('======================');
 
         // Add to analyzing set
         setAnalyzingGames(prev => new Set(prev).add(game.id));
@@ -255,17 +297,6 @@ const GamesList = () => {
                 next.delete(game.id);
                 return next;
             });
-        }
-    };
-
-    const getStatusBadge = (status: string) => {
-        const baseClass = "px-2.5 py-1 rounded text-xs font-medium";
-        switch (status) {
-            case 'completed': return <span className={cn(baseClass, "bg-emerald-500/20 text-emerald-400")}>Completed</span>;
-            case 'processing': return <span className={cn(baseClass, "bg-amber-500/20 text-amber-400")}>Processing</span>;
-            case 'pending': return <span className={cn(baseClass, "bg-zinc-500/20 text-zinc-400")}>Pending</span>;
-            case 'failed': return <span className={cn(baseClass, "bg-red-500/20 text-red-400")}>Failed</span>;
-            default: return <span className={cn(baseClass, "bg-zinc-500/20 text-zinc-400")}>{status}</span>;
         }
     };
 
@@ -333,15 +364,15 @@ const GamesList = () => {
                     {/* Platform Filter */}
                     <div className="flex flex-col gap-1.5">
                         <label className="text-xs text-muted-foreground uppercase tracking-wide">Platform</label>
-                        <select
+                <select
                             value={filters.platform}
                             onChange={(e) => updateFilter('platform', e.target.value)}
                             className="h-9 w-[140px] rounded-md border border-input bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         >
                             <option value="all">All</option>
-                            <option value="chess.com">Chess.com</option>
-                            <option value="lichess">Lichess</option>
-                        </select>
+                    <option value="chess.com">Chess.com</option>
+                    <option value="lichess">Lichess</option>
+                </select>
                     </div>
 
                     {/* Result Filter */}
@@ -374,22 +405,6 @@ const GamesList = () => {
                             <option value="classical">Classical</option>
                         </select>
                     </div>
-
-                    {/* Status Filter */}
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-xs text-muted-foreground uppercase tracking-wide">Status</label>
-                        <select
-                            value={filters.status}
-                            onChange={(e) => updateFilter('status', e.target.value)}
-                            className="h-9 w-[140px] rounded-md border border-input bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        >
-                            <option value="all">All</option>
-                            <option value="completed">Completed</option>
-                            <option value="pending">Pending</option>
-                            <option value="processing">Processing</option>
-                            <option value="failed">Failed</option>
-                        </select>
-                    </div>
                 </div>
 
                 {/* Results count */}
@@ -409,17 +424,16 @@ const GamesList = () => {
                                 <th className="px-6 py-4">Platform</th>
                                 <th className="px-6 py-4">Players</th>
                                 <th className="px-6 py-4">Result</th>
+                                <th className="px-6 py-4">Won By</th>
                                 <th className="px-6 py-4">Control</th>
                                 <th className="px-6 py-4">Date</th>
-                                <th className="px-6 py-4">Accuracy</th>
-                                <th className="px-6 py-4">Status</th>
                                 <th className="px-6 py-4 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-12 text-center">
+                                    <td colSpan={7} className="px-6 py-12 text-center">
                                         <div className="flex justify-center">
                                             <RotateCw className="animate-spin h-8 w-8 text-primary" />
                                         </div>
@@ -427,7 +441,7 @@ const GamesList = () => {
                                 </tr>
                             ) : filteredGames.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-12 text-center text-muted-foreground">
+                                    <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
                                         {games.length === 0 
                                             ? 'No games found. Click "Sync Games" to import.'
                                             : 'No games match your filters.'
@@ -435,74 +449,90 @@ const GamesList = () => {
                                     </td>
                                 </tr>
                             ) : (
-                                filteredGames.map((game, i) => (
-                                    <tr
-                                        key={game.id}
-                                        className="hover:bg-muted/50 transition-colors animate-fade-in"
-                                        style={{ animationDelay: `${i * 0.05}s` }}
-                                    >
-                                        <td className="px-6 py-4">
-                                            {getPlatformBadge(game.platform)}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="font-medium">⚪ {game.whitePlayer}</span>
-                                                <span className="text-muted-foreground">⚫ {game.blackPlayer}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {getResultBadge(game)}
-                                        </td>
-                                        <td className="px-6 py-4 text-muted-foreground font-mono">
-                                            {formatTimeControl(game.timeControl)}
-                                        </td>
-                                        <td className="px-6 py-4 text-muted-foreground whitespace-nowrap">
-                                            {new Date(game.playedAt).toLocaleDateString()}
-                                        </td>
-                                        <td className="px-6 py-4 text-muted-foreground">
-                                            {game.accuracy ? (
-                                                <div className="flex flex-col text-xs">
-                                                    <span>W: {game.accuracy.white}%</span>
-                                                    <span>B: {game.accuracy.black}%</span>
+                                filteredGames.map((game, i) => {
+                                    const isAnalyzed = game.analysisStatus === 'completed';
+                                    const pgnData = parsePgnHeaders(game.pgn);
+                                    const whiteElo = game.whiteElo || pgnData.whiteElo;
+                                    const blackElo = game.blackElo || pgnData.blackElo;
+                                    const termination = game.termination || pgnData.termination;
+                                    
+                                    return (
+                                        <tr
+                                            key={game.id}
+                                            className={cn(
+                                                "transition-colors animate-fade-in",
+                                                isAnalyzed 
+                                                    ? "bg-emerald-500/5 hover:bg-emerald-500/10 border-l-2 border-l-emerald-500" 
+                                                    : "hover:bg-muted/50"
+                                            )}
+                                            style={{ animationDelay: `${i * 0.05}s` }}
+                                        >
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    {isAnalyzed && (
+                                                        <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0" />
+                                                    )}
+                                                    {getPlatformBadge(game.platform)}
                                                 </div>
-                                            ) : '-'}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {getStatusBadge(game.analysisStatus)}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                {game.analysisStatus === 'completed' ? (
-                                                    <button
-                                                        onClick={() => navigate(`/analysis/${game.id}`)}
-                                                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-md transition-colors"
-                                                        title="View Analysis"
-                                                    >
-                                                        <Eye size={16} />
-                                                        View
-                                                    </button>
-                                                ) : analyzingGames.has(game.id) || game.analysisStatus === 'processing' ? (
-                                                    <button
-                                                        disabled
-                                                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-amber-400 bg-amber-500/10 rounded-md cursor-not-allowed"
-                                                    >
-                                                        <Loader2 size={16} className="animate-spin" />
-                                                        Analyzing...
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => handleAnalyze(game)}
-                                                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-md transition-colors"
-                                                        title="Analyze Game"
-                                                    >
-                                                        <Play size={16} />
-                                                        Analyze
-                                                    </button>
-                                                )}
-                                            </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium">
+                                                        ⚪ {game.whitePlayer}
+                                                        {whiteElo && <span className="text-muted-foreground text-xs ml-1">({whiteElo})</span>}
+                                                    </span>
+                                                    <span className="text-muted-foreground">
+                                                        ⚫ {game.blackPlayer}
+                                                        {blackElo && <span className="text-xs ml-1">({blackElo})</span>}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {getResultBadge(game)}
+                                            </td>
+                                            <td className="px-6 py-4 text-muted-foreground text-sm">
+                                                {getTerminationReason(termination)}
+                                            </td>
+                                            <td className="px-6 py-4 text-muted-foreground font-mono">
+                                                {formatTimeControl(game.timeControl)}
+                                            </td>
+                                            <td className="px-6 py-4 text-muted-foreground whitespace-nowrap">
+                                                {new Date(game.playedAt).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {isAnalyzed ? (
+                                            <button
+                                                            onClick={() => navigate(`/analysis/${game.id}`)}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-400 bg-emerald-500/20 hover:bg-emerald-500/30 rounded-md transition-colors border border-emerald-500/30"
+                                                title="View Analysis"
+                                            >
+                                                            <Eye size={16} />
+                                                            View
+                                                        </button>
+                                                    ) : analyzingGames.has(game.id) || game.analysisStatus === 'processing' ? (
+                                                        <button
+                                                            disabled
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-amber-400 bg-amber-500/10 rounded-md cursor-not-allowed"
+                                                        >
+                                                            <Loader2 size={16} className="animate-spin" />
+                                                            Analyzing...
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handleAnalyze(game)}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-md transition-colors"
+                                                            title="Analyze Game"
+                                                        >
+                                                            <Play size={16} />
+                                                            Analyze
+                                            </button>
+                                                    )}
+                                                </div>
                                         </td>
                                     </tr>
-                                ))
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>

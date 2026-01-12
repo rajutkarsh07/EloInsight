@@ -13,6 +13,9 @@ interface Game {
     accuracy?: { white: number; black: number };
     pgn?: string;
     openingName?: string;
+    whiteElo?: number;
+    blackElo?: number;
+    termination?: string;
 }
 
 interface GamesResponse {
