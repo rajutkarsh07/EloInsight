@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Eye, RotateCw, Target, TrendingUp, CheckCircle2, Filter, X } from 'lucide-react';
+import { BarChart3, Eye, RotateCw, Target, TrendingUp, CheckCircle2, Filter, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
 
@@ -98,6 +98,7 @@ const AnalysisList = () => {
         accuracy: 'all',
         dateRange: 'all',
     });
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
 
     const fetchAnalyzedGames = useCallback(async (page: number, limit: number) => {
         try {
@@ -141,9 +142,9 @@ const AnalysisList = () => {
 
     const hasActiveFilters = Object.values(filters).some(v => v !== 'all');
 
-    // Apply client-side filters
+    // Apply client-side filters and sorting
     const filteredGames = useMemo(() => {
-        return games.filter(game => {
+        let result = games.filter(game => {
             // Platform filter
             if (filters.platform !== 'all') {
                 if (game.platform !== filters.platform) return false;
@@ -172,7 +173,26 @@ const AnalysisList = () => {
             
             return true;
         });
-    }, [games, filters]);
+
+        // Apply sorting by analyzed date
+        if (sortDirection) {
+            result = [...result].sort((a, b) => {
+                const dateA = a.analysis?.analyzedAt ? new Date(a.analysis.analyzedAt).getTime() : 0;
+                const dateB = b.analysis?.analyzedAt ? new Date(b.analysis.analyzedAt).getTime() : 0;
+                return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+            });
+        }
+
+        return result;
+    }, [games, filters, sortDirection]);
+
+    const toggleSort = () => {
+        setSortDirection(prev => {
+            if (prev === null) return 'desc';
+            if (prev === 'desc') return 'asc';
+            return null;
+        });
+    };
 
     const getAccuracyColor = (accuracy: number): string => {
         if (accuracy >= 90) return 'text-emerald-400';
@@ -384,7 +404,23 @@ const AnalysisList = () => {
                                 <th className="px-6 py-4 text-center">White Accuracy</th>
                                 <th className="px-6 py-4 text-center">Black Accuracy</th>
                                 <th className="px-6 py-4 text-center">Mistakes</th>
-                                <th className="px-6 py-4">Analyzed</th>
+                                <th 
+                                    className="px-6 py-4 cursor-pointer select-none hover:text-foreground transition-colors group"
+                                    onClick={toggleSort}
+                                >
+                                    <div className="flex items-center gap-1.5">
+                                        Analyzed
+                                        {sortDirection === null && (
+                                            <ArrowUpDown className="h-3.5 w-3.5 opacity-50 group-hover:opacity-100 transition-opacity" />
+                                        )}
+                                        {sortDirection === 'desc' && (
+                                            <ArrowDown className="h-3.5 w-3.5 text-primary" />
+                                        )}
+                                        {sortDirection === 'asc' && (
+                                            <ArrowUp className="h-3.5 w-3.5 text-primary" />
+                                        )}
+                                    </div>
+                                </th>
                                 <th className="px-6 py-4 text-right">Actions</th>
                             </tr>
                         </thead>
