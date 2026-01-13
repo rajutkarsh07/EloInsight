@@ -117,27 +117,114 @@ export class GamesController {
             },
         });
 
-        // Create a map for quick lookup: externalId -> stored game info
-        const storedGamesMap = new Map<string, { id: string; analysisStatus: string }>();
+        // Extract game ID from URL or return as-is if it's already just an ID
+        // This handles the mismatch between:
+        // - sync-service which stores just the ID (e.g., "123456789" or "AbCdEfGh")
+        // - api-gateway which stores full URLs (e.g., "https://www.chess.com/game/live/123456789")
+        const extractGameId = (id: string | null | undefined): string => {
+            if (!id) return '';
+            
+            const normalized = id.toLowerCase().trim();
+            
+            // Chess.com URL: extract numeric game ID
+            const chessComMatch = normalized.match(/chess\.com\/game\/(?:live|daily)\/(\d+)/);
+            if (chessComMatch) return chessComMatch[1];
+            
+            // Lichess URL: extract 8-character game ID
+            const lichessMatch = normalized.match(/lichess\.org\/(\w+)/);
+            if (lichessMatch) return lichessMatch[1];
+            
+            // If no URL pattern matched, it's likely already just the ID
+            // Return as-is but lowercase for case-insensitive matching
+            return normalized;
+        };
+
+        // Log stored games for debugging
+        this.logger.debug(`Found ${storedGames.length} stored games for user ${userId}`);
         storedGames.forEach(g => {
-            storedGamesMap.set(g.externalId, {
-                id: g.id,
-                analysisStatus: g.analysisStatus.toLowerCase()
-            });
+            if (g.analysisStatus === 'COMPLETED') {
+                this.logger.debug(`Stored game: externalId="${g.externalId}", extracted="${extractGameId(g.externalId)}"`);
+            }
         });
+
+        // Create maps for game lookup
+        // Primary map: extracted game ID -> stored game info
+        const storedGamesMap = new Map<string, { id: string; analysisStatus: string; originalExternalId: string }>();
+        
+        // Secondary map: DB ID -> COMPLETED game info (for linking UUID externalIds back to originals)
+        // This handles cases where a COMPLETED game's externalId is the DB ID of another record
+        const completedByDbId = new Map<string, { id: string; analysisStatus: string }>();
+
+        storedGames.forEach(g => {
+            if (g.externalId) {
+                const key = extractGameId(g.externalId);
+                const existing = storedGamesMap.get(key);
+                
+                // Only update if: no existing entry, OR new entry has higher priority status
+                const statusPriority: Record<string, number> = {
+                    'PENDING': 1, 'QUEUED': 2, 'PROCESSING': 3, 'FAILED': 4, 'COMPLETED': 5,
+                };
+                const newPriority = statusPriority[g.analysisStatus] || 0;
+                const existingPriority = existing ? statusPriority[existing.analysisStatus.toUpperCase()] || 0 : 0;
+                
+                if (!existing || newPriority > existingPriority) {
+                    storedGamesMap.set(key, {
+                        id: g.id,
+                        analysisStatus: g.analysisStatus.toLowerCase(),
+                        originalExternalId: g.externalId,
+                    });
+                }
+                
+                // If this is a COMPLETED game with a UUID-like externalId, it might reference another game's DB ID
+                // Store it for secondary lookup
+                if (g.analysisStatus === 'COMPLETED') {
+                    const isUuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(g.externalId);
+                    if (isUuidLike) {
+                        completedByDbId.set(g.externalId.toLowerCase(), {
+                            id: g.id,
+                            analysisStatus: 'completed',
+                        });
+                    }
+                }
+            }
+        });
+        
+        this.logger.debug(`Built secondary lookup with ${completedByDbId.size} COMPLETED games with UUID externalIds`);
 
         // Merge analysis status from database into fetched games
         allGames = allGames.map(game => {
-            const stored = storedGamesMap.get(game.id);
+            const gameId = extractGameId(game.id);
+            let stored = storedGamesMap.get(gameId);
+            
+            // If found but not COMPLETED, check if there's a COMPLETED game that references this one's DB ID
+            // This handles the case where analysis was saved with the wrong externalId (UUID instead of URL)
+            if (stored && stored.analysisStatus !== 'completed') {
+                const completedRef = completedByDbId.get(stored.id.toLowerCase());
+                if (completedRef) {
+                    this.logger.debug(`Found COMPLETED reference for game "${stored.id}" via secondary lookup`);
+                    stored = {
+                        id: completedRef.id,
+                        analysisStatus: completedRef.analysisStatus,
+                        originalExternalId: stored.originalExternalId,
+                    };
+                }
+            }
+            
             if (stored) {
+                this.logger.debug(`Matched game: "${game.id}" (id: ${gameId}) -> DB ID "${stored.id}", status: ${stored.analysisStatus}`);
                 return {
                     ...game,
-                    id: stored.id, // Use database ID for navigation
+                    dbId: stored.id, // Database ID for navigation
+                    externalId: game.id, // Preserve original external ID (URL) for future API calls
                     analysisStatus: stored.analysisStatus,
                 };
             }
             return game;
         });
+
+        // Log how many games were matched
+        const matchedCount = allGames.filter(g => g.analysisStatus === 'completed').length;
+        this.logger.debug(`Matched ${matchedCount} games with completed analysis status`);
 
         // Filter by analyzed status if requested (for 'no' filter - exclude analyzed games)
         if (analyzed === 'no') {
