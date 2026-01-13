@@ -171,8 +171,6 @@ func (a *Analyzer) AnalyzeGame(ctx context.Context, gameID string, pgn string, d
 		EngineVersion: eng.Version(),
 	}
 
-	var prevEval *engine.Evaluation
-
 	for i := 0; i < len(positions)-1; i++ {
 		select {
 		case <-ctx.Done():
@@ -183,26 +181,38 @@ func (a *Analyzer) AnalyzeGame(ctx context.Context, gameID string, pgn string, d
 		pos := positions[i]
 		nextPos := positions[i+1]
 
-		// Analyze current position
-		result, err := eng.AnalyzePosition(pos.FEN, depth, 1)
+		// Analyze position BEFORE the move
+		resultBefore, err := eng.AnalyzePosition(pos.FEN, depth, 1)
 		if err != nil {
-			a.logger.Warn("Failed to analyze position",
+			a.logger.Warn("Failed to analyze position before move",
 				zap.Int("ply", i),
 				zap.Error(err))
 			continue
 		}
 
-		if len(result.Evaluations) == 0 {
+		if len(resultBefore.Evaluations) == 0 {
 			continue
 		}
 
-		currentEval := result.Evaluations[0]
+		evalBefore := resultBefore.Evaluations[0]
 
-		// Calculate move analysis
-		moveAnalysis := a.createMoveAnalysis(i, pos, nextPos, &currentEval, prevEval, result.BestMove)
+		// Analyze position AFTER the move
+		resultAfter, err := eng.AnalyzePosition(nextPos.FEN, depth, 1)
+		if err != nil {
+			a.logger.Warn("Failed to analyze position after move",
+				zap.Int("ply", i),
+				zap.Error(err))
+			continue
+		}
+
+		var evalAfter engine.Evaluation
+		if len(resultAfter.Evaluations) > 0 {
+			evalAfter = resultAfter.Evaluations[0]
+		}
+
+		// Calculate move analysis with both evaluations
+		moveAnalysis := a.createMoveAnalysis(i, pos, nextPos, &evalBefore, &evalAfter, resultBefore.BestMove)
 		analysis.Moves = append(analysis.Moves, moveAnalysis)
-
-		prevEval = &currentEval
 
 		// Call progress callback
 		if callback != nil {
@@ -222,7 +232,7 @@ func (a *Analyzer) AnalyzeGame(ctx context.Context, gameID string, pgn string, d
 func (a *Analyzer) createMoveAnalysis(
 	ply int,
 	currentPos, nextPos Position,
-	currentEval, prevEval *engine.Evaluation,
+	evalBefore, evalAfter *engine.Evaluation,
 	bestMoveUCI string,
 ) MoveAnalysis {
 	color := "white"
@@ -241,25 +251,52 @@ func (a *Analyzer) createMoveAnalysis(
 		BestMoveUCI:   bestMoveUCI,
 		FENBefore:     currentPos.FEN,
 		FENAfter:      nextPos.FEN,
-		EvalBefore:    *currentEval,
-		Depth:         currentEval.Depth,
-		PV:            currentEval.PV,
+		EvalBefore:    *evalBefore,
+		Depth:         evalBefore.Depth,
+		PV:            evalBefore.PV,
+	}
+
+	// Store evalAfter if available
+	if evalAfter != nil {
+		analysis.EvalAfter = *evalAfter
 	}
 
 	// Calculate centipawn loss
-	if prevEval != nil && !currentEval.IsMate && !prevEval.IsMate {
-		// Adjust for perspective (positive is always good for the side to move)
-		evalBefore := currentEval.Centipawns
-		evalAfter := prevEval.Centipawns
-
-		if color == "black" {
-			evalBefore = -evalBefore
-			evalAfter = -evalAfter
-		}
-
-		analysis.CentipawnLoss = evalBefore - evalAfter
-		if analysis.CentipawnLoss < 0 {
-			analysis.CentipawnLoss = 0
+	// evalBefore: evaluation from the perspective of the side to move (before the move)
+	// evalAfter: evaluation from the perspective of the opponent (after the move)
+	// Since perspectives flip, we need to account for this in the calculation
+	if evalBefore != nil && evalAfter != nil {
+		if evalBefore.IsMate || evalAfter.IsMate {
+			// Handle mate scenarios
+			if evalBefore.IsMate && evalBefore.MateIn != nil {
+				// Player had mate, check if they kept it
+				if evalAfter.IsMate && evalAfter.MateIn != nil {
+					// Still mate, minimal loss (might have lengthened the mate)
+					analysis.CentipawnLoss = 0
+				} else {
+					// Lost the mate - significant blunder
+					analysis.CentipawnLoss = 500
+				}
+			} else if evalAfter.IsMate && evalAfter.MateIn != nil && *evalAfter.MateIn > 0 {
+				// Opponent now has mate against us - blunder
+				analysis.CentipawnLoss = 500
+			}
+		} else {
+			// Normal centipawn evaluation
+			// evalBefore is from mover's perspective (positive = good for mover)
+			// evalAfter is from opponent's perspective (positive = good for opponent = bad for mover)
+			// So the mover's eval after the move is -evalAfter.Centipawns
+			
+			evalBeforeCP := evalBefore.Centipawns
+			evalAfterCP := -evalAfter.Centipawns // Negate because perspective flipped
+			
+			// Centipawn loss = how much worse the position got for the mover
+			analysis.CentipawnLoss = evalBeforeCP - evalAfterCP
+			
+			// Can't have negative loss (improvement is 0 loss)
+			if analysis.CentipawnLoss < 0 {
+				analysis.CentipawnLoss = 0
+			}
 		}
 	}
 
