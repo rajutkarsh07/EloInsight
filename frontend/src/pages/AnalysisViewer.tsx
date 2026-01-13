@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, Star, Zap, Check, ArrowLeft, Trophy } from 'lucide-react';
+import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Trophy } from 'lucide-react';
 import ChessBoardViewer from '../components/chess/ChessBoardViewer';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
@@ -387,39 +387,41 @@ const AnalysisViewer = () => {
                     </div>
 
                     {/* Navigation Controls */}
-                    <div className="flex items-center justify-center gap-2">
+                    <div className="flex items-center justify-center gap-1">
                         <button
                             onClick={() => goToMove(0)}
-                            className="p-2 rounded-md hover:bg-accent transition-colors disabled:opacity-30"
+                            className="p-2.5 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                             disabled={currentMoveIndex === 0}
+                            title="Go to start"
                         >
-                            <ChevronLeft className="h-5 w-5" />
-                            <ChevronLeft className="h-5 w-5 -ml-3" />
+                            <ChevronsLeft className="h-5 w-5" />
                         </button>
                         <button
                             onClick={() => goToMove(currentMoveIndex - 1)}
-                            className="p-2 rounded-md hover:bg-accent transition-colors disabled:opacity-30"
+                            className="p-2.5 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                             disabled={currentMoveIndex === 0}
+                            title="Previous move"
                         >
                             <ChevronLeft className="h-5 w-5" />
                         </button>
-                        <span className="px-4 py-2 text-sm font-medium bg-muted rounded-md min-w-[100px] text-center">
+                        <span className="px-5 py-2 text-sm font-medium bg-muted rounded-lg min-w-[120px] text-center tabular-nums">
                             Move {currentMoveIndex} / {analysis.moves.length}
                         </span>
                         <button
                             onClick={() => goToMove(currentMoveIndex + 1)}
-                            className="p-2 rounded-md hover:bg-accent transition-colors disabled:opacity-30"
+                            className="p-2.5 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                             disabled={currentMoveIndex >= analysis.moves.length}
+                            title="Next move"
                         >
                             <ChevronRight className="h-5 w-5" />
                         </button>
                         <button
                             onClick={() => goToMove(analysis.moves.length)}
-                            className="p-2 rounded-md hover:bg-accent transition-colors disabled:opacity-30"
+                            className="p-2.5 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                             disabled={currentMoveIndex >= analysis.moves.length}
+                            title="Go to end"
                         >
-                            <ChevronRight className="h-5 w-5" />
-                            <ChevronRight className="h-5 w-5 -ml-3" />
+                            <ChevronsRight className="h-5 w-5" />
                         </button>
                     </div>
 
