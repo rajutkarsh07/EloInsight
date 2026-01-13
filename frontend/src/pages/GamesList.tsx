@@ -10,6 +10,7 @@ import { useGames } from '../contexts/GamesContext';
 interface Game {
     id: string;
     dbId?: string; // Database UUID (separate from external ID)
+    externalId?: string; // Original external ID (URL) - preserved for API calls
     platform: string;
     whitePlayer: string;
     blackPlayer: string;
@@ -353,10 +354,13 @@ const GamesList = () => {
         setLocalError('');
 
         try {
+            // Use externalId if available (preserves original URL), otherwise fall back to id
+            const originalExternalId = game.externalId || game.id;
+            
             // Step 1: Save game to database
             const saveResponse = await apiClient.post<{ id: string; analysisStatus?: string }>('/games', {
                 platform: game.platform,
-                externalId: game.id,
+                externalId: originalExternalId,
                 pgn: game.pgn || '',
                 whitePlayer: game.whitePlayer,
                 blackPlayer: game.blackPlayer,
@@ -376,7 +380,7 @@ const GamesList = () => {
 
             // Step 2: Trigger analysis as "fire and forget" - don't await
             // Use fetch directly to avoid axios cancelation on component unmount
-            const externalId = game.id; // Store original ID for callback
+            const externalIdForCallback = game.id; // Use current id for cache lookup
 
             fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api/v1'}/analysis/game/${gameId}`, {
                 method: 'POST',
@@ -393,14 +397,14 @@ const GamesList = () => {
                 if (response.ok) {
                     console.log(`Analysis completed for game ${gameId}`);
                     // Update game status when done (store dbId, don't overwrite external id)
-                    updateGame(externalId, { analysisStatus: 'completed', dbId: gameId } as any);
+                    updateGame(externalIdForCallback, { analysisStatus: 'completed', dbId: gameId } as any);
                     toast.success('✅ Analysis complete!', {
                         description: `${game.whitePlayer} vs ${game.blackPlayer}`,
                         duration: 4000,
                     });
                 } else {
                     console.error('Analysis failed with status:', response.status);
-                    updateGame(externalId, { analysisStatus: 'failed' });
+                    updateGame(externalIdForCallback, { analysisStatus: 'failed' });
                     toast.error('❌ Analysis failed', {
                         description: 'Please try again later.',
                         duration: 4000,
@@ -408,7 +412,7 @@ const GamesList = () => {
                 }
             }).catch(err => {
                 console.error('Analysis error:', err);
-                updateGame(externalId, { analysisStatus: 'failed' });
+                updateGame(externalIdForCallback, { analysisStatus: 'failed' });
                 toast.error('❌ Analysis failed', {
                     description: err.message || 'An error occurred.',
                     duration: 4000,

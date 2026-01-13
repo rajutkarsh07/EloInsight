@@ -4,6 +4,7 @@ import { apiClient } from '../services/apiClient';
 interface Game {
     id: string;
     dbId?: string; // Database UUID (separate from external ID)
+    externalId?: string; // Original external ID (URL) - preserved for API calls
     platform: string;
     whitePlayer: string;
     blackPlayer: string;
