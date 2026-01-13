@@ -3,6 +3,7 @@ import { apiClient } from '../services/apiClient';
 
 interface Game {
     id: string;
+    dbId?: string; // Database UUID (separate from external ID)
     platform: string;
     whitePlayer: string;
     blackPlayer: string;
@@ -80,9 +81,9 @@ export const GamesProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const fetchGames = useCallback(async (
-        page: number, 
-        limit: number, 
-        platform?: string, 
+        page: number,
+        limit: number,
+        platform?: string,
         forceRefresh = false
     ) => {
         const cacheKey = getCacheKey(page, limit, platform);
@@ -97,7 +98,7 @@ export const GamesProvider = ({ children }: { children: ReactNode }) => {
         try {
             setLoading(true);
             setError('');
-            
+
             const params = new URLSearchParams();
             params.set('page', page.toString());
             params.set('limit', limit.toString());
@@ -106,7 +107,7 @@ export const GamesProvider = ({ children }: { children: ReactNode }) => {
             }
 
             const response = await apiClient.get<GamesResponse>(`/games?${params.toString()}`);
-            
+
             // Update cache
             setCache(prev => ({
                 ...prev,
@@ -133,18 +134,18 @@ export const GamesProvider = ({ children }: { children: ReactNode }) => {
             setSyncing(true);
             setError('');
             await apiClient.post('/games/sync', { platform: 'chess.com' });
-            
+
             // Clear cache and refetch
             setCache({});
             setHasFetched(false);
-            
+
             // Refetch current page with force refresh
             const params = new URLSearchParams();
             params.set('page', pagination.page.toString());
             params.set('limit', pagination.limit.toString());
-            
+
             const response = await apiClient.get<GamesResponse>(`/games?${params.toString()}`);
-            
+
             const cacheKey = getCacheKey(pagination.page, pagination.limit);
             setCache({
                 [cacheKey]: {
@@ -153,7 +154,7 @@ export const GamesProvider = ({ children }: { children: ReactNode }) => {
                     timestamp: Date.now(),
                 },
             });
-            
+
             setCurrentGames(response.data);
             setPagination(response.pagination);
             setHasFetched(true);
@@ -166,17 +167,17 @@ export const GamesProvider = ({ children }: { children: ReactNode }) => {
     }, [pagination.page, pagination.limit]);
 
     const updateGame = useCallback((gameId: string, updates: Partial<Game>) => {
-        setCurrentGames(prev => 
+        setCurrentGames(prev =>
             prev.map(g => g.id === gameId ? { ...g, ...updates } : g)
         );
-        
+
         // Also update cache
         setCache(prev => {
             const newCache = { ...prev };
             Object.keys(newCache).forEach(key => {
                 newCache[key] = {
                     ...newCache[key],
-                    games: newCache[key].games.map(g => 
+                    games: newCache[key].games.map(g =>
                         g.id === gameId ? { ...g, ...updates } : g
                     ),
                 };
