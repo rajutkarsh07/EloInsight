@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, RotateCw, Filter, X, Play, Loader2, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,6 +9,7 @@ import { useGames } from '../contexts/GamesContext';
 
 interface Game {
     id: string;
+    dbId?: string; // Database UUID (separate from external ID)
     platform: string;
     whitePlayer: string;
     blackPlayer: string;
@@ -26,11 +28,11 @@ interface Game {
 // Parse PGN headers to extract Elo ratings and termination reason
 const parsePgnHeaders = (pgn: string | undefined): { whiteElo?: number; blackElo?: number; termination?: string } => {
     if (!pgn) return {};
-    
+
     const whiteEloMatch = pgn.match(/\[WhiteElo\s+"(\d+)"\]/);
     const blackEloMatch = pgn.match(/\[BlackElo\s+"(\d+)"\]/);
     const terminationMatch = pgn.match(/\[Termination\s+"([^"]+)"\]/);
-    
+
     return {
         whiteElo: whiteEloMatch ? parseInt(whiteEloMatch[1], 10) : undefined,
         blackElo: blackEloMatch ? parseInt(blackEloMatch[1], 10) : undefined,
@@ -41,9 +43,9 @@ const parsePgnHeaders = (pgn: string | undefined): { whiteElo?: number; blackElo
 // Extract the termination reason (e.g., "resignation", "checkmate", "timeout")
 const getTerminationReason = (termination: string | undefined): string => {
     if (!termination) return '-';
-    
+
     const lower = termination.toLowerCase();
-    
+
     if (lower.includes('checkmate')) return 'Checkmate';
     if (lower.includes('resignation') || lower.includes('resigned')) return 'Resignation';
     if (lower.includes('timeout') || lower.includes('time')) return 'Timeout';
@@ -53,13 +55,13 @@ const getTerminationReason = (termination: string | undefined): string => {
     if (lower.includes('insufficient')) return 'Insufficient';
     if (lower.includes('agreement') || lower.includes('agreed')) return 'Agreement';
     if (lower.includes('50') || lower.includes('fifty')) return '50-move rule';
-    
+
     // Try to extract the key word after "won by" or "drawn by"
     const wonByMatch = lower.match(/won by (\w+)/);
     if (wonByMatch) {
         return wonByMatch[1].charAt(0).toUpperCase() + wonByMatch[1].slice(1);
     }
-    
+
     return termination.length > 20 ? termination.slice(0, 20) + '...' : termination;
 };
 
@@ -78,7 +80,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 const getTerminationCategory = (termination: string | undefined): string => {
     if (!termination) return 'unknown';
     const lower = termination.toLowerCase();
-    
+
     if (lower.includes('checkmate')) return 'checkmate';
     if (lower.includes('resignation') || lower.includes('resigned')) return 'resignation';
     if (lower.includes('timeout') || lower.includes('time')) return 'timeout';
@@ -87,19 +89,19 @@ const getTerminationCategory = (termination: string | undefined): string => {
     if (lower.includes('repetition')) return 'repetition';
     if (lower.includes('insufficient')) return 'insufficient';
     if (lower.includes('agreement') || lower.includes('agreed')) return 'agreement';
-    
+
     return 'other';
 };
 
 // Helper to check if date is within range
 const isWithinDateRange = (dateStr: string, range: string): boolean => {
     if (range === 'all') return true;
-    
+
     const gameDate = new Date(dateStr);
     const now = new Date();
     const diffMs = now.getTime() - gameDate.getTime();
     const diffDays = diffMs / (1000 * 60 * 60 * 24);
-    
+
     switch (range) {
         case 'day': return diffDays <= 1;
         case 'week': return diffDays <= 7;
@@ -112,18 +114,18 @@ const isWithinDateRange = (dateStr: string, range: string): boolean => {
 const GamesList = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { 
-        games, 
-        pagination, 
-        loading, 
-        error: contextError, 
-        syncing, 
+    const {
+        games,
+        pagination,
+        loading,
+        error: contextError,
+        syncing,
         hasFetched,
-        fetchGames, 
-        syncGames, 
-        updateGame 
+        fetchGames,
+        syncGames,
+        updateGame
     } = useGames();
-    
+
     const [filters, setFilters] = useState<Filters>({
         platform: 'all',
         result: 'all',
@@ -135,7 +137,17 @@ const GamesList = () => {
     const [localError, setLocalError] = useState('');
     const [analyzingGames, setAnalyzingGames] = useState<Set<string>>(new Set());
 
+    const MAX_CONCURRENT_ANALYSES = 3;
+
     const error = localError || contextError;
+
+    // Count currently processing games (from both local state and game status)
+    const getProcessingCount = useCallback(() => {
+        const processingFromGames = games.filter(g => g.analysisStatus?.toLowerCase() === 'processing').length;
+        const processingFromLocal = analyzingGames.size;
+        // Avoid double-counting by using the max
+        return Math.max(processingFromGames, processingFromLocal);
+    }, [games, analyzingGames]);
 
     // Get all possible usernames for the current user
     const getUsernames = useCallback(() => {
@@ -150,18 +162,18 @@ const GamesList = () => {
     // Chess.com uses seconds (180+2), Lichess already uses minutes (3+2)
     const formatTimeControl = (timeControl: string): string => {
         if (!timeControl || timeControl === '-') return '-';
-        
+
         const parts = timeControl.split('+');
         const baseValue = parseInt(parts[0], 10);
         const increment = parts[1] ? parseInt(parts[1], 10) : 0;
-        
+
         // Handle invalid values
         if (isNaN(baseValue)) return '-';
-        
+
         // If base value is large (>= 60), it's in seconds (Chess.com format)
         // Convert to minutes. Otherwise it's already in minutes (Lichess format)
         const minutes = baseValue >= 60 ? Math.floor(baseValue / 60) : baseValue;
-        
+
         return `${minutes}+${increment}`;
     };
 
@@ -170,15 +182,15 @@ const GamesList = () => {
         const usernames = getUsernames();
         const isWhite = usernames.includes(game.whitePlayer.toLowerCase());
         const isBlack = usernames.includes(game.blackPlayer.toLowerCase());
-        
+
         if (game.result === '1/2-1/2' || game.result === '½-½') return 'draw';
-        
+
         if (isWhite) {
             return game.result === '1-0' ? 'win' : 'loss';
         } else if (isBlack) {
             return game.result === '0-1' ? 'win' : 'loss';
         }
-        
+
         // Fallback: can't determine, show based on result
         return 'draw';
     }, [getUsernames]);
@@ -186,16 +198,16 @@ const GamesList = () => {
     // Get time control category (bullet, blitz, rapid, classical)
     const getTimeControlCategory = (timeControl: string): string => {
         if (!timeControl || timeControl === '-') return 'unknown';
-        
+
         const parts = timeControl.split('+');
         const baseValue = parseInt(parts[0], 10);
         if (isNaN(baseValue)) return 'unknown';
-        
+
         // Convert to minutes if needed
         const minutes = baseValue >= 60 ? Math.floor(baseValue / 60) : baseValue;
         const increment = parts[1] ? parseInt(parts[1], 10) : 0;
         const totalTime = minutes + (increment * 40 / 60); // Estimate total game time
-        
+
         if (totalTime < 3) return 'bullet';
         if (totalTime < 10) return 'blitz';
         if (totalTime < 30) return 'rapid';
@@ -237,13 +249,13 @@ const GamesList = () => {
                 const result = getUserResult(game);
                 if (result !== filters.result) return false;
             }
-            
+
             // Time control filter
             if (filters.timeControl !== 'all') {
                 const category = getTimeControlCategory(game.timeControl);
                 if (category !== filters.timeControl) return false;
             }
-            
+
             // Won By filter
             if (filters.wonBy !== 'all') {
                 const pgnData = parsePgnHeaders(game.pgn);
@@ -251,19 +263,19 @@ const GamesList = () => {
                 const category = getTerminationCategory(termination);
                 if (category !== filters.wonBy) return false;
             }
-            
+
             // Analyzed filter
             if (filters.analyzed !== 'all') {
-                const isAnalyzed = game.analysisStatus === 'completed';
+                const isAnalyzed = game.analysisStatus?.toLowerCase() === 'completed';
                 if (filters.analyzed === 'yes' && !isAnalyzed) return false;
                 if (filters.analyzed === 'no' && isAnalyzed) return false;
             }
-            
+
             // Date range filter
             if (filters.dateRange !== 'all') {
                 if (!isWithinDateRange(game.playedAt, filters.dateRange)) return false;
             }
-            
+
             return true;
         });
     }, [games, filters, getUserResult]);
@@ -296,8 +308,8 @@ const GamesList = () => {
 
     const handleAnalyze = async (game: Game) => {
         // If analysis already exists, navigate directly to the analysis page
-        if (game.analysisStatus === 'completed') {
-            navigate(`/analysis/${game.id}`);
+        if (game.analysisStatus?.toLowerCase() === 'completed') {
+            navigate(`/analysis/${game.dbId || game.id}`);
             return;
         }
 
@@ -307,6 +319,19 @@ const GamesList = () => {
         console.log('Players:', game.whitePlayer, 'vs', game.blackPlayer);
         console.log('PGN:', game.pgn);
         console.log('======================');
+
+        // Check concurrent analysis limit
+        const currentProcessing = getProcessingCount();
+        if (currentProcessing >= MAX_CONCURRENT_ANALYSES) {
+            toast.warning(
+                `⏳ Analysis limit reached`,
+                {
+                    description: `Please wait for one of the ${MAX_CONCURRENT_ANALYSES} ongoing analyses to complete before starting another.`,
+                    duration: 5000,
+                }
+            );
+            return;
+        }
 
         // Add to analyzing set
         setAnalyzingGames(prev => new Set(prev).add(game.id));
@@ -329,32 +354,76 @@ const GamesList = () => {
             const gameId = saveResponse.id;
 
             // If analysis already exists for this game, navigate directly
-            if (saveResponse.analysisStatus === 'COMPLETED') {
+            if (saveResponse.analysisStatus === 'COMPLETED' || saveResponse.analysisStatus === 'completed') {
                 navigate(`/analysis/${gameId}`);
                 return;
             }
 
-            // Step 2: Trigger analysis
-            await apiClient.post(`/analysis/game/${gameId}`, {
-                pgn: game.pgn || '',
-                depth: 20,
-                includeBookMoves: true,
+            // Step 2: Trigger analysis as "fire and forget" - don't await
+            // Use fetch directly to avoid axios cancelation on component unmount
+            const externalId = game.id; // Store original ID for callback
+
+            fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api/v1'}/analysis/game/${gameId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                },
+                body: JSON.stringify({
+                    pgn: game.pgn || '',
+                    depth: 20,
+                    includeBookMoves: true,
+                }),
+            }).then(async (response) => {
+                if (response.ok) {
+                    console.log(`Analysis completed for game ${gameId}`);
+                    // Update game status when done (store dbId, don't overwrite external id)
+                    updateGame(externalId, { analysisStatus: 'completed', dbId: gameId } as any);
+                    toast.success('✅ Analysis complete!', {
+                        description: `${game.whitePlayer} vs ${game.blackPlayer}`,
+                        duration: 4000,
+                    });
+                } else {
+                    console.error('Analysis failed with status:', response.status);
+                    updateGame(externalId, { analysisStatus: 'failed' });
+                    toast.error('❌ Analysis failed', {
+                        description: 'Please try again later.',
+                        duration: 4000,
+                    });
+                }
+            }).catch(err => {
+                console.error('Analysis error:', err);
+                updateGame(externalId, { analysisStatus: 'failed' });
+                toast.error('❌ Analysis failed', {
+                    description: err.message || 'An error occurred.',
+                    duration: 4000,
+                });
             });
 
-            // Update game in context cache
-            updateGame(game.id, { analysisStatus: 'completed', id: gameId });
+            // Update game in context cache to show processing (don't overwrite ID!)
+            updateGame(game.id, { analysisStatus: 'processing', dbId: gameId } as any);
 
-            // Navigate to analysis viewer
-            navigate(`/analysis/${gameId}`);
+            // Show toast that analysis started
+            toast.info('🔄 Analysis started', {
+                description: `${game.whitePlayer} vs ${game.blackPlayer} - You can navigate away.`,
+                duration: 3000,
+            });
+
+            // Remove from local analyzing set (the status will show from game.analysisStatus)
+            setAnalyzingGames(prev => {
+                const next = new Set(prev);
+                next.delete(game.id);
+                return next;
+            });
+
+            // Show feedback to user
+            setLocalError(''); // Clear any previous errors
 
         } catch (err) {
-            console.error('Error analyzing game:', err);
+            console.error('Error saving game:', err);
             const error = err as { response?: { data?: { message?: string } } };
-            setLocalError(error.response?.data?.message || 'Failed to analyze game. Please try again.');
-            
-            // Update local state to show failed
-            updateGame(game.id, { analysisStatus: 'failed' });
-        } finally {
+            setLocalError(error.response?.data?.message || 'Failed to start analysis. Please try again.');
+
             // Remove from analyzing set
             setAnalyzingGames(prev => {
                 const next = new Set(prev);
@@ -423,20 +492,20 @@ const GamesList = () => {
                         </button>
                     )}
                 </div>
-                
+
                 <div className="flex flex-wrap gap-3">
                     {/* Platform Filter */}
                     <div className="flex flex-col gap-1.5">
                         <label className="text-xs text-muted-foreground uppercase tracking-wide">Platform</label>
-                <select
+                        <select
                             value={filters.platform}
                             onChange={(e) => updateFilter('platform', e.target.value)}
                             className="h-9 w-[140px] rounded-md border border-input bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         >
                             <option value="all">All</option>
-                    <option value="chess.com">Chess.com</option>
-                    <option value="lichess">Lichess</option>
-                </select>
+                            <option value="chess.com">Chess.com</option>
+                            <option value="lichess">Lichess</option>
+                        </select>
                     </div>
 
                     {/* Result Filter */}
@@ -556,7 +625,7 @@ const GamesList = () => {
                             ) : filteredGames.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
-                                        {games.length === 0 
+                                        {games.length === 0
                                             ? 'No games found. Click "Sync Games" to import.'
                                             : 'No games match your filters.'
                                         }
@@ -564,19 +633,19 @@ const GamesList = () => {
                                 </tr>
                             ) : (
                                 filteredGames.map((game, i) => {
-                                    const isAnalyzed = game.analysisStatus === 'completed';
+                                    const isAnalyzed = game.analysisStatus?.toLowerCase() === 'completed';
                                     const pgnData = parsePgnHeaders(game.pgn);
                                     const whiteElo = game.whiteElo || pgnData.whiteElo;
                                     const blackElo = game.blackElo || pgnData.blackElo;
                                     const termination = game.termination || pgnData.termination;
-                                    
+
                                     return (
                                         <tr
                                             key={game.id}
                                             className={cn(
                                                 "transition-colors animate-fade-in",
-                                                isAnalyzed 
-                                                    ? "bg-emerald-500/5 hover:bg-emerald-500/10 border-l-2 border-l-emerald-500" 
+                                                isAnalyzed
+                                                    ? "bg-emerald-500/5 hover:bg-emerald-500/10 border-l-2 border-l-emerald-500"
                                                     : "hover:bg-muted/50"
                                             )}
                                             style={{ animationDelay: `${i * 0.05}s` }}
@@ -616,15 +685,15 @@ const GamesList = () => {
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex items-center justify-end gap-2">
                                                     {isAnalyzed ? (
-                                            <button
-                                                            onClick={() => navigate(`/analysis/${game.id}`)}
+                                                        <button
+                                                            onClick={() => navigate(`/analysis/${game.dbId || game.id}`)}
                                                             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-400 bg-emerald-500/20 hover:bg-emerald-500/30 rounded-md transition-colors border border-emerald-500/30"
-                                                title="View Analysis"
-                                            >
+                                                            title="View Analysis"
+                                                        >
                                                             <Eye size={16} />
                                                             View
                                                         </button>
-                                                    ) : analyzingGames.has(game.id) || game.analysisStatus === 'processing' ? (
+                                                    ) : analyzingGames.has(game.id) || game.analysisStatus?.toLowerCase() === 'processing' ? (
                                                         <button
                                                             disabled
                                                             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-amber-400 bg-amber-500/10 rounded-md cursor-not-allowed"
@@ -640,11 +709,11 @@ const GamesList = () => {
                                                         >
                                                             <Play size={16} />
                                                             Analyze
-                                            </button>
+                                                        </button>
                                                     )}
                                                 </div>
-                                        </td>
-                                    </tr>
+                                            </td>
+                                        </tr>
                                     );
                                 })
                             )}
@@ -675,7 +744,7 @@ const GamesList = () => {
                             <span className="text-sm text-muted-foreground">
                                 Page {pagination.page} of {pagination.totalPages}
                             </span>
-                            
+
                             <div className="flex items-center gap-1">
                                 <button
                                     onClick={() => handlePageChange(1)}
@@ -693,7 +762,7 @@ const GamesList = () => {
                                 >
                                     ‹
                                 </button>
-                                
+
                                 {/* Page Numbers */}
                                 <div className="flex items-center gap-1">
                                     {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
@@ -707,7 +776,7 @@ const GamesList = () => {
                                         } else {
                                             pageNum = pagination.page - 2 + i;
                                         }
-                                        
+
                                         return (
                                             <button
                                                 key={pageNum}
