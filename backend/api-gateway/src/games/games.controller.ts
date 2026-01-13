@@ -77,6 +77,7 @@ export class GamesController {
     @ApiQuery({ name: 'page', required: false, type: Number })
     @ApiQuery({ name: 'limit', required: false, type: Number })
     @ApiQuery({ name: 'platform', required: false, enum: ['chess.com', 'lichess'] })
+    @ApiQuery({ name: 'analyzed', required: false, enum: ['yes', 'no'] })
     @ApiResponse({ status: 200, description: 'Games retrieved successfully' })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     async getGames(
@@ -84,6 +85,7 @@ export class GamesController {
         @Query('page') page = 1,
         @Query('limit') limit = 20,
         @Query('platform') platform?: string,
+        @Query('analyzed') analyzed?: string,
     ) {
         const user = await this.authService.getUserById(req.user.id);
         const userId = req.user.id;
@@ -136,6 +138,11 @@ export class GamesController {
             }
             return game;
         });
+
+        // Filter by analyzed status if requested (for 'no' filter - exclude analyzed games)
+        if (analyzed === 'no') {
+            allGames = allGames.filter(game => game.analysisStatus !== 'completed');
+        }
 
         // Pagination (local)
         const startIndex = (Number(page) - 1) * Number(limit);

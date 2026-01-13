@@ -51,7 +51,7 @@ interface GamesContextType {
     error: string;
     syncing: boolean;
     hasFetched: boolean;
-    fetchGames: (page: number, limit: number, platform?: string, forceRefresh?: boolean) => Promise<void>;
+    fetchGames: (page: number, limit: number, platform?: string, forceRefresh?: boolean, analyzed?: string) => Promise<void>;
     syncGames: () => Promise<void>;
     updateGame: (gameId: string, updates: Partial<Game>) => void;
     clearCache: () => void;
@@ -76,17 +76,18 @@ export const GamesProvider = ({ children }: { children: ReactNode }) => {
     const [hasFetched, setHasFetched] = useState(false);
 
     // Generate cache key based on query params
-    const getCacheKey = (page: number, limit: number, platform?: string) => {
-        return `${page}-${limit}-${platform || 'all'}`;
+    const getCacheKey = (page: number, limit: number, platform?: string, analyzed?: string) => {
+        return `${page}-${limit}-${platform || 'all'}-${analyzed || 'all'}`;
     };
 
     const fetchGames = useCallback(async (
         page: number,
         limit: number,
         platform?: string,
-        forceRefresh = false
+        forceRefresh = false,
+        analyzed?: string
     ) => {
-        const cacheKey = getCacheKey(page, limit, platform);
+        const cacheKey = getCacheKey(page, limit, platform, analyzed);
 
         // Return cached data if available and not forcing refresh
         if (!forceRefresh && cache[cacheKey] && hasFetched) {
@@ -106,7 +107,15 @@ export const GamesProvider = ({ children }: { children: ReactNode }) => {
                 params.set('platform', platform);
             }
 
-            const response = await apiClient.get<GamesResponse>(`/games?${params.toString()}`);
+            // Use different endpoint for analyzed games filter
+            let endpoint = '/games';
+            if (analyzed === 'yes') {
+                endpoint = '/games/analyzed';
+            } else if (analyzed === 'no') {
+                params.set('analyzed', 'no');
+            }
+
+            const response = await apiClient.get<GamesResponse>(`${endpoint}?${params.toString()}`);
 
             // Update cache
             setCache(prev => ({

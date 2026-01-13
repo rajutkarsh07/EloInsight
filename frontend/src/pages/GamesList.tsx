@@ -218,27 +218,39 @@ const GamesList = () => {
     useEffect(() => {
         if (!hasFetched) {
             const platform = filters.platform !== 'all' ? filters.platform : undefined;
-            fetchGames(1, pagination.limit, platform);
+            const analyzedFilter = filters.analyzed !== 'all' ? filters.analyzed : undefined;
+            fetchGames(1, pagination.limit, platform, false, analyzedFilter);
         }
-    }, [hasFetched, fetchGames, filters.platform, pagination.limit]);
+    }, [hasFetched, fetchGames, filters.platform, filters.analyzed, pagination.limit]);
 
     // Handle platform filter change - this needs to refetch from server
     const handlePlatformChange = (platform: string) => {
         setFilters(prev => ({ ...prev, platform }));
         const platformValue = platform !== 'all' ? platform : undefined;
-        fetchGames(1, pagination.limit, platformValue, true); // Force refresh for platform change
+        const analyzedFilter = filters.analyzed !== 'all' ? filters.analyzed : undefined;
+        fetchGames(1, pagination.limit, platformValue, true, analyzedFilter); // Force refresh for platform change
+    };
+
+    // Handle analyzed filter change - this needs to refetch from server
+    const handleAnalyzedChange = (analyzed: string) => {
+        setFilters(prev => ({ ...prev, analyzed }));
+        const platformValue = filters.platform !== 'all' ? filters.platform : undefined;
+        const analyzedFilter = analyzed !== 'all' ? analyzed : undefined;
+        fetchGames(1, pagination.limit, platformValue, true, analyzedFilter); // Force refresh for analyzed change
     };
 
     const handlePageChange = (newPage: number) => {
         if (newPage >= 1 && newPage <= pagination.totalPages) {
             const platform = filters.platform !== 'all' ? filters.platform : undefined;
-            fetchGames(newPage, pagination.limit, platform);
+            const analyzedFilter = filters.analyzed !== 'all' ? filters.analyzed : undefined;
+            fetchGames(newPage, pagination.limit, platform, false, analyzedFilter);
         }
     };
 
     const handlePageSizeChange = (newLimit: number) => {
         const platform = filters.platform !== 'all' ? filters.platform : undefined;
-        fetchGames(1, newLimit, platform, true);
+        const analyzedFilter = filters.analyzed !== 'all' ? filters.analyzed : undefined;
+        fetchGames(1, newLimit, platform, true, analyzedFilter);
     };
 
     // Apply client-side filters
@@ -264,12 +276,13 @@ const GamesList = () => {
                 if (category !== filters.wonBy) return false;
             }
 
-            // Analyzed filter
-            if (filters.analyzed !== 'all') {
-                const isAnalyzed = game.analysisStatus?.toLowerCase() === 'completed';
-                if (filters.analyzed === 'yes' && !isAnalyzed) return false;
-                if (filters.analyzed === 'no' && isAnalyzed) return false;
-            }
+            // Analyzed filter - now handled server-side, skip client-side filtering
+            // (keeping the code commented for reference)
+            // if (filters.analyzed !== 'all') {
+            //     const isAnalyzed = game.analysisStatus?.toLowerCase() === 'completed';
+            //     if (filters.analyzed === 'yes' && !isAnalyzed) return false;
+            //     if (filters.analyzed === 'no' && isAnalyzed) return false;
+            // }
 
             // Date range filter
             if (filters.dateRange !== 'all') {
@@ -283,6 +296,8 @@ const GamesList = () => {
     const updateFilter = (key: keyof Filters, value: string) => {
         if (key === 'platform') {
             handlePlatformChange(value);
+        } else if (key === 'analyzed') {
+            handleAnalyzedChange(value);
         } else {
             setFilters(prev => ({ ...prev, [key]: value }));
         }
@@ -592,9 +607,11 @@ const GamesList = () => {
 
                 {/* Results count */}
                 <div className="text-xs text-muted-foreground pt-1">
-                    {hasActiveFilters && filters.platform === 'all'
-                        ? `Showing ${filteredGames.length} of ${games.length} games (filtered from page)`
-                        : `Total: ${pagination.total} games`
+                    {filters.analyzed !== 'all'
+                        ? `Total: ${pagination.total} ${filters.analyzed === 'yes' ? 'analyzed' : 'non-analyzed'} games`
+                        : hasActiveFilters && filters.platform === 'all'
+                            ? `Showing ${filteredGames.length} of ${games.length} games (filtered from page)`
+                            : `Total: ${pagination.total} games`
                     }
                 </div>
             </div>
