@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Trophy } from 'lucide-react';
+import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, TrendingUp, Target, BookOpen, Sparkles, RefreshCw } from 'lucide-react';
 import ChessBoardViewer from '../components/chess/ChessBoardViewer';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
+import { useAuth } from '../contexts/AuthContext';
 
 interface MoveAnalysis {
     moveNumber: number;
@@ -75,10 +76,38 @@ interface FullAnalysis {
 const AnalysisViewer = () => {
     const { gameId } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [analysis, setAnalysis] = useState<FullAnalysis | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
+    const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white');
+
+    // Determine which color the user played as
+    const getUserColor = useCallback((gameData: FullAnalysis): 'white' | 'black' => {
+        if (!user) return 'white';
+        
+        const whitePlayer = gameData.game.whitePlayer.toLowerCase();
+        const blackPlayer = gameData.game.blackPlayer.toLowerCase();
+        
+        // Check against user's chess platform usernames
+        const usernames = [
+            user.username?.toLowerCase(),
+            user.chessComUsername?.toLowerCase(),
+            user.lichessUsername?.toLowerCase(),
+        ].filter(Boolean);
+        
+        for (const username of usernames) {
+            if (username && blackPlayer.includes(username)) return 'black';
+            if (username && whitePlayer.includes(username)) return 'white';
+        }
+        
+        return 'white'; // Default to white perspective
+    }, [user]);
+
+    const flipBoard = useCallback(() => {
+        setBoardOrientation(prev => prev === 'white' ? 'black' : 'white');
+    }, []);
 
     useEffect(() => {
         const fetchAnalysis = async () => {
@@ -92,6 +121,23 @@ const AnalysisViewer = () => {
                 }
                 
                 setAnalysis(data);
+                
+                // Auto-orient board based on which color user played
+                const userColor = getUserColor(data);
+                setBoardOrientation(userColor);
+                
+                // Debug: Log data used for Review Graph
+                console.log('📊 Review Graph Data:', {
+                    totalMoves: data.moves.length,
+                    sampleMoves: data.moves.slice(0, 5).map(m => ({
+                        halfMove: m.halfMove,
+                        playedMove: m.playedMove,
+                        evaluation: m.evaluation,
+                        mateIn: m.mateIn,
+                        classification: m.classification,
+                    })),
+                    allEvaluations: data.moves.map(m => m.evaluation),
+                });
             } catch (err) {
                 console.error('Error fetching analysis:', err);
                 setError('Failed to load analysis');
@@ -103,7 +149,7 @@ const AnalysisViewer = () => {
         if (gameId) {
             fetchAnalysis();
         }
-    }, [gameId]);
+    }, [gameId, getUserColor]);
 
     const goToMove = useCallback((index: number) => {
         if (!analysis) return;
@@ -267,49 +313,321 @@ const AnalysisViewer = () => {
         return 'text-red-400';
     };
 
-    const MetricCard = ({
-        title,
-        whiteValue,
-        blackValue,
-        unit = '',
-        icon,
-        reverseColors = false,
-    }: {
-        title: string;
-        whiteValue: number;
-        blackValue: number;
-        unit?: string;
-        icon?: React.ReactNode;
-        reverseColors?: boolean;
+    // Review graph component like Chess.com
+    const ReviewGraph = ({ moves, currentIndex, onMoveClick }: { 
+        moves: MoveAnalysis[]; 
+        currentIndex: number;
+        onMoveClick: (index: number) => void;
     }) => {
-        const whiteBetter = reverseColors ? whiteValue < blackValue : whiteValue > blackValue;
+        const graphRef = useRef<HTMLDivElement>(null);
+        const [hoveredMove, setHoveredMove] = useState<number | null>(null);
+        const [tooltip, setTooltip] = useState<{ x: number; y: number; eval: string; move: string; classification: string } | null>(null);
+        
+        // Convert evaluation to a normalized value for the graph (0-100, 50 = equal)
+        const evalToY = (evaluation: number | null, mateIn: number | null): number => {
+            if (mateIn !== null) {
+                return mateIn > 0 ? 98 : 2;
+            }
+            if (evaluation === null) return 50;
+            // Use a sigmoid-like function for smoother visualization
+            // Maps roughly -400 to +400 centipawns to 5-95%
+            const normalized = evaluation / 100; // Convert to pawns
+            const sigmoid = 50 + (50 * (2 / (1 + Math.exp(-normalized * 0.8)) - 1));
+            return Math.max(2, Math.min(98, sigmoid));
+        };
+
+        // Build path for the evaluation line
+        const buildPath = () => {
+            if (moves.length === 0) return '';
+            
+            const width = 100;
+            const points: string[] = [];
+            
+            // Start from initial position (eval = 0)
+            points.push(`M 0 50`);
+            
+            moves.forEach((move, index) => {
+                const x = ((index + 1) / moves.length) * width;
+                const y = 100 - evalToY(move.evaluation, move.mateIn);
+                points.push(`L ${x} ${y}`);
+            });
+            
+            return points.join(' ');
+        };
+
+        // Build filled areas
+        const buildWhiteArea = () => {
+            if (moves.length === 0) return '';
+            const width = 100;
+            let path = `M 0 50`;
+            
+            moves.forEach((move, index) => {
+                const x = ((index + 1) / moves.length) * width;
+                const y = 100 - evalToY(move.evaluation, move.mateIn);
+                path += ` L ${x} ${y}`;
+            });
+            
+            path += ` L ${width} 50 L 0 50 Z`;
+            return path;
+        };
+
+        const buildBlackArea = () => {
+            if (moves.length === 0) return '';
+            const width = 100;
+            let path = `M 0 50`;
+            
+            moves.forEach((move, index) => {
+                const x = ((index + 1) / moves.length) * width;
+                const y = 100 - evalToY(move.evaluation, move.mateIn);
+                path += ` L ${x} ${y}`;
+            });
+            
+            path += ` L ${width} 50 L 0 50 Z`;
+            return path;
+        };
+
+        const getClassificationDot = (classification: string): { color: string; show: boolean } => {
+            switch (classification) {
+                case 'brilliant': return { color: '#22d3ee', show: true }; // cyan-400
+                case 'great': return { color: '#60a5fa', show: true }; // blue-400
+                case 'best': return { color: '#4ade80', show: false }; // Don't show dots for normal good moves
+                case 'good': return { color: '#22c55e', show: false };
+                case 'inaccuracy': return { color: '#facc15', show: true }; // yellow-400
+                case 'mistake': return { color: '#fb923c', show: true }; // orange-400
+                case 'blunder': return { color: '#f87171', show: true }; // red-400
+                default: return { color: '#71717a', show: false };
+            }
+        };
+
+        const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+            if (!graphRef.current || moves.length === 0) return;
+            
+            const rect = graphRef.current.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const relativeX = x / rect.width;
+            const moveIndex = Math.min(Math.floor(relativeX * moves.length), moves.length - 1);
+            
+            if (moveIndex >= 0 && moveIndex < moves.length) {
+                const move = moves[moveIndex];
+                setHoveredMove(moveIndex);
+                setTooltip({
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top,
+                    eval: formatEval(move.evaluation, move.mateIn),
+                    move: `${Math.floor(moveIndex / 2) + 1}${moveIndex % 2 === 0 ? '.' : '...'} ${move.playedMove}`,
+                    classification: move.classification,
+                });
+            }
+        };
+
+        const handleMouseLeave = () => {
+            setHoveredMove(null);
+            setTooltip(null);
+        };
+
+        const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+            if (!graphRef.current || moves.length === 0) return;
+            
+            const rect = graphRef.current.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const relativeX = x / rect.width;
+            const moveIndex = Math.min(Math.floor(relativeX * moves.length), moves.length - 1);
+            
+            if (moveIndex >= 0) {
+                onMoveClick(moveIndex + 1); // +1 because move indices are 1-based in the viewer
+            }
+        };
+
+        const currentX = currentIndex > 0 ? (currentIndex / moves.length) * 100 : 0;
 
         return (
-            <div className="bg-card border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center gap-2 mb-3 text-muted-foreground">
-                    {icon}
-                    <span className="text-xs font-semibold uppercase tracking-wider">{title}</span>
+            <div className="bg-gradient-to-b from-zinc-900/50 to-zinc-800/30 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-emerald-400" />
+                        Review Graph
+                    </h3>
+                    <div className="flex items-center gap-3 text-xs">
+                        <span className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-zinc-100"></span>
+                            <span className="text-zinc-400">White</span>
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-zinc-700"></span>
+                            <span className="text-zinc-400">Black</span>
+                        </span>
                 </div>
-                <div className="flex justify-between items-end">
-                    <div>
-                        <div className="text-xs text-muted-foreground mb-1">White</div>
+                </div>
+                
+                <div 
+                    ref={graphRef}
+                    className="relative h-32 cursor-crosshair select-none"
+                    onMouseMove={handleMouseMove}
+                    onMouseLeave={handleMouseLeave}
+                    onClick={handleClick}
+                >
+                    {/* Background grid */}
+                    <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+                        {/* Horizontal grid lines */}
+                        <line x1="0" y1="25" x2="100" y2="25" stroke="rgba(113, 113, 122, 0.15)" strokeWidth="0.3" />
+                        <line x1="0" y1="50" x2="100" y2="50" stroke="rgba(113, 113, 122, 0.4)" strokeWidth="0.5" strokeDasharray="2,2" />
+                        <line x1="0" y1="75" x2="100" y2="75" stroke="rgba(113, 113, 122, 0.15)" strokeWidth="0.3" />
+                        
+                        {/* White advantage area (above center line) */}
+                        <defs>
+                            <clipPath id="whiteClip">
+                                <rect x="0" y="0" width="100" height="50" />
+                            </clipPath>
+                            <clipPath id="blackClip">
+                                <rect x="0" y="50" width="100" height="50" />
+                            </clipPath>
+                            <linearGradient id="whiteGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stopColor="rgba(250, 250, 250, 0.6)" />
+                                <stop offset="100%" stopColor="rgba(250, 250, 250, 0.1)" />
+                            </linearGradient>
+                            <linearGradient id="blackGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stopColor="rgba(39, 39, 42, 0.1)" />
+                                <stop offset="100%" stopColor="rgba(39, 39, 42, 0.7)" />
+                            </linearGradient>
+                        </defs>
+                        
+                        {/* Filled areas */}
+                        <path 
+                            d={buildWhiteArea()} 
+                            fill="url(#whiteGradient)"
+                            clipPath="url(#whiteClip)"
+                        />
+                        <path 
+                            d={buildBlackArea()} 
+                            fill="url(#blackGradient)"
+                            clipPath="url(#blackClip)"
+                        />
+                        
+                        {/* Main evaluation line */}
+                        <path 
+                            d={buildPath()} 
+                            fill="none" 
+                            stroke="rgba(161, 161, 170, 0.9)" 
+                            strokeWidth="1.5"
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
+                        />
+                        
+                        {/* Classification dots */}
+                        {moves.map((move, index) => {
+                            const dot = getClassificationDot(move.classification);
+                            if (!dot.show) return null;
+                            
+                            const x = ((index + 1) / moves.length) * 100;
+                            const y = 100 - evalToY(move.evaluation, move.mateIn);
+                            
+                            return (
+                                <g key={index}>
+                                    <circle 
+                                        cx={x} 
+                                        cy={y} 
+                                        r="2.5" 
+                                        fill={dot.color}
+                                        stroke="rgba(0,0,0,0.5)"
+                                        strokeWidth="0.5"
+                                    />
+                                </g>
+                            );
+                        })}
+                        
+                        {/* Current position indicator */}
+                        {currentIndex > 0 && (
+                            <>
+                                <line 
+                                    x1={currentX} 
+                                    y1="0" 
+                                    x2={currentX} 
+                                    y2="100" 
+                                    stroke="rgba(34, 197, 94, 0.7)" 
+                                    strokeWidth="1"
+                                    strokeDasharray="3,2"
+                                />
+                                <circle 
+                                    cx={currentX} 
+                                    cy={100 - evalToY(moves[currentIndex - 1]?.evaluation ?? 0, moves[currentIndex - 1]?.mateIn ?? null)} 
+                                    r="3.5" 
+                                    fill="#22c55e"
+                                    stroke="white"
+                                    strokeWidth="1"
+                                />
+                            </>
+                        )}
+                        
+                        {/* Hover indicator */}
+                        {hoveredMove !== null && (
+                            <line 
+                                x1={((hoveredMove + 1) / moves.length) * 100} 
+                                y1="0" 
+                                x2={((hoveredMove + 1) / moves.length) * 100} 
+                                y2="100" 
+                                stroke="rgba(255, 255, 255, 0.3)" 
+                                strokeWidth="0.5"
+                            />
+                        )}
+                    </svg>
+                    
+                    {/* Tooltip */}
+                    {tooltip && (
+                        <div 
+                            className="absolute z-50 pointer-events-none transform -translate-x-1/2"
+                            style={{ 
+                                left: Math.max(60, Math.min(tooltip.x, graphRef.current?.offsetWidth ? graphRef.current.offsetWidth - 60 : 200)), 
+                                top: -8,
+                                transform: 'translateX(-50%) translateY(-100%)'
+                            }}
+                        >
                         <div className={cn(
-                            "text-xl font-bold",
-                            whiteBetter ? "text-green-500" : "text-foreground"
-                        )}>
-                            {typeof whiteValue === 'number' ? whiteValue.toFixed(unit === '%' ? 1 : 0) : whiteValue}{unit}
+                                "px-3 py-2 rounded-lg shadow-xl text-xs font-medium border backdrop-blur-sm",
+                                "bg-zinc-900/95 border-zinc-700"
+                            )}>
+                                <div className="flex items-center gap-2">
+                                    <span className={cn(
+                                        "w-2 h-2 rounded-full",
+                                        tooltip.classification === 'brilliant' && "bg-cyan-400",
+                                        tooltip.classification === 'great' && "bg-blue-400",
+                                        tooltip.classification === 'best' && "bg-green-400",
+                                        tooltip.classification === 'good' && "bg-green-500",
+                                        tooltip.classification === 'inaccuracy' && "bg-yellow-400",
+                                        tooltip.classification === 'mistake' && "bg-orange-400",
+                                        tooltip.classification === 'blunder' && "bg-red-400",
+                                        !['brilliant', 'great', 'best', 'good', 'inaccuracy', 'mistake', 'blunder'].includes(tooltip.classification) && "bg-zinc-400"
+                                    )}></span>
+                                    <span className="text-zinc-300">{tooltip.move}</span>
+                                    <span className={cn(
+                                        "font-bold ml-1",
+                                        parseFloat(tooltip.eval) > 0 ? "text-zinc-100" : parseFloat(tooltip.eval) < 0 ? "text-zinc-400" : "text-zinc-300"
+                                    )}>
+                                        {tooltip.eval}
+                                    </span>
                         </div>
                     </div>
-                    <div className="h-8 w-px bg-border mx-4" />
-                    <div className="text-right">
-                        <div className="text-xs text-muted-foreground mb-1">Black</div>
-                        <div className={cn(
-                            "text-xl font-bold",
-                            !whiteBetter && whiteValue !== blackValue ? "text-green-500" : "text-foreground"
-                        )}>
-                            {typeof blackValue === 'number' ? blackValue.toFixed(unit === '%' ? 1 : 0) : blackValue}{unit}
                         </div>
+                    )}
                     </div>
+                
+                {/* Legend for classification dots */}
+                <div className="flex items-center justify-center gap-4 mt-3 text-xs">
+                    <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                        <span className="text-zinc-500">Brilliant</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
+                        <span className="text-zinc-500">Inaccuracy</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-orange-400"></span>
+                        <span className="text-zinc-500">Mistake</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                        <span className="text-zinc-500">Blunder</span>
+                    </span>
                 </div>
             </div>
         );
@@ -341,187 +659,285 @@ const AnalysisViewer = () => {
     }
 
     const currentEval = getCurrentEval();
-    
-    // Debug: Log evaluation data to console
-    console.log('Move:', currentMoveIndex, 'Eval:', currentEval, 'Bar width:', getEvalBarWidth(currentEval.evaluation, currentEval.mateIn));
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
+        <div className="space-y-6 max-w-7xl mx-auto">
+            {/* Compact Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
+                <div className="space-y-2">
                     <button
                         onClick={() => navigate('/analysis')}
-                        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-2"
+                        className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
                     >
                         <ArrowLeft size={14} />
                         Back to Analysis
                     </button>
-                    <h1 className="text-3xl font-bold tracking-tight">Game Analysis</h1>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <h1 className="text-2xl font-bold tracking-tight">Game Review</h1>
+                        <div className="flex items-center gap-2">
                         <span className={cn(
-                            "px-2 py-0.5 rounded-full text-xs font-medium border",
+                                "px-2.5 py-1 rounded-md text-xs font-semibold",
                             analysis.game.platform === 'chess.com' 
-                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                : "bg-violet-500/10 text-violet-400 border-violet-500/20"
+                                    ? "bg-emerald-500/20 text-emerald-400"
+                                    : "bg-violet-500/20 text-violet-400"
                         )}>
                             {analysis.game.platform}
                         </span>
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground border border-border">
+                            <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-zinc-800 text-zinc-300">
                             {formatTimeControl(analysis.game.timeControl)}
                         </span>
+                    </div>
+                </div>
+                </div>
+                <div className="text-right text-xs text-zinc-500">
+                    <p>Depth {analysis.analysisDepth} • {analysis.engineVersion}</p>
+                    <p>{new Date(analysis.analyzedAt).toLocaleDateString()}</p>
+                </div>
+            </div>
+
+            {/* Players Bar - Compact */}
+            <div className="bg-gradient-to-r from-zinc-900 via-zinc-800/50 to-zinc-900 rounded-xl p-4 border border-zinc-700/50">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-zinc-100 to-zinc-300 flex items-center justify-center shadow-lg">
+                            <span className="text-zinc-800 font-bold text-lg">♔</span>
+                        </div>
+                        <div>
+                            <p className="font-bold text-white">{analysis.game.whitePlayer}</p>
+                            <div className="flex items-center gap-2">
+                                <div className={cn(
+                                    "text-sm font-bold",
+                                    getAccuracyColor(analysis.whiteMetrics.accuracy)
+                                )}>
+                                    {analysis.whiteMetrics.accuracy.toFixed(1)}%
+                        </div>
+                                <span className="text-xs text-zinc-500">accuracy</span>
+                    </div>
+                    </div>
+                        </div>
+                    
+                    <div className="flex flex-col items-center gap-1">
+                        <div className="px-5 py-2 bg-zinc-900 rounded-lg border border-zinc-700 shadow-inner">
+                            <span className="font-bold text-xl tracking-wider text-white">{analysis.game.result}</span>
+                        </div>
                         {analysis.game.openingName && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground border border-border">
-                                {analysis.game.openingName}
-                            </span>
+                            <span className="text-xs text-zinc-500 max-w-[200px] truncate">{analysis.game.openingName}</span>
                         )}
                     </div>
+                    
+                    <div className="flex items-center gap-3">
+                        <div className="text-right">
+                            <p className="font-bold text-white">{analysis.game.blackPlayer}</p>
+                            <div className="flex items-center justify-end gap-2">
+                                <span className="text-xs text-zinc-500">accuracy</span>
+                                <div className={cn(
+                                    "text-sm font-bold",
+                                    getAccuracyColor(analysis.blackMetrics.accuracy)
+                                )}>
+                                    {analysis.blackMetrics.accuracy.toFixed(1)}%
                 </div>
-                <div className="text-right text-sm text-muted-foreground">
-                    <p>Analyzed: {new Date(analysis.analyzedAt).toLocaleDateString()}</p>
-                    <p>Depth: {analysis.analysisDepth} • {analysis.engineVersion}</p>
+                        </div>
+                    </div>
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-zinc-700 to-zinc-900 flex items-center justify-center shadow-lg border border-zinc-600">
+                            <span className="text-zinc-200 font-bold text-lg">♚</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Players & Result */}
-            <div className="bg-card border rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-white border-2 border-zinc-400 flex items-center justify-center text-black font-bold text-sm">
-                            ⚪
-                        </div>
-                        <div>
-                            <p className="font-semibold">{analysis.game.whitePlayer}</p>
-                            <p className={cn("text-sm font-bold", getAccuracyColor(analysis.whiteMetrics.accuracy))}>
-                                {analysis.whiteMetrics.accuracy.toFixed(1)}% accuracy
-                            </p>
-                        </div>
-                    </div>
-                    <div className="px-4 py-2 bg-muted rounded-lg font-bold text-lg">
-                        {analysis.game.result}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div>
-                            <p className="font-semibold text-right">{analysis.game.blackPlayer}</p>
-                            <p className={cn("text-sm font-bold text-right", getAccuracyColor(analysis.blackMetrics.accuracy))}>
-                                {analysis.blackMetrics.accuracy.toFixed(1)}% accuracy
-                            </p>
-                        </div>
-                        <div className="w-8 h-8 rounded-full bg-zinc-800 border-2 border-zinc-600 flex items-center justify-center text-white font-bold text-sm">
-                            ⚫
-                        </div>
-                    </div>
-                </div>
-                {(analysis.whiteMetrics.performanceRating || analysis.blackMetrics.performanceRating) && (
-                    <div className="flex items-center gap-4 text-sm">
-                        <div className="flex items-center gap-1">
-                            <Trophy className="h-4 w-4 text-amber-400" />
-                            <span className="text-muted-foreground">Performance:</span>
-                        </div>
-                        {analysis.whiteMetrics.performanceRating && (
-                            <span>⚪ {analysis.whiteMetrics.performanceRating}</span>
-                        )}
-                        {analysis.blackMetrics.performanceRating && (
-                            <span>⚫ {analysis.blackMetrics.performanceRating}</span>
-                        )}
-                    </div>
-                )}
-            </div>
+            {/* Review Graph */}
+            <ReviewGraph 
+                moves={analysis.moves} 
+                currentIndex={currentMoveIndex}
+                onMoveClick={goToMove}
+            />
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Board & Moves */}
-                <div className="lg:col-span-2 space-y-4">
-                    {/* Evaluation Bar */}
-                    <div className="h-6 w-full bg-zinc-700 rounded-full overflow-hidden relative">
-                        <div 
-                            className="h-full bg-white transition-all duration-300 ease-out"
-                            style={{ width: `${getEvalBarWidth(currentEval.evaluation, currentEval.mateIn)}%` }}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Left Panel: Board & Controls */}
+                <div className="lg:col-span-5 space-y-4">
+                    {/* Vertical Evaluation Bar + Board */}
+                    <div className="flex gap-2">
+                        {/* Vertical Eval Bar */}
+                        <div className="w-6 flex-shrink-0 relative rounded-lg overflow-hidden bg-zinc-800 shadow-inner">
+                            <div 
+                                className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-zinc-100 to-white transition-all duration-300 ease-out"
+                                style={{ height: `${getEvalBarWidth(currentEval.evaluation, currentEval.mateIn)}%` }}
                         />
                         <div className="absolute inset-0 flex items-center justify-center">
-                            <span className={cn(
-                                "px-2 py-0.5 rounded text-xs font-bold",
-                                (currentEval.evaluation ?? 0) >= 0 ? "bg-zinc-800 text-white" : "bg-white text-zinc-800"
-                            )}>
+                                <span 
+                                    className={cn(
+                                        "text-[10px] font-bold px-0.5 py-0.5 rounded writing-mode-vertical transform rotate-180",
+                                        (currentEval.evaluation ?? 0) >= 0 ? "text-zinc-800" : "text-zinc-200"
+                                    )}
+                                    style={{ writingMode: 'vertical-rl' }}
+                                >
                                 {formatEval(currentEval.evaluation, currentEval.mateIn)}
                             </span>
                         </div>
                     </div>
 
                     {/* Chessboard */}
-                    <div className="bg-card border rounded-xl shadow-card overflow-hidden">
+                        <div className="flex-1 rounded-xl overflow-hidden shadow-2xl border border-zinc-700/50">
                         <ChessBoardViewer
                             fen={currentFen}
                             interactive={false}
-                            bestMove={currentMoveData.bestMove}
-                            destinationSquare={currentMoveData.destinationSquare}
-                            classification={currentMoveData.classification}
+                                bestMove={currentMoveData.bestMove}
+                                destinationSquare={currentMoveData.destinationSquare}
+                                classification={currentMoveData.classification}
+                            boardOrientation={boardOrientation}
                         />
+                        </div>
                     </div>
 
                     {/* Navigation Controls */}
-                    <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-2 bg-zinc-900/50 rounded-xl p-3 border border-zinc-700/30">
+                        {/* Flip Board Button */}
+                        <button
+                            onClick={flipBoard}
+                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors"
+                            title="Flip board"
+                        >
+                            <RefreshCw className="h-4 w-4" />
+                        </button>
+                        
+                        <div className="w-px h-6 bg-zinc-700 mx-1"></div>
+                        
                         <button
                             onClick={() => goToMove(0)}
-                            className="p-2.5 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                             disabled={currentMoveIndex === 0}
-                            title="Go to start"
+                            title="Go to start (Home)"
                         >
-                            <ChevronsLeft className="h-5 w-5" />
+                            <ChevronsLeft className="h-4 w-4" />
                         </button>
                         <button
                             onClick={() => goToMove(currentMoveIndex - 1)}
-                            className="p-2.5 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                             disabled={currentMoveIndex === 0}
-                            title="Previous move"
+                            title="Previous move (←)"
                         >
-                            <ChevronLeft className="h-5 w-5" />
+                            <ChevronLeft className="h-4 w-4" />
                         </button>
-                        <span className="px-5 py-2 text-sm font-medium bg-muted rounded-lg min-w-[120px] text-center tabular-nums">
-                            Move {currentMoveIndex} / {analysis.moves.length}
-                        </span>
+                        <div className="px-4 py-1.5 bg-zinc-800 rounded-lg min-w-[100px] text-center border border-zinc-700/50">
+                            <span className="text-xs text-zinc-500">Move</span>
+                            <span className="ml-2 font-bold tabular-nums">{currentMoveIndex}/{analysis.moves.length}</span>
+                        </div>
                         <button
                             onClick={() => goToMove(currentMoveIndex + 1)}
-                            className="p-2.5 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                             disabled={currentMoveIndex >= analysis.moves.length}
-                            title="Next move"
+                            title="Next move (→)"
                         >
-                            <ChevronRight className="h-5 w-5" />
+                            <ChevronRight className="h-4 w-4" />
                         </button>
                         <button
                             onClick={() => goToMove(analysis.moves.length)}
-                            className="p-2.5 rounded-lg hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                             disabled={currentMoveIndex >= analysis.moves.length}
-                            title="Go to end"
+                            title="Go to end (End)"
                         >
-                            <ChevronsRight className="h-5 w-5" />
+                            <ChevronsRight className="h-4 w-4" />
                         </button>
                     </div>
 
-                    {/* Move List */}
-                    <div className="bg-card border rounded-xl shadow-card p-4">
-                        <h3 className="text-lg font-semibold mb-3">Move List</h3>
-                        <div className="max-h-[300px] overflow-y-auto">
-                            <div className="grid grid-cols-2 gap-1">
+                    {/* Current Move Card */}
+                    {currentMoveIndex > 0 && analysis.moves[currentMoveIndex - 1] && (
+                        <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+                                    <Target className="h-4 w-4 text-blue-400" />
+                                    Move {currentMoveIndex}
+                                </h3>
+                                <span className={cn(
+                                    "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border",
+                                    getClassificationColor(analysis.moves[currentMoveIndex - 1].classification)
+                                )}>
+                                    {getClassificationIcon(analysis.moves[currentMoveIndex - 1].classification)}
+                                    {analysis.moves[currentMoveIndex - 1].classification.charAt(0).toUpperCase() + 
+                                     analysis.moves[currentMoveIndex - 1].classification.slice(1)}
+                                </span>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
+                                    <span className="text-xs text-zinc-500 block mb-1">Played</span>
+                                    <span className="font-mono font-bold text-lg text-white">
+                                        {analysis.moves[currentMoveIndex - 1].playedMove}
+                                    </span>
+                                </div>
+                                <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
+                                    <span className="text-xs text-zinc-500 block mb-1">Best</span>
+                                    <span className="font-mono font-bold text-lg text-emerald-400">
+                                        {analysis.moves[currentMoveIndex - 1].bestMove}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-zinc-700/30">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-zinc-500">Eval:</span>
+                                    <span className={cn(
+                                        "font-mono font-bold",
+                                        (currentEval.evaluation ?? 0) >= 0 ? "text-zinc-200" : "text-zinc-400"
+                                    )}>
+                                        {formatEval(currentEval.evaluation, currentEval.mateIn)}
+                                    </span>
+                                </div>
+                                {analysis.moves[currentMoveIndex - 1].centipawnLoss !== null && 
+                                 analysis.moves[currentMoveIndex - 1].centipawnLoss! > 0 && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-zinc-500">CP Loss:</span>
+                                        <span className="font-mono font-bold text-orange-400">
+                                            -{analysis.moves[currentMoveIndex - 1].centipawnLoss}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Middle Panel: Move List */}
+                <div className="lg:col-span-4">
+                    <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl border border-zinc-700/50 backdrop-blur-sm h-full">
+                        <div className="flex items-center gap-2 p-4 border-b border-zinc-700/50">
+                            <BookOpen className="h-4 w-4 text-amber-400" />
+                            <h3 className="text-sm font-semibold text-zinc-300">Move List</h3>
+                            <span className="text-xs text-zinc-500 ml-auto">{analysis.moves.length} moves</span>
+                        </div>
+                        <div className="max-h-[500px] overflow-y-auto p-2 custom-scrollbar">
+                            <div className="space-y-0.5">
                                 {Array.from({ length: Math.ceil(analysis.moves.length / 2) }).map((_, rowIndex) => {
                                     const whiteMove = analysis.moves[rowIndex * 2];
                                     const blackMove = analysis.moves[rowIndex * 2 + 1];
                                     const moveNum = rowIndex + 1;
                                     
                                     return (
-                                        <div key={rowIndex} className="contents">
+                                        <div key={rowIndex} className="flex items-stretch gap-0.5">
+                                            {/* Move number */}
+                                            <div className="w-8 flex items-center justify-center text-xs text-zinc-600 font-medium">
+                                                {moveNum}.
+                                            </div>
+                                            
                                             {/* White's move */}
                                             <button
                                                 onClick={() => goToMove(rowIndex * 2 + 1)}
                                                 className={cn(
-                                                    "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors border",
+                                                    "flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded text-sm transition-all",
                                                     currentMoveIndex === rowIndex * 2 + 1
-                                                        ? "bg-primary/20 border-primary"
-                                                        : getClassificationColor(whiteMove?.classification || 'normal')
+                                                        ? "bg-emerald-500/20 ring-1 ring-emerald-500/50"
+                                                        : "hover:bg-zinc-700/50"
                                                 )}
                                             >
-                                                <span className="text-muted-foreground text-xs w-6">{moveNum}.</span>
+                                                <span className="w-4 flex-shrink-0">
                                                 {getClassificationIcon(whiteMove?.classification || 'normal')}
-                                                <span className="font-mono">{whiteMove?.playedMove || '-'}</span>
+                                                </span>
+                                                <span className={cn(
+                                                    "font-mono text-xs",
+                                                    currentMoveIndex === rowIndex * 2 + 1 ? "text-white font-bold" : "text-zinc-300"
+                                                )}>
+                                                    {whiteMove?.playedMove || '-'}
+                                                </span>
                                             </button>
                                             
                                             {/* Black's move */}
@@ -529,18 +945,24 @@ const AnalysisViewer = () => {
                                                 <button
                                                     onClick={() => goToMove(rowIndex * 2 + 2)}
                                                     className={cn(
-                                                        "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors border",
+                                                        "flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded text-sm transition-all",
                                                         currentMoveIndex === rowIndex * 2 + 2
-                                                            ? "bg-primary/20 border-primary"
-                                                            : getClassificationColor(blackMove.classification)
+                                                            ? "bg-emerald-500/20 ring-1 ring-emerald-500/50"
+                                                            : "hover:bg-zinc-700/50"
                                                     )}
                                                 >
-                                                    <span className="text-muted-foreground text-xs w-6">{moveNum}...</span>
+                                                    <span className="w-4 flex-shrink-0">
                                                     {getClassificationIcon(blackMove.classification)}
-                                                    <span className="font-mono">{blackMove.playedMove}</span>
+                                                    </span>
+                                                    <span className={cn(
+                                                        "font-mono text-xs",
+                                                        currentMoveIndex === rowIndex * 2 + 2 ? "text-white font-bold" : "text-zinc-300"
+                                                    )}>
+                                                        {blackMove.playedMove}
+                                                    </span>
                                                 </button>
                                             ) : (
-                                                <div />
+                                                <div className="flex-1" />
                                             )}
                                         </div>
                                     );
@@ -550,89 +972,155 @@ const AnalysisViewer = () => {
                     </div>
                 </div>
 
-                {/* Metrics Panel */}
-                <div className="space-y-6">
-                    {/* Current Move Info */}
-                    {currentMoveIndex > 0 && analysis.moves[currentMoveIndex - 1] && (
-                        <div className="bg-card border rounded-xl shadow-card p-4">
-                            <h3 className="text-lg font-semibold mb-3">Current Move</h3>
+                {/* Right Panel: Metrics */}
+                <div className="lg:col-span-3 space-y-4">
+                    {/* Accuracy Cards */}
+                    <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Sparkles className="h-4 w-4 text-purple-400" />
+                            <h3 className="text-sm font-semibold text-zinc-300">Accuracy</h3>
+                        </div>
+                        
                             <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-muted-foreground">Played:</span>
-                                    <span className="font-mono font-bold">{analysis.moves[currentMoveIndex - 1].playedMove}</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-muted-foreground">Best:</span>
-                                    <span className="font-mono text-green-400">{analysis.moves[currentMoveIndex - 1].bestMove}</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-muted-foreground">Classification:</span>
-                                    <span className={cn(
-                                        "flex items-center gap-1 px-2 py-1 rounded text-sm font-medium border",
-                                        getClassificationColor(analysis.moves[currentMoveIndex - 1].classification)
-                                    )}>
-                                        {getClassificationIcon(analysis.moves[currentMoveIndex - 1].classification)}
-                                        {analysis.moves[currentMoveIndex - 1].classification}
+                            {/* White accuracy */}
+                            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs text-zinc-400 flex items-center gap-1">
+                                        <span className="w-3 h-3 rounded bg-zinc-100"></span>
+                                        {analysis.game.whitePlayer}
+                                    </span>
+                                    <span className={cn("font-bold text-lg", getAccuracyColor(analysis.whiteMetrics.accuracy))}>
+                                        {analysis.whiteMetrics.accuracy.toFixed(1)}%
                                     </span>
                                 </div>
-                                {analysis.moves[currentMoveIndex - 1].centipawnLoss !== null && (
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-muted-foreground">CP Loss:</span>
-                                        <span className="font-mono">{analysis.moves[currentMoveIndex - 1].centipawnLoss}</span>
+                                <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all"
+                                        style={{ width: `${analysis.whiteMetrics.accuracy}%` }}
+                                    />
+                                </div>
+                            </div>
+                            
+                            {/* Black accuracy */}
+                            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs text-zinc-400 flex items-center gap-1">
+                                        <span className="w-3 h-3 rounded bg-zinc-700"></span>
+                                        {analysis.game.blackPlayer}
+                                    </span>
+                                    <span className={cn("font-bold text-lg", getAccuracyColor(analysis.blackMetrics.accuracy))}>
+                                        {analysis.blackMetrics.accuracy.toFixed(1)}%
+                                    </span>
+                                </div>
+                                <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all"
+                                        style={{ width: `${analysis.blackMetrics.accuracy}%` }}
+                                    />
                                     </div>
-                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Move Quality Summary */}
+                    <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
+                        <h3 className="text-sm font-semibold text-zinc-300 mb-4">Move Quality</h3>
+                        
+                        <div className="space-y-2">
+                            {/* Brilliant */}
+                            {(analysis.whiteMetrics.brilliantMoves > 0 || analysis.blackMetrics.brilliantMoves > 0) && (
+                                <div className="flex items-center justify-between py-1.5 border-b border-zinc-700/30">
+                                    <span className="flex items-center gap-2 text-xs">
+                                        <Star className="h-3.5 w-3.5 text-cyan-400" />
+                                        <span className="text-cyan-400">Brilliant</span>
+                                    </span>
+                                    <div className="flex items-center gap-3 text-xs font-mono">
+                                        <span className="text-zinc-300">{analysis.whiteMetrics.brilliantMoves}</span>
+                                        <span className="text-zinc-600">|</span>
+                                        <span className="text-zinc-300">{analysis.blackMetrics.brilliantMoves}</span>
                             </div>
                         </div>
                     )}
 
-                    <div className="bg-card border rounded-xl shadow-card p-6">
-                        <h3 className="text-lg font-semibold mb-6">Analysis Metrics</h3>
-                        <div className="space-y-4">
-                            <MetricCard
-                                title="Accuracy"
-                                whiteValue={analysis.whiteMetrics.accuracy}
-                                blackValue={analysis.blackMetrics.accuracy}
-                                unit="%"
-                            />
-                            <MetricCard
-                                title="Avg Centipawn Loss"
-                                whiteValue={analysis.whiteMetrics.acpl}
-                                blackValue={analysis.blackMetrics.acpl}
-                                reverseColors
-                            />
-                            <MetricCard
-                                title="Blunders"
-                                whiteValue={analysis.whiteMetrics.blunders}
-                                blackValue={analysis.blackMetrics.blunders}
-                                icon={<XCircle size={14} className="text-red-500" />}
-                                reverseColors
-                            />
-                            <MetricCard
-                                title="Mistakes"
-                                whiteValue={analysis.whiteMetrics.mistakes}
-                                blackValue={analysis.blackMetrics.mistakes}
-                                icon={<AlertTriangle size={14} className="text-orange-500" />}
-                                reverseColors
-                            />
-                            <MetricCard
-                                title="Inaccuracies"
-                                whiteValue={analysis.whiteMetrics.inaccuracies}
-                                blackValue={analysis.blackMetrics.inaccuracies}
-                                icon={<MinusCircle size={14} className="text-yellow-500" />}
-                                reverseColors
-                            />
-                            <MetricCard
-                                title="Brilliant Moves"
-                                whiteValue={analysis.whiteMetrics.brilliantMoves}
-                                blackValue={analysis.blackMetrics.brilliantMoves}
-                                icon={<Star size={14} className="text-cyan-400" />}
-                            />
-                            <MetricCard
-                                title="Good Moves"
-                                whiteValue={analysis.whiteMetrics.goodMoves}
-                                blackValue={analysis.blackMetrics.goodMoves}
-                                icon={<Check size={14} className="text-green-400" />}
-                            />
+                            {/* Best/Good */}
+                            <div className="flex items-center justify-between py-1.5 border-b border-zinc-700/30">
+                                <span className="flex items-center gap-2 text-xs">
+                                    <Check className="h-3.5 w-3.5 text-green-400" />
+                                    <span className="text-green-400">Best/Good</span>
+                                </span>
+                                <div className="flex items-center gap-3 text-xs font-mono">
+                                    <span className="text-zinc-300">{analysis.whiteMetrics.goodMoves}</span>
+                                    <span className="text-zinc-600">|</span>
+                                    <span className="text-zinc-300">{analysis.blackMetrics.goodMoves}</span>
+                        </div>
+                    </div>
+                            
+                            {/* Inaccuracies */}
+                            <div className="flex items-center justify-between py-1.5 border-b border-zinc-700/30">
+                                <span className="flex items-center gap-2 text-xs">
+                                    <MinusCircle className="h-3.5 w-3.5 text-yellow-400" />
+                                    <span className="text-yellow-400">Inaccuracies</span>
+                                </span>
+                                <div className="flex items-center gap-3 text-xs font-mono">
+                                    <span className="text-zinc-300">{analysis.whiteMetrics.inaccuracies}</span>
+                                    <span className="text-zinc-600">|</span>
+                                    <span className="text-zinc-300">{analysis.blackMetrics.inaccuracies}</span>
+                                </div>
+                            </div>
+                            
+                            {/* Mistakes */}
+                            <div className="flex items-center justify-between py-1.5 border-b border-zinc-700/30">
+                                <span className="flex items-center gap-2 text-xs">
+                                    <AlertTriangle className="h-3.5 w-3.5 text-orange-400" />
+                                    <span className="text-orange-400">Mistakes</span>
+                                </span>
+                                <div className="flex items-center gap-3 text-xs font-mono">
+                                    <span className="text-zinc-300">{analysis.whiteMetrics.mistakes}</span>
+                                    <span className="text-zinc-600">|</span>
+                                    <span className="text-zinc-300">{analysis.blackMetrics.mistakes}</span>
+                                </div>
+                            </div>
+                            
+                            {/* Blunders */}
+                            <div className="flex items-center justify-between py-1.5">
+                                <span className="flex items-center gap-2 text-xs">
+                                    <XCircle className="h-3.5 w-3.5 text-red-400" />
+                                    <span className="text-red-400">Blunders</span>
+                                </span>
+                                <div className="flex items-center gap-3 text-xs font-mono">
+                                    <span className="text-zinc-300">{analysis.whiteMetrics.blunders}</span>
+                                    <span className="text-zinc-600">|</span>
+                                    <span className="text-zinc-300">{analysis.blackMetrics.blunders}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* Legend */}
+                        <div className="flex items-center justify-end gap-4 mt-3 pt-3 border-t border-zinc-700/30 text-[10px] text-zinc-500">
+                            <span className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded bg-zinc-200"></span>
+                                White
+                            </span>
+                            <span className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded bg-zinc-600"></span>
+                                Black
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* ACPL */}
+                    <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
+                        <h3 className="text-xs font-semibold text-zinc-400 mb-3">Average Centipawn Loss</h3>
+                        <div className="flex items-center justify-between">
+                            <div className="text-center">
+                                <span className="text-2xl font-bold text-zinc-200">{analysis.whiteMetrics.acpl.toFixed(0)}</span>
+                                <span className="text-xs text-zinc-500 block">White</span>
+                            </div>
+                            <div className="h-8 w-px bg-zinc-700"></div>
+                            <div className="text-center">
+                                <span className="text-2xl font-bold text-zinc-200">{analysis.blackMetrics.acpl.toFixed(0)}</span>
+                                <span className="text-xs text-zinc-500 block">Black</span>
+                            </div>
                         </div>
                     </div>
                 </div>
