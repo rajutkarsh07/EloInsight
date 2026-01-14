@@ -98,7 +98,7 @@ const AnalysisList = () => {
         accuracy: 'all',
         dateRange: 'all',
     });
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>('desc'); // Default: newest first
 
     const fetchAnalyzedGames = useCallback(async (page: number, limit: number) => {
         try {
@@ -528,7 +528,14 @@ const AnalysisList = () => {
                                             )}
                                         </td>
                                         <td className="px-6 py-4 text-muted-foreground text-sm whitespace-nowrap">
-                                            {game.analysis && new Date(game.analysis.analyzedAt).toLocaleDateString()}
+                                            {game.analysis && (
+                                                <div className="flex flex-col">
+                                                    <span>{new Date(game.analysis.analyzedAt).toLocaleDateString()}</span>
+                                                    <span className="text-xs opacity-70">
+                                                        {new Date(game.analysis.analyzedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <button
