@@ -215,6 +215,7 @@ export class AnalysisController {
                 evaluation: move.evalAfter?.centipawns ?? null,
                 mateIn: move.evalAfter?.mateIn ?? null,
                 bestMove: move.bestMove,
+                bestMoveUci: move.bestMoveUci || null, // UCI format for arrow display
                 playedMove: move.playedMove,
                 isBlunder: move.classification === 10,
                 isMistake: move.classification === 9,
@@ -379,6 +380,7 @@ export class AnalysisController {
                 evaluation: pos.evaluation,
                 mateIn: pos.mateIn,
                 bestMove: pos.bestMove,
+                bestMoveUci: pos.bestMoveUci, // UCI format for arrow display
                 playedMove: pos.playedMove,
                 classification: pos.classification.toLowerCase(),
                 centipawnLoss: pos.centipawnLoss,

@@ -12,6 +12,7 @@ interface MoveAnalysis {
     evaluation: number | null;
     mateIn: number | null;
     bestMove: string;
+    bestMoveUci?: string | null; // UCI format for arrow display
     playedMove: string;
     classification: string;
     centipawnLoss: number | null;
@@ -172,15 +173,8 @@ const AnalysisViewer = () => {
             };
         }
         
-        // Best move from PV array (should be in UCI format from Stockfish)
-        const bestMoveUci = move.pv?.[0] || undefined;
-        
         // Extract destination square from played move for classification badge placement
         const destinationSquare = extractDestinationSquare(move.playedMove);
-        
-        // Create a "fake" lastMove for highlighting - we just need the destination
-        // Format: "xxd5" where xx is placeholder and d5 is destination
-        const lastMove = destinationSquare ? `${destinationSquare}${destinationSquare}` : undefined;
         
         // Map classification string to valid type
         const validClassifications = ['brilliant', 'great', 'best', 'excellent', 'good', 'book', 'normal', 'inaccuracy', 'mistake', 'blunder'];
@@ -188,9 +182,15 @@ const AnalysisViewer = () => {
             ? (move.classification as BoardClassification) 
             : null;
         
+        // Show best move arrow for bad moves (inaccuracy, mistake, blunder)
+        // This shows what the player should have played instead
+        // For good moves, no arrow is needed since the player already made the right choice
+        const shouldShowArrow = ['inaccuracy', 'mistake', 'blunder'].includes(move.classification);
+        const bestMoveUci = shouldShowArrow && move.bestMoveUci ? move.bestMoveUci : undefined;
+        
         return {
             bestMove: bestMoveUci,
-            lastMove,
+            lastMove: undefined,
             classification,
             destinationSquare,
         };
