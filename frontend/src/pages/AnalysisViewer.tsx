@@ -25,6 +25,16 @@ interface MoveAnalysis {
     depth: number | null;
 }
 
+// Extract destination square from SAN notation (e.g., "Nf3" -> "f3", "e4" -> "e4", "Qxd5" -> "d5")
+const extractDestinationSquare = (san: string): string | undefined => {
+    if (!san) return undefined;
+    // Remove check/checkmate symbols and promotion
+    const cleaned = san.replace(/[+#=QRBN]$/g, '').replace(/[+#]/g, '');
+    // Match the last two characters that form a valid square (letter a-h + number 1-8)
+    const match = cleaned.match(/([a-h][1-8])$/);
+    return match ? match[1] : undefined;
+};
+
 interface GameMetrics {
     accuracy: number;
     acpl: number;
@@ -124,9 +134,6 @@ const AnalysisViewer = () => {
         const move = analysis.moves[currentMoveIndex - 1];
         const fen = move?.fen;
         
-        // Debug log - remove in production
-        console.log('Move', currentMoveIndex, 'FEN:', fen);
-        
         if (fen && typeof fen === 'string' && fen.trim().length > 0) {
             return fen;
         }
@@ -134,6 +141,59 @@ const AnalysisViewer = () => {
         // Fallback: if FEN is not available, keep the starting position
         console.warn('FEN not available for move', currentMoveIndex);
         return startingFen;
+    }, [analysis, currentMoveIndex]);
+
+    // Valid classification types for the ChessBoardViewer
+    type BoardClassification = 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'book' | 'normal' | 'inaccuracy' | 'mistake' | 'blunder' | null;
+
+    // Compute current move data for board visualization
+    const currentMoveData = useMemo((): {
+        bestMove: string | undefined;
+        lastMove: string | undefined;
+        classification: BoardClassification;
+        destinationSquare: string | undefined;
+    } => {
+        if (!analysis || currentMoveIndex === 0) {
+            return { 
+                bestMove: undefined, 
+                lastMove: undefined, 
+                classification: null,
+                destinationSquare: undefined,
+            };
+        }
+        
+        const move = analysis.moves[currentMoveIndex - 1];
+        if (!move) {
+            return { 
+                bestMove: undefined, 
+                lastMove: undefined, 
+                classification: null,
+                destinationSquare: undefined,
+            };
+        }
+        
+        // Best move from PV array (should be in UCI format from Stockfish)
+        const bestMoveUci = move.pv?.[0] || undefined;
+        
+        // Extract destination square from played move for classification badge placement
+        const destinationSquare = extractDestinationSquare(move.playedMove);
+        
+        // Create a "fake" lastMove for highlighting - we just need the destination
+        // Format: "xxd5" where xx is placeholder and d5 is destination
+        const lastMove = destinationSquare ? `${destinationSquare}${destinationSquare}` : undefined;
+        
+        // Map classification string to valid type
+        const validClassifications = ['brilliant', 'great', 'best', 'excellent', 'good', 'book', 'normal', 'inaccuracy', 'mistake', 'blunder'];
+        const classification: BoardClassification = validClassifications.includes(move.classification) 
+            ? (move.classification as BoardClassification) 
+            : null;
+        
+        return {
+            bestMove: bestMoveUci,
+            lastMove,
+            classification,
+            destinationSquare,
+        };
     }, [analysis, currentMoveIndex]);
 
     const getClassificationIcon = (classification: string) => {
@@ -281,6 +341,9 @@ const AnalysisViewer = () => {
     }
 
     const currentEval = getCurrentEval();
+    
+    // Debug: Log evaluation data to console
+    console.log('Move:', currentMoveIndex, 'Eval:', currentEval, 'Bar width:', getEvalBarWidth(currentEval.evaluation, currentEval.mateIn));
 
     return (
         <div className="space-y-6">
@@ -389,6 +452,9 @@ const AnalysisViewer = () => {
                         <ChessBoardViewer
                             fen={currentFen}
                             interactive={false}
+                            bestMove={currentMoveData.bestMove}
+                            destinationSquare={currentMoveData.destinationSquare}
+                            classification={currentMoveData.classification}
                         />
                     </div>
 
