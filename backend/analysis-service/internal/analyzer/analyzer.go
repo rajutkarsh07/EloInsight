@@ -241,6 +241,9 @@ func (a *Analyzer) createMoveAnalysis(
 	}
 	moveNumber := (ply / 2) + 1
 
+	// Convert best move from UCI to SAN
+	bestMoveSAN := a.uciToSAN(currentPos.FEN, bestMoveUCI)
+
 	// The played move is stored in nextPos (the position AFTER the move was made)
 	analysis := MoveAnalysis{
 		MoveNumber:    moveNumber,
@@ -248,6 +251,7 @@ func (a *Analyzer) createMoveAnalysis(
 		Color:         color,
 		PlayedMove:    nextPos.MoveSAN,
 		PlayedMoveUCI: nextPos.MoveUCI,
+		BestMove:      bestMoveSAN,
 		BestMoveUCI:   bestMoveUCI,
 		FENBefore:     currentPos.FEN,
 		FENAfter:      nextPos.FEN,
@@ -324,6 +328,34 @@ func (a *Analyzer) classifyMove(cpLoss int, isBestMove bool) MoveClassification 
 		return ClassMistake
 	}
 	return ClassBlunder
+}
+
+// uciToSAN converts a UCI move notation to SAN notation given a FEN position
+func (a *Analyzer) uciToSAN(fen, uciMove string) string {
+	if uciMove == "" {
+		return ""
+	}
+
+	// Parse the FEN to get the position
+	fenFunc, err := chess.FEN(fen)
+	if err != nil {
+		a.logger.Warn("Failed to parse FEN for UCI to SAN conversion", zap.String("fen", fen), zap.Error(err))
+		return uciMove // Return UCI as fallback
+	}
+
+	game := chess.NewGame(fenFunc)
+	position := game.Position()
+
+	// Decode the UCI move
+	move, err := chess.UCINotation{}.Decode(position, uciMove)
+	if err != nil {
+		a.logger.Warn("Failed to decode UCI move", zap.String("uci", uciMove), zap.Error(err))
+		return uciMove // Return UCI as fallback
+	}
+
+	// Encode to SAN
+	san := chess.AlgebraicNotation{}.Encode(position, move)
+	return san
 }
 
 // calculateMetrics calculates aggregated metrics for a color
