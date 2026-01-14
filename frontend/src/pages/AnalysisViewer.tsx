@@ -644,55 +644,157 @@ const AnalysisViewer = () => {
                 </div>
             </div>
 
-            {/* Players Bar - Compact */}
-            <div className="bg-gradient-to-r from-zinc-900 via-zinc-800/50 to-zinc-900 rounded-xl p-4 border border-zinc-700/50">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-zinc-100 to-zinc-300 flex items-center justify-center shadow-lg">
-                            <span className="text-zinc-800 font-bold text-lg">♔</span>
+            {/* Players Bar - Enhanced with clear winner/loser indication */}
+            {(() => {
+                const result = analysis.game.result;
+                const whiteWon = result === '1-0';
+                const blackWon = result === '0-1';
+                const isDraw = result === '1/2-1/2' || result === '½-½';
+
+                // Determine termination reason from result
+                const getTerminationText = () => {
+                    if (whiteWon) return 'White wins';
+                    if (blackWon) return 'Black wins';
+                    if (isDraw) return 'Draw';
+                    return 'Game over';
+                };
+
+                return (
+                    <div className="bg-gradient-to-r from-zinc-900 via-zinc-800/50 to-zinc-900 rounded-xl border border-zinc-700/50 overflow-hidden">
+                        {/* Result Banner */}
+                        <div className={cn(
+                            "px-4 py-2 text-center text-sm font-semibold",
+                            whiteWon ? "bg-gradient-to-r from-emerald-500/20 via-emerald-500/10 to-emerald-500/20 text-emerald-400" :
+                                blackWon ? "bg-gradient-to-r from-red-500/20 via-red-500/10 to-red-500/20 text-red-400" :
+                                    "bg-gradient-to-r from-zinc-500/20 via-zinc-500/10 to-zinc-500/20 text-zinc-400"
+                        )}>
+                            <span className="flex items-center justify-center gap-2">
+                                {whiteWon && <span>🏆</span>}
+                                {blackWon && <span>🏆</span>}
+                                {isDraw && <span>🤝</span>}
+                                {getTerminationText()} • {result}
+                            </span>
                         </div>
-                        <div>
-                            <p className="font-bold text-white">{analysis.game.whitePlayer}</p>
-                            <div className="flex items-center gap-2">
-                                <div className={cn(
-                                    "text-sm font-bold",
-                                    getAccuracyColor(analysis.whiteMetrics.accuracy)
-                                )}>
-                                    {analysis.whiteMetrics.accuracy.toFixed(1)}%
+
+                        {/* Players */}
+                        <div className="p-4">
+                            <div className="flex items-center justify-between">
+                                {/* White Player */}
+                                <div className="flex items-center gap-3">
+                                    <div className={cn(
+                                        "w-12 h-12 rounded-lg flex items-center justify-center shadow-lg relative",
+                                        whiteWon
+                                            ? "bg-gradient-to-br from-yellow-200 to-yellow-400 ring-2 ring-yellow-400/50"
+                                            : "bg-gradient-to-br from-zinc-100 to-zinc-300"
+                                    )}>
+                                        <span className="text-zinc-800 font-bold text-xl">♔</span>
+                                        {whiteWon && (
+                                            <span className="absolute -top-1 -right-1 text-sm">👑</span>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <p className={cn(
+                                                "font-bold",
+                                                whiteWon ? "text-emerald-400" : blackWon ? "text-zinc-400" : "text-white"
+                                            )}>
+                                                {analysis.game.whitePlayer}
+                                            </p>
+                                            {whiteWon && (
+                                                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-emerald-500/20 text-emerald-400">
+                                                    WON
+                                                </span>
+                                            )}
+                                            {blackWon && (
+                                                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-red-500/20 text-red-400">
+                                                    LOST
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className={cn(
+                                                "text-sm font-bold",
+                                                getAccuracyColor(analysis.whiteMetrics.accuracy)
+                                            )}>
+                                                {analysis.whiteMetrics.accuracy.toFixed(1)}%
+                                            </div>
+                                            <span className="text-xs text-zinc-500">accuracy</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <span className="text-xs text-zinc-500">accuracy</span>
+
+                                {/* Result Badge */}
+                                <div className="flex flex-col items-center gap-1.5">
+                                    <div className={cn(
+                                        "px-6 py-3 rounded-xl border shadow-lg",
+                                        whiteWon ? "bg-emerald-500/10 border-emerald-500/30" :
+                                            blackWon ? "bg-red-500/10 border-red-500/30" :
+                                                "bg-zinc-800 border-zinc-700"
+                                    )}>
+                                        <span className={cn(
+                                            "font-bold text-2xl tracking-widest",
+                                            whiteWon ? "text-emerald-400" :
+                                                blackWon ? "text-red-400" :
+                                                    "text-white"
+                                        )}>
+                                            {result}
+                                        </span>
+                                    </div>
+                                    {analysis.game.openingName && (
+                                        <span className="text-xs text-zinc-500 max-w-[200px] truncate text-center">
+                                            {analysis.game.openingName}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Black Player */}
+                                <div className="flex items-center gap-3">
+                                    <div className="text-right">
+                                        <div className="flex items-center justify-end gap-2">
+                                            {blackWon && (
+                                                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-emerald-500/20 text-emerald-400">
+                                                    WON
+                                                </span>
+                                            )}
+                                            {whiteWon && (
+                                                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-red-500/20 text-red-400">
+                                                    LOST
+                                                </span>
+                                            )}
+                                            <p className={cn(
+                                                "font-bold",
+                                                blackWon ? "text-emerald-400" : whiteWon ? "text-zinc-400" : "text-white"
+                                            )}>
+                                                {analysis.game.blackPlayer}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <span className="text-xs text-zinc-500">accuracy</span>
+                                            <div className={cn(
+                                                "text-sm font-bold",
+                                                getAccuracyColor(analysis.blackMetrics.accuracy)
+                                            )}>
+                                                {analysis.blackMetrics.accuracy.toFixed(1)}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className={cn(
+                                        "w-12 h-12 rounded-lg flex items-center justify-center shadow-lg border relative",
+                                        blackWon
+                                            ? "bg-gradient-to-br from-zinc-600 to-zinc-800 ring-2 ring-yellow-400/50 border-yellow-400/30"
+                                            : "bg-gradient-to-br from-zinc-700 to-zinc-900 border-zinc-600"
+                                    )}>
+                                        <span className="text-zinc-200 font-bold text-xl">♚</span>
+                                        {blackWon && (
+                                            <span className="absolute -top-1 -right-1 text-sm">👑</span>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-
-                    <div className="flex flex-col items-center gap-1">
-                        <div className="px-5 py-2 bg-zinc-900 rounded-lg border border-zinc-700 shadow-inner">
-                            <span className="font-bold text-xl tracking-wider text-white">{analysis.game.result}</span>
-                        </div>
-                        {analysis.game.openingName && (
-                            <span className="text-xs text-zinc-500 max-w-[200px] truncate">{analysis.game.openingName}</span>
-                        )}
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        <div className="text-right">
-                            <p className="font-bold text-white">{analysis.game.blackPlayer}</p>
-                            <div className="flex items-center justify-end gap-2">
-                                <span className="text-xs text-zinc-500">accuracy</span>
-                                <div className={cn(
-                                    "text-sm font-bold",
-                                    getAccuracyColor(analysis.blackMetrics.accuracy)
-                                )}>
-                                    {analysis.blackMetrics.accuracy.toFixed(1)}%
-                                </div>
-                            </div>
-                        </div>
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-zinc-700 to-zinc-900 flex items-center justify-center shadow-lg border border-zinc-600">
-                            <span className="text-zinc-200 font-bold text-lg">♚</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                );
+            })()}
 
             {/* Review Graph */}
             <ReviewGraph
