@@ -9,20 +9,23 @@ const ChessBoardViewer = ({
     fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
     interactive = false,
 }: ChessBoardViewerProps) => {
+    // react-chessboard v5 uses 'options' prop
+    const boardOptions = {
+        position: fen,
+        arePiecesDraggable: interactive,
+        animationDuration: 200,
+        darkSquareStyle: { backgroundColor: '#779556' },
+        lightSquareStyle: { backgroundColor: '#ebecd0' },
+        boardOrientation: 'white' as const,
+    };
 
     return (
-        <div className="bg-card border rounded-lg p-4 max-w-[600px] mx-auto shadow-card">
-            <h3 className="font-semibold text-lg mb-2">Chess Board</h3>
-            <Chessboard
-                key={fen} // Force re-render when FEN changes
-                position={fen}
-                arePiecesDraggable={interactive}
-                animationDuration={200}
-                customDarkSquareStyle={{ backgroundColor: '#779556' }}
-                customLightSquareStyle={{ backgroundColor: '#ebecd0' }}
-                boardOrientation="white"
+        <div style={{ width: '100%', maxWidth: '560px', margin: '0 auto' }}>
+            <Chessboard 
+                key={fen}
+                options={boardOptions}
             />
-            <p className="text-xs text-muted-foreground mt-2 font-mono break-all">
+            <p className="text-xs text-muted-foreground mt-2 font-mono break-all text-center">
                 FEN: {fen}
             </p>
         </div>

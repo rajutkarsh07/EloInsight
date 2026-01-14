@@ -124,9 +124,15 @@ const AnalysisViewer = () => {
         const move = analysis.moves[currentMoveIndex - 1];
         const fen = move?.fen;
         
+        // Debug log - remove in production
+        console.log('Move', currentMoveIndex, 'FEN:', fen);
+        
         if (fen && typeof fen === 'string' && fen.trim().length > 0) {
             return fen;
         }
+        
+        // Fallback: if FEN is not available, keep the starting position
+        console.warn('FEN not available for move', currentMoveIndex);
         return startingFen;
     }, [analysis, currentMoveIndex]);
 
