@@ -328,6 +328,7 @@ func convertMoveAnalysis(move *analyzer.MoveAnalysis) *pb.MoveAnalysis {
 		FenBefore:       move.FENBefore,
 		FenAfter:        move.FENAfter,
 		EvalBefore:      convertEvaluation(&move.EvalBefore),
+		EvalAfter:       convertEvaluation(&move.EvalAfter), // FIX: Was missing - now sending evaluation after move
 		CentipawnLoss:   int32(move.CentipawnLoss),
 		Classification:  convertClassification(move.Classification),
 		Pv:              move.PV,

@@ -9,6 +9,7 @@ interface ChessBoardViewerProps {
     classification?: 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'book' | 'normal' | 'inaccuracy' | 'mistake' | 'blunder' | null;
     showArrow?: boolean;
     showClassification?: boolean;
+    boardOrientation?: 'white' | 'black';
 }
 
 // Convert UCI notation to square pair
@@ -45,6 +46,7 @@ const ChessBoardViewer = ({
     classification,
     showArrow = true,
     showClassification = true,
+    boardOrientation = 'white',
 }: ChessBoardViewerProps) => {
     
     // Custom arrows for best move (green arrow)
@@ -64,20 +66,23 @@ const ChessBoardViewer = ({
     // Build options object for react-chessboard v5
     const boardOptions = useMemo(() => ({
         position: fen,
-        boardOrientation: 'white' as const,
+        boardOrientation: boardOrientation,
         allowDragging: interactive,
         animationDurationInMs: 200,
         showNotation: true,
         darkSquareStyle: { backgroundColor: '#779556' },
         lightSquareStyle: { backgroundColor: '#ebecd0' },
         arrows: arrows,
-    }), [fen, interactive, arrows]);
+    }), [fen, interactive, arrows, boardOrientation]);
 
     // Get destination square for icon placement
     const iconSquare = destinationSquare;
     const iconData = classification && classification !== 'normal' && classification !== 'good' 
         ? classificationConfig[classification] 
         : null;
+
+    // Adjust badge position based on board orientation
+    const isFlipped = boardOrientation === 'black';
 
     return (
         <div style={{ width: '100%', maxWidth: '560px', margin: '0 auto', position: 'relative' }}>
@@ -88,6 +93,7 @@ const ChessBoardViewer = ({
                 <ClassificationBadge 
                     square={iconSquare} 
                     iconData={iconData}
+                    isFlipped={isFlipped}
                 />
             )}
         </div>
@@ -97,14 +103,22 @@ const ChessBoardViewer = ({
 // Classification badge overlay component - positioned at top-right of destination square
 const ClassificationBadge = ({ 
     square, 
-    iconData 
+    iconData,
+    isFlipped = false,
 }: { 
     square: string; 
     iconData: { icon: string; color: string };
+    isFlipped?: boolean;
 }) => {
-    // Convert square to position (a1 = col 0, row 7 from white's perspective)
-    const col = square.charCodeAt(0) - 97; // a=0, h=7
-    const row = 8 - parseInt(square[1]);    // 1=7, 8=0
+    // Convert square to position
+    let col = square.charCodeAt(0) - 97; // a=0, h=7
+    let row = 8 - parseInt(square[1]);    // 1=7, 8=0
+    
+    // Flip coordinates if board is flipped (black perspective)
+    if (isFlipped) {
+        col = 7 - col;
+        row = 7 - row;
+    }
     
     // Position as percentage - place at top-right corner of the square
     const left = ((col + 1) * 12.5) - 1.5; // 12.5% per square
