@@ -293,7 +293,24 @@ const AnalysisViewer = () => {
     const getCurrentEval = () => {
         if (!analysis || currentMoveIndex === 0) return { evaluation: 0, mateIn: null };
         const move = analysis.moves[currentMoveIndex - 1];
-        return { evaluation: move?.evaluation ?? 0, mateIn: move?.mateIn ?? null };
+
+        // Normalize to White's perspective
+        // currentMoveIndex - 1 gives us the array index (0-based)
+        // Index 0, 2, 4... = White's moves (even), Index 1, 3, 5... = Black's moves (odd)
+        const isBlackMove = (currentMoveIndex - 1) % 2 === 1;
+
+        let evaluation = move?.evaluation ?? 0;
+        let mateIn = move?.mateIn ?? null;
+
+        // Flip values to White's perspective if it was Black's move
+        if (isBlackMove) {
+            evaluation = -evaluation;
+            if (mateIn !== null) {
+                mateIn = -mateIn;
+            }
+        }
+
+        return { evaluation, mateIn };
     };
 
     const formatTimeControl = (tc: string): string => {
