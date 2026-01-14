@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, TrendingUp, Target, BookOpen, Sparkles, RefreshCw } from 'lucide-react';
+import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, Sparkles, RefreshCw } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot } from 'recharts';
 import ChessBoardViewer from '../components/chess/ChessBoardViewer';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
@@ -86,22 +87,22 @@ const AnalysisViewer = () => {
     // Determine which color the user played as
     const getUserColor = useCallback((gameData: FullAnalysis): 'white' | 'black' => {
         if (!user) return 'white';
-        
+
         const whitePlayer = gameData.game.whitePlayer.toLowerCase();
         const blackPlayer = gameData.game.blackPlayer.toLowerCase();
-        
+
         // Check against user's chess platform usernames
         const usernames = [
             user.username?.toLowerCase(),
             user.chessComUsername?.toLowerCase(),
             user.lichessUsername?.toLowerCase(),
         ].filter(Boolean);
-        
+
         for (const username of usernames) {
             if (username && blackPlayer.includes(username)) return 'black';
             if (username && whitePlayer.includes(username)) return 'white';
         }
-        
+
         return 'white'; // Default to white perspective
     }, [user]);
 
@@ -114,18 +115,18 @@ const AnalysisViewer = () => {
             try {
                 setLoading(true);
                 const data = await apiClient.get<FullAnalysis>(`/analysis/game/${gameId}`);
-                
+
                 if (data.status === 'not_analyzed') {
                     setError('This game has not been analyzed yet.');
                     return;
                 }
-                
+
                 setAnalysis(data);
-                
+
                 // Auto-orient board based on which color user played
                 const userColor = getUserColor(data);
                 setBoardOrientation(userColor);
-                
+
                 // Debug: Log data used for Review Graph
                 console.log('📊 Review Graph Data:', {
                     totalMoves: data.moves.length,
@@ -177,14 +178,14 @@ const AnalysisViewer = () => {
     const currentFen = useMemo(() => {
         const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
         if (!analysis || currentMoveIndex === 0) return startingFen;
-        
+
         const move = analysis.moves[currentMoveIndex - 1];
         const fen = move?.fen;
-        
+
         if (fen && typeof fen === 'string' && fen.trim().length > 0) {
             return fen;
         }
-        
+
         // Fallback: if FEN is not available, keep the starting position
         console.warn('FEN not available for move', currentMoveIndex);
         return startingFen;
@@ -201,39 +202,39 @@ const AnalysisViewer = () => {
         destinationSquare: string | undefined;
     } => {
         if (!analysis || currentMoveIndex === 0) {
-            return { 
-                bestMove: undefined, 
-                lastMove: undefined, 
+            return {
+                bestMove: undefined,
+                lastMove: undefined,
                 classification: null,
                 destinationSquare: undefined,
             };
         }
-        
+
         const move = analysis.moves[currentMoveIndex - 1];
         if (!move) {
-            return { 
-                bestMove: undefined, 
-                lastMove: undefined, 
+            return {
+                bestMove: undefined,
+                lastMove: undefined,
                 classification: null,
                 destinationSquare: undefined,
             };
         }
-        
+
         // Extract destination square from played move for classification badge placement
         const destinationSquare = extractDestinationSquare(move.playedMove);
-        
+
         // Map classification string to valid type
         const validClassifications = ['brilliant', 'great', 'best', 'excellent', 'good', 'book', 'normal', 'inaccuracy', 'mistake', 'blunder'];
-        const classification: BoardClassification = validClassifications.includes(move.classification) 
-            ? (move.classification as BoardClassification) 
+        const classification: BoardClassification = validClassifications.includes(move.classification)
+            ? (move.classification as BoardClassification)
             : null;
-        
+
         // Show best move arrow for bad moves (inaccuracy, mistake, blunder)
         // This shows what the player should have played instead
         // For good moves, no arrow is needed since the player already made the right choice
         const shouldShowArrow = ['inaccuracy', 'mistake', 'blunder'].includes(move.classification);
         const bestMoveUci = shouldShowArrow && move.bestMoveUci ? move.bestMoveUci : undefined;
-        
+
         return {
             bestMove: bestMoveUci,
             lastMove: undefined,
@@ -313,320 +314,234 @@ const AnalysisViewer = () => {
         return 'text-red-400';
     };
 
-    // Review graph component like Chess.com
-    const ReviewGraph = ({ moves, currentIndex, onMoveClick }: { 
-        moves: MoveAnalysis[]; 
+    // Chess.com-style Review Graph using Recharts Area Chart
+    const ReviewGraph = ({ moves, currentIndex, onMoveClick }: {
+        moves: MoveAnalysis[];
         currentIndex: number;
         onMoveClick: (index: number) => void;
     }) => {
-        const graphRef = useRef<HTMLDivElement>(null);
-        const [hoveredMove, setHoveredMove] = useState<number | null>(null);
-        const [tooltip, setTooltip] = useState<{ x: number; y: number; eval: string; move: string; classification: string } | null>(null);
-        
-        // Convert evaluation to a normalized value for the graph (0-100, 50 = equal)
-        const evalToY = (evaluation: number | null, mateIn: number | null): number => {
-            if (mateIn !== null) {
-                return mateIn > 0 ? 98 : 2;
-            }
-            if (evaluation === null) return 50;
-            // Use a sigmoid-like function for smoother visualization
-            // Maps roughly -400 to +400 centipawns to 5-95%
-            const normalized = evaluation / 100; // Convert to pawns
-            const sigmoid = 50 + (50 * (2 / (1 + Math.exp(-normalized * 0.8)) - 1));
-            return Math.max(2, Math.min(98, sigmoid));
-        };
+        // Prepare data for Recharts
+        const chartData = useMemo(() => {
+            // Start with equal position
+            const data: Array<{
+                moveIndex: number;
+                moveNumber: string;
+                evaluation: number;
+                displayEval: string;
+                playedMove: string;
+                classification: string;
+                isNotable: boolean;
+            }> = [{
+                moveIndex: 0,
+                moveNumber: 'Start',
+                evaluation: 0,
+                displayEval: '0.0',
+                playedMove: '',
+                classification: '',
+                isNotable: false,
+            }];
 
-        // Build path for the evaluation line
-        const buildPath = () => {
-            if (moves.length === 0) return '';
-            
-            const width = 100;
-            const points: string[] = [];
-            
-            // Start from initial position (eval = 0)
-            points.push(`M 0 50`);
-            
             moves.forEach((move, index) => {
-                const x = ((index + 1) / moves.length) * width;
-                const y = 100 - evalToY(move.evaluation, move.mateIn);
-                points.push(`L ${x} ${y}`);
-            });
-            
-            return points.join(' ');
-        };
+                // Convert centipawns to pawns, handle mate
+                let evalValue = 0;
+                let displayEval = '0.0';
 
-        // Build filled areas
-        const buildWhiteArea = () => {
-            if (moves.length === 0) return '';
-            const width = 100;
-            let path = `M 0 50`;
-            
-            moves.forEach((move, index) => {
-                const x = ((index + 1) / moves.length) * width;
-                const y = 100 - evalToY(move.evaluation, move.mateIn);
-                path += ` L ${x} ${y}`;
-            });
-            
-            path += ` L ${width} 50 L 0 50 Z`;
-            return path;
-        };
+                if (move.mateIn !== null) {
+                    evalValue = move.mateIn > 0 ? 10 : -10; // Cap mate at ±10
+                    displayEval = move.mateIn > 0 ? `M${move.mateIn}` : `-M${Math.abs(move.mateIn)}`;
+                } else if (move.evaluation !== null) {
+                    evalValue = Math.max(-10, Math.min(10, move.evaluation / 100)); // Clamp to ±10 pawns
+                    displayEval = evalValue > 0 ? `+${evalValue.toFixed(1)}` : evalValue.toFixed(1);
+                }
 
-        const buildBlackArea = () => {
-            if (moves.length === 0) return '';
-            const width = 100;
-            let path = `M 0 50`;
-            
-            moves.forEach((move, index) => {
-                const x = ((index + 1) / moves.length) * width;
-                const y = 100 - evalToY(move.evaluation, move.mateIn);
-                path += ` L ${x} ${y}`;
-            });
-            
-            path += ` L ${width} 50 L 0 50 Z`;
-            return path;
-        };
+                const isNotable = ['brilliant', 'great', 'blunder', 'mistake', 'inaccuracy'].includes(move.classification);
 
-        const getClassificationDot = (classification: string): { color: string; show: boolean } => {
-            switch (classification) {
-                case 'brilliant': return { color: '#22d3ee', show: true }; // cyan-400
-                case 'great': return { color: '#60a5fa', show: true }; // blue-400
-                case 'best': return { color: '#4ade80', show: false }; // Don't show dots for normal good moves
-                case 'good': return { color: '#22c55e', show: false };
-                case 'inaccuracy': return { color: '#facc15', show: true }; // yellow-400
-                case 'mistake': return { color: '#fb923c', show: true }; // orange-400
-                case 'blunder': return { color: '#f87171', show: true }; // red-400
-                default: return { color: '#71717a', show: false };
-            }
-        };
-
-        const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-            if (!graphRef.current || moves.length === 0) return;
-            
-            const rect = graphRef.current.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const relativeX = x / rect.width;
-            const moveIndex = Math.min(Math.floor(relativeX * moves.length), moves.length - 1);
-            
-            if (moveIndex >= 0 && moveIndex < moves.length) {
-                const move = moves[moveIndex];
-                setHoveredMove(moveIndex);
-                setTooltip({
-                    x: e.clientX - rect.left,
-                    y: e.clientY - rect.top,
-                    eval: formatEval(move.evaluation, move.mateIn),
-                    move: `${Math.floor(moveIndex / 2) + 1}${moveIndex % 2 === 0 ? '.' : '...'} ${move.playedMove}`,
+                data.push({
+                    moveIndex: index + 1,
+                    moveNumber: `${Math.floor(index / 2) + 1}${index % 2 === 0 ? '.' : '...'}`,
+                    evaluation: evalValue,
+                    displayEval,
+                    playedMove: move.playedMove,
                     classification: move.classification,
+                    isNotable,
                 });
+            });
+
+            return data;
+        }, [moves]);
+
+        // Find notable moves for dots
+        const notableMoves = useMemo(() => {
+            return chartData.filter(d => d.isNotable);
+        }, [chartData]);
+
+        const getClassificationColor = (classification: string): string => {
+            switch (classification) {
+                case 'brilliant': return '#22d3ee';
+                case 'great': return '#3b82f6';
+                case 'inaccuracy': return '#facc15';
+                case 'mistake': return '#f97316';
+                case 'blunder': return '#ef4444';
+                default: return '#a1a1aa';
             }
         };
 
-        const handleMouseLeave = () => {
-            setHoveredMove(null);
-            setTooltip(null);
-        };
+        // Custom tooltip
+        const CustomTooltip = ({ active, payload }: any) => {
+            if (!active || !payload || !payload[0]) return null;
 
-        const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-            if (!graphRef.current || moves.length === 0) return;
-            
-            const rect = graphRef.current.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const relativeX = x / rect.width;
-            const moveIndex = Math.min(Math.floor(relativeX * moves.length), moves.length - 1);
-            
-            if (moveIndex >= 0) {
-                onMoveClick(moveIndex + 1); // +1 because move indices are 1-based in the viewer
-            }
-        };
+            const data = payload[0].payload;
+            if (data.moveIndex === 0) return null;
 
-        const currentX = currentIndex > 0 ? (currentIndex / moves.length) * 100 : 0;
-
-        return (
-            <div className="bg-gradient-to-b from-zinc-900/50 to-zinc-800/30 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
-                <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4 text-emerald-400" />
-                        Review Graph
-                    </h3>
-                    <div className="flex items-center gap-3 text-xs">
-                        <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-zinc-100"></span>
-                            <span className="text-zinc-400">White</span>
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-zinc-700"></span>
-                            <span className="text-zinc-400">Black</span>
-                        </span>
-                </div>
-                </div>
-                
-                <div 
-                    ref={graphRef}
-                    className="relative h-32 cursor-crosshair select-none"
-                    onMouseMove={handleMouseMove}
-                    onMouseLeave={handleMouseLeave}
-                    onClick={handleClick}
-                >
-                    {/* Background grid */}
-                    <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-                        {/* Horizontal grid lines */}
-                        <line x1="0" y1="25" x2="100" y2="25" stroke="rgba(113, 113, 122, 0.15)" strokeWidth="0.3" />
-                        <line x1="0" y1="50" x2="100" y2="50" stroke="rgba(113, 113, 122, 0.4)" strokeWidth="0.5" strokeDasharray="2,2" />
-                        <line x1="0" y1="75" x2="100" y2="75" stroke="rgba(113, 113, 122, 0.15)" strokeWidth="0.3" />
-                        
-                        {/* White advantage area (above center line) */}
-                        <defs>
-                            <clipPath id="whiteClip">
-                                <rect x="0" y="0" width="100" height="50" />
-                            </clipPath>
-                            <clipPath id="blackClip">
-                                <rect x="0" y="50" width="100" height="50" />
-                            </clipPath>
-                            <linearGradient id="whiteGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" stopColor="rgba(250, 250, 250, 0.6)" />
-                                <stop offset="100%" stopColor="rgba(250, 250, 250, 0.1)" />
-                            </linearGradient>
-                            <linearGradient id="blackGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" stopColor="rgba(39, 39, 42, 0.1)" />
-                                <stop offset="100%" stopColor="rgba(39, 39, 42, 0.7)" />
-                            </linearGradient>
-                        </defs>
-                        
-                        {/* Filled areas */}
-                        <path 
-                            d={buildWhiteArea()} 
-                            fill="url(#whiteGradient)"
-                            clipPath="url(#whiteClip)"
-                        />
-                        <path 
-                            d={buildBlackArea()} 
-                            fill="url(#blackGradient)"
-                            clipPath="url(#blackClip)"
-                        />
-                        
-                        {/* Main evaluation line */}
-                        <path 
-                            d={buildPath()} 
-                            fill="none" 
-                            stroke="rgba(161, 161, 170, 0.9)" 
-                            strokeWidth="1.5"
-                            strokeLinejoin="round"
-                            strokeLinecap="round"
-                        />
-                        
-                        {/* Classification dots */}
-                        {moves.map((move, index) => {
-                            const dot = getClassificationDot(move.classification);
-                            if (!dot.show) return null;
-                            
-                            const x = ((index + 1) / moves.length) * 100;
-                            const y = 100 - evalToY(move.evaluation, move.mateIn);
-                            
-                            return (
-                                <g key={index}>
-                                    <circle 
-                                        cx={x} 
-                                        cy={y} 
-                                        r="2.5" 
-                                        fill={dot.color}
-                                        stroke="rgba(0,0,0,0.5)"
-                                        strokeWidth="0.5"
-                                    />
-                                </g>
-                            );
-                        })}
-                        
-                        {/* Current position indicator */}
-                        {currentIndex > 0 && (
-                            <>
-                                <line 
-                                    x1={currentX} 
-                                    y1="0" 
-                                    x2={currentX} 
-                                    y2="100" 
-                                    stroke="rgba(34, 197, 94, 0.7)" 
-                                    strokeWidth="1"
-                                    strokeDasharray="3,2"
-                                />
-                                <circle 
-                                    cx={currentX} 
-                                    cy={100 - evalToY(moves[currentIndex - 1]?.evaluation ?? 0, moves[currentIndex - 1]?.mateIn ?? null)} 
-                                    r="3.5" 
-                                    fill="#22c55e"
-                                    stroke="white"
-                                    strokeWidth="1"
-                                />
-                            </>
-                        )}
-                        
-                        {/* Hover indicator */}
-                        {hoveredMove !== null && (
-                            <line 
-                                x1={((hoveredMove + 1) / moves.length) * 100} 
-                                y1="0" 
-                                x2={((hoveredMove + 1) / moves.length) * 100} 
-                                y2="100" 
-                                stroke="rgba(255, 255, 255, 0.3)" 
-                                strokeWidth="0.5"
+            return (
+                <div className="bg-zinc-800/95 border border-zinc-700 rounded-lg px-3 py-2 shadow-xl backdrop-blur-sm">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs text-zinc-400">{data.moveNumber}</span>
+                        <span className="font-semibold text-white">{data.playedMove}</span>
+                        {data.classification && (
+                            <span
+                                className="w-2 h-2 rounded-full"
+                                style={{ backgroundColor: getClassificationColor(data.classification) }}
                             />
                         )}
-                    </svg>
-                    
-                    {/* Tooltip */}
-                    {tooltip && (
-                        <div 
-                            className="absolute z-50 pointer-events-none transform -translate-x-1/2"
-                            style={{ 
-                                left: Math.max(60, Math.min(tooltip.x, graphRef.current?.offsetWidth ? graphRef.current.offsetWidth - 60 : 200)), 
-                                top: -8,
-                                transform: 'translateX(-50%) translateY(-100%)'
-                            }}
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <span className="text-xs text-zinc-500">Eval:</span>
+                        <span className={cn(
+                            "font-mono text-sm font-bold",
+                            data.evaluation > 0 ? "text-white" :
+                                data.evaluation < 0 ? "text-zinc-400" : "text-zinc-300"
+                        )}>
+                            {data.displayEval}
+                        </span>
+                    </div>
+                </div>
+            );
+        };
+
+        // Handle chart click
+        const handleChartClick = (data: any) => {
+            if (data && data.activePayload && data.activePayload[0]) {
+                const moveIndex = data.activePayload[0].payload.moveIndex;
+                if (moveIndex > 0) {
+                    onMoveClick(moveIndex);
+                }
+            }
+        };
+
+        return (
+            <div className="bg-zinc-900/95 rounded-xl border border-zinc-800/80 overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800/60">
+                    <span className="text-sm font-medium text-zinc-300">Evaluation Graph</span>
+                    <div className="flex items-center gap-4 text-xs text-zinc-500">
+                        <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-sm bg-white/80"></span>
+                            White
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-sm bg-zinc-600"></span>
+                            Black
+                        </span>
+                    </div>
+                </div>
+
+                {/* Chart */}
+                <div className="h-32 w-full px-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart
+                            data={chartData}
+                            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                            onClick={handleChartClick}
                         >
-                        <div className={cn(
-                                "px-3 py-2 rounded-lg shadow-xl text-xs font-medium border backdrop-blur-sm",
-                                "bg-zinc-900/95 border-zinc-700"
-                            )}>
-                                <div className="flex items-center gap-2">
-                                    <span className={cn(
-                                        "w-2 h-2 rounded-full",
-                                        tooltip.classification === 'brilliant' && "bg-cyan-400",
-                                        tooltip.classification === 'great' && "bg-blue-400",
-                                        tooltip.classification === 'best' && "bg-green-400",
-                                        tooltip.classification === 'good' && "bg-green-500",
-                                        tooltip.classification === 'inaccuracy' && "bg-yellow-400",
-                                        tooltip.classification === 'mistake' && "bg-orange-400",
-                                        tooltip.classification === 'blunder' && "bg-red-400",
-                                        !['brilliant', 'great', 'best', 'good', 'inaccuracy', 'mistake', 'blunder'].includes(tooltip.classification) && "bg-zinc-400"
-                                    )}></span>
-                                    <span className="text-zinc-300">{tooltip.move}</span>
-                                    <span className={cn(
-                                        "font-bold ml-1",
-                                        parseFloat(tooltip.eval) > 0 ? "text-zinc-100" : parseFloat(tooltip.eval) < 0 ? "text-zinc-400" : "text-zinc-300"
-                                    )}>
-                                        {tooltip.eval}
-                                    </span>
-                        </div>
-                    </div>
-                        </div>
-                    )}
-                    </div>
-                
-                {/* Legend for classification dots */}
-                <div className="flex items-center justify-center gap-4 mt-3 text-xs">
+                            <defs>
+                                <linearGradient id="positiveGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#ffffff" stopOpacity={0.4} />
+                                    <stop offset="100%" stopColor="#ffffff" stopOpacity={0.05} />
+                                </linearGradient>
+                                <linearGradient id="negativeGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#27272a" stopOpacity={0.05} />
+                                    <stop offset="100%" stopColor="#27272a" stopOpacity={0.6} />
+                                </linearGradient>
+                            </defs>
+
+                            {/* Center reference line (equal position) */}
+                            <ReferenceLine y={0} stroke="rgba(113, 113, 122, 0.4)" strokeDasharray="3 3" />
+
+                            {/* Current move indicator */}
+                            {currentIndex > 0 && (
+                                <ReferenceLine
+                                    x={currentIndex}
+                                    stroke="#22c55e"
+                                    strokeWidth={2}
+                                />
+                            )}
+
+                            <XAxis
+                                dataKey="moveIndex"
+                                hide
+                                type="number"
+                                domain={[0, 'dataMax']}
+                            />
+                            <YAxis
+                                hide
+                                domain={[-10, 10]}
+                                type="number"
+                            />
+                            <Tooltip
+                                content={<CustomTooltip />}
+                                cursor={{ stroke: 'rgba(255,255,255,0.2)', strokeWidth: 1 }}
+                            />
+
+                            {/* Area for positive values (white advantage) */}
+                            <Area
+                                type="monotone"
+                                dataKey="evaluation"
+                                stroke="rgba(200, 200, 210, 0.8)"
+                                strokeWidth={1.5}
+                                fill="url(#positiveGradient)"
+                                fillOpacity={1}
+                                baseValue={0}
+                                isAnimationActive={false}
+                            />
+
+                            {/* Notable move markers */}
+                            {notableMoves.map((move) => (
+                                <ReferenceDot
+                                    key={move.moveIndex}
+                                    x={move.moveIndex}
+                                    y={move.evaluation}
+                                    r={4}
+                                    fill={getClassificationColor(move.classification)}
+                                    stroke="rgba(0,0,0,0.3)"
+                                    strokeWidth={1}
+                                />
+                            ))}
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Legend */}
+                <div className="flex items-center justify-center gap-4 px-4 py-2 border-t border-zinc-800/60 text-[10px] text-zinc-500">
                     <span className="flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
-                        <span className="text-zinc-500">Brilliant</span>
+                        Brilliant
+                    </span>
+                    <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        Great
                     </span>
                     <span className="flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
-                        <span className="text-zinc-500">Inaccuracy</span>
+                        Inaccuracy
                     </span>
                     <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-orange-400"></span>
-                        <span className="text-zinc-500">Mistake</span>
+                        <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                        Mistake
                     </span>
                     <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-red-400"></span>
-                        <span className="text-zinc-500">Blunder</span>
+                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                        Blunder
                     </span>
                 </div>
             </div>
@@ -675,19 +590,19 @@ const AnalysisViewer = () => {
                     <div className="flex flex-wrap items-center gap-3">
                         <h1 className="text-2xl font-bold tracking-tight">Game Review</h1>
                         <div className="flex items-center gap-2">
-                        <span className={cn(
+                            <span className={cn(
                                 "px-2.5 py-1 rounded-md text-xs font-semibold",
-                            analysis.game.platform === 'chess.com' 
+                                analysis.game.platform === 'chess.com'
                                     ? "bg-emerald-500/20 text-emerald-400"
                                     : "bg-violet-500/20 text-violet-400"
-                        )}>
-                            {analysis.game.platform}
-                        </span>
+                            )}>
+                                {analysis.game.platform}
+                            </span>
                             <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-zinc-800 text-zinc-300">
-                            {formatTimeControl(analysis.game.timeControl)}
-                        </span>
+                                {formatTimeControl(analysis.game.timeControl)}
+                            </span>
+                        </div>
                     </div>
-                </div>
                 </div>
                 <div className="text-right text-xs text-zinc-500">
                     <p>Depth {analysis.analysisDepth} • {analysis.engineVersion}</p>
@@ -710,12 +625,12 @@ const AnalysisViewer = () => {
                                     getAccuracyColor(analysis.whiteMetrics.accuracy)
                                 )}>
                                     {analysis.whiteMetrics.accuracy.toFixed(1)}%
-                        </div>
+                                </div>
                                 <span className="text-xs text-zinc-500">accuracy</span>
-                    </div>
-                    </div>
+                            </div>
                         </div>
-                    
+                    </div>
+
                     <div className="flex flex-col items-center gap-1">
                         <div className="px-5 py-2 bg-zinc-900 rounded-lg border border-zinc-700 shadow-inner">
                             <span className="font-bold text-xl tracking-wider text-white">{analysis.game.result}</span>
@@ -724,7 +639,7 @@ const AnalysisViewer = () => {
                             <span className="text-xs text-zinc-500 max-w-[200px] truncate">{analysis.game.openingName}</span>
                         )}
                     </div>
-                    
+
                     <div className="flex items-center gap-3">
                         <div className="text-right">
                             <p className="font-bold text-white">{analysis.game.blackPlayer}</p>
@@ -735,9 +650,9 @@ const AnalysisViewer = () => {
                                     getAccuracyColor(analysis.blackMetrics.accuracy)
                                 )}>
                                     {analysis.blackMetrics.accuracy.toFixed(1)}%
-                </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
                         <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-zinc-700 to-zinc-900 flex items-center justify-center shadow-lg border border-zinc-600">
                             <span className="text-zinc-200 font-bold text-lg">♚</span>
                         </div>
@@ -746,8 +661,8 @@ const AnalysisViewer = () => {
             </div>
 
             {/* Review Graph */}
-            <ReviewGraph 
-                moves={analysis.moves} 
+            <ReviewGraph
+                moves={analysis.moves}
                 currentIndex={currentMoveIndex}
                 onMoveClick={goToMove}
             />
@@ -759,33 +674,33 @@ const AnalysisViewer = () => {
                     <div className="flex gap-2">
                         {/* Vertical Eval Bar */}
                         <div className="w-6 flex-shrink-0 relative rounded-lg overflow-hidden bg-zinc-800 shadow-inner">
-                            <div 
+                            <div
                                 className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-zinc-100 to-white transition-all duration-300 ease-out"
                                 style={{ height: `${getEvalBarWidth(currentEval.evaluation, currentEval.mateIn)}%` }}
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                                <span 
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <span
                                     className={cn(
                                         "text-[10px] font-bold px-0.5 py-0.5 rounded writing-mode-vertical transform rotate-180",
                                         (currentEval.evaluation ?? 0) >= 0 ? "text-zinc-800" : "text-zinc-200"
                                     )}
                                     style={{ writingMode: 'vertical-rl' }}
                                 >
-                                {formatEval(currentEval.evaluation, currentEval.mateIn)}
-                            </span>
+                                    {formatEval(currentEval.evaluation, currentEval.mateIn)}
+                                </span>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Chessboard */}
+                        {/* Chessboard */}
                         <div className="flex-1 rounded-xl overflow-hidden shadow-2xl border border-zinc-700/50">
-                        <ChessBoardViewer
-                            fen={currentFen}
-                            interactive={false}
+                            <ChessBoardViewer
+                                fen={currentFen}
+                                interactive={false}
                                 bestMove={currentMoveData.bestMove}
                                 destinationSquare={currentMoveData.destinationSquare}
                                 classification={currentMoveData.classification}
-                            boardOrientation={boardOrientation}
-                        />
+                                boardOrientation={boardOrientation}
+                            />
                         </div>
                     </div>
 
@@ -799,9 +714,9 @@ const AnalysisViewer = () => {
                         >
                             <RefreshCw className="h-4 w-4" />
                         </button>
-                        
+
                         <div className="w-px h-6 bg-zinc-700 mx-1"></div>
-                        
+
                         <button
                             onClick={() => goToMove(0)}
                             className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -853,11 +768,11 @@ const AnalysisViewer = () => {
                                     getClassificationColor(analysis.moves[currentMoveIndex - 1].classification)
                                 )}>
                                     {getClassificationIcon(analysis.moves[currentMoveIndex - 1].classification)}
-                                    {analysis.moves[currentMoveIndex - 1].classification.charAt(0).toUpperCase() + 
-                                     analysis.moves[currentMoveIndex - 1].classification.slice(1)}
+                                    {analysis.moves[currentMoveIndex - 1].classification.charAt(0).toUpperCase() +
+                                        analysis.moves[currentMoveIndex - 1].classification.slice(1)}
                                 </span>
                             </div>
-                            
+
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
                                     <span className="text-xs text-zinc-500 block mb-1">Played</span>
@@ -872,7 +787,7 @@ const AnalysisViewer = () => {
                                     </span>
                                 </div>
                             </div>
-                            
+
                             <div className="flex items-center justify-between mt-3 pt-3 border-t border-zinc-700/30">
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs text-zinc-500">Eval:</span>
@@ -883,15 +798,15 @@ const AnalysisViewer = () => {
                                         {formatEval(currentEval.evaluation, currentEval.mateIn)}
                                     </span>
                                 </div>
-                                {analysis.moves[currentMoveIndex - 1].centipawnLoss !== null && 
-                                 analysis.moves[currentMoveIndex - 1].centipawnLoss! > 0 && (
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-zinc-500">CP Loss:</span>
-                                        <span className="font-mono font-bold text-orange-400">
-                                            -{analysis.moves[currentMoveIndex - 1].centipawnLoss}
-                                        </span>
-                                    </div>
-                                )}
+                                {analysis.moves[currentMoveIndex - 1].centipawnLoss !== null &&
+                                    analysis.moves[currentMoveIndex - 1].centipawnLoss! > 0 && (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-zinc-500">CP Loss:</span>
+                                            <span className="font-mono font-bold text-orange-400">
+                                                -{analysis.moves[currentMoveIndex - 1].centipawnLoss}
+                                            </span>
+                                        </div>
+                                    )}
                             </div>
                         </div>
                     )}
@@ -911,14 +826,14 @@ const AnalysisViewer = () => {
                                     const whiteMove = analysis.moves[rowIndex * 2];
                                     const blackMove = analysis.moves[rowIndex * 2 + 1];
                                     const moveNum = rowIndex + 1;
-                                    
+
                                     return (
                                         <div key={rowIndex} className="flex items-stretch gap-0.5">
                                             {/* Move number */}
                                             <div className="w-8 flex items-center justify-center text-xs text-zinc-600 font-medium">
                                                 {moveNum}.
                                             </div>
-                                            
+
                                             {/* White's move */}
                                             <button
                                                 onClick={() => goToMove(rowIndex * 2 + 1)}
@@ -930,7 +845,7 @@ const AnalysisViewer = () => {
                                                 )}
                                             >
                                                 <span className="w-4 flex-shrink-0">
-                                                {getClassificationIcon(whiteMove?.classification || 'normal')}
+                                                    {getClassificationIcon(whiteMove?.classification || 'normal')}
                                                 </span>
                                                 <span className={cn(
                                                     "font-mono text-xs",
@@ -939,7 +854,7 @@ const AnalysisViewer = () => {
                                                     {whiteMove?.playedMove || '-'}
                                                 </span>
                                             </button>
-                                            
+
                                             {/* Black's move */}
                                             {blackMove ? (
                                                 <button
@@ -952,7 +867,7 @@ const AnalysisViewer = () => {
                                                     )}
                                                 >
                                                     <span className="w-4 flex-shrink-0">
-                                                    {getClassificationIcon(blackMove.classification)}
+                                                        {getClassificationIcon(blackMove.classification)}
                                                     </span>
                                                     <span className={cn(
                                                         "font-mono text-xs",
@@ -980,8 +895,8 @@ const AnalysisViewer = () => {
                             <Sparkles className="h-4 w-4 text-purple-400" />
                             <h3 className="text-sm font-semibold text-zinc-300">Accuracy</h3>
                         </div>
-                        
-                            <div className="space-y-3">
+
+                        <div className="space-y-3">
                             {/* White accuracy */}
                             <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
                                 <div className="flex items-center justify-between mb-2">
@@ -994,13 +909,13 @@ const AnalysisViewer = () => {
                                     </span>
                                 </div>
                                 <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
-                                    <div 
+                                    <div
                                         className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all"
                                         style={{ width: `${analysis.whiteMetrics.accuracy}%` }}
                                     />
                                 </div>
                             </div>
-                            
+
                             {/* Black accuracy */}
                             <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
                                 <div className="flex items-center justify-between mb-2">
@@ -1013,11 +928,11 @@ const AnalysisViewer = () => {
                                     </span>
                                 </div>
                                 <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
-                                    <div 
+                                    <div
                                         className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all"
                                         style={{ width: `${analysis.blackMetrics.accuracy}%` }}
                                     />
-                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1025,7 +940,7 @@ const AnalysisViewer = () => {
                     {/* Move Quality Summary */}
                     <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
                         <h3 className="text-sm font-semibold text-zinc-300 mb-4">Move Quality</h3>
-                        
+
                         <div className="space-y-2">
                             {/* Brilliant */}
                             {(analysis.whiteMetrics.brilliantMoves > 0 || analysis.blackMetrics.brilliantMoves > 0) && (
@@ -1038,9 +953,9 @@ const AnalysisViewer = () => {
                                         <span className="text-zinc-300">{analysis.whiteMetrics.brilliantMoves}</span>
                                         <span className="text-zinc-600">|</span>
                                         <span className="text-zinc-300">{analysis.blackMetrics.brilliantMoves}</span>
-                            </div>
-                        </div>
-                    )}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Best/Good */}
                             <div className="flex items-center justify-between py-1.5 border-b border-zinc-700/30">
@@ -1052,9 +967,9 @@ const AnalysisViewer = () => {
                                     <span className="text-zinc-300">{analysis.whiteMetrics.goodMoves}</span>
                                     <span className="text-zinc-600">|</span>
                                     <span className="text-zinc-300">{analysis.blackMetrics.goodMoves}</span>
-                        </div>
-                    </div>
-                            
+                                </div>
+                            </div>
+
                             {/* Inaccuracies */}
                             <div className="flex items-center justify-between py-1.5 border-b border-zinc-700/30">
                                 <span className="flex items-center gap-2 text-xs">
@@ -1067,7 +982,7 @@ const AnalysisViewer = () => {
                                     <span className="text-zinc-300">{analysis.blackMetrics.inaccuracies}</span>
                                 </div>
                             </div>
-                            
+
                             {/* Mistakes */}
                             <div className="flex items-center justify-between py-1.5 border-b border-zinc-700/30">
                                 <span className="flex items-center gap-2 text-xs">
@@ -1080,7 +995,7 @@ const AnalysisViewer = () => {
                                     <span className="text-zinc-300">{analysis.blackMetrics.mistakes}</span>
                                 </div>
                             </div>
-                            
+
                             {/* Blunders */}
                             <div className="flex items-center justify-between py-1.5">
                                 <span className="flex items-center gap-2 text-xs">
@@ -1094,7 +1009,7 @@ const AnalysisViewer = () => {
                                 </div>
                             </div>
                         </div>
-                        
+
                         {/* Legend */}
                         <div className="flex items-center justify-end gap-4 mt-3 pt-3 border-t border-zinc-700/30 text-[10px] text-zinc-500">
                             <span className="flex items-center gap-1">
