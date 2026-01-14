@@ -343,14 +343,31 @@ const AnalysisViewer = () => {
 
             moves.forEach((move, index) => {
                 // Convert centipawns to pawns, handle mate
+                // IMPORTANT: Stockfish gives eval from the perspective of the side that just moved
+                // - After White's move (even index 0, 2, 4...): eval is from White's perspective
+                // - After Black's move (odd index 1, 3, 5...): eval is from Black's perspective
+                // We need to normalize all to White's perspective for consistent graphing
+                const isBlackMove = index % 2 === 1;
+
                 let evalValue = 0;
                 let displayEval = '0.0';
 
                 if (move.mateIn !== null) {
-                    evalValue = move.mateIn > 0 ? 10 : -10; // Cap mate at ±10
-                    displayEval = move.mateIn > 0 ? `M${move.mateIn}` : `-M${Math.abs(move.mateIn)}`;
+                    // Mate evaluation
+                    let normalizedMate = move.mateIn;
+                    // Normalize to White's perspective
+                    if (isBlackMove) {
+                        normalizedMate = -normalizedMate;
+                    }
+                    evalValue = normalizedMate > 0 ? 10 : -10; // Cap mate at ±10
+                    displayEval = normalizedMate > 0 ? `M${Math.abs(move.mateIn)}` : `-M${Math.abs(move.mateIn)}`;
                 } else if (move.evaluation !== null) {
-                    evalValue = Math.max(-10, Math.min(10, move.evaluation / 100)); // Clamp to ±10 pawns
+                    // Centipawn evaluation - normalize to White's perspective
+                    let normalizedEval = move.evaluation;
+                    if (isBlackMove) {
+                        normalizedEval = -normalizedEval;
+                    }
+                    evalValue = Math.max(-10, Math.min(10, normalizedEval / 100)); // Clamp to ±10 pawns
                     displayEval = evalValue > 0 ? `+${evalValue.toFixed(1)}` : evalValue.toFixed(1);
                 }
 
