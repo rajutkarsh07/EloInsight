@@ -1932,254 +1932,257 @@ const AnalysisViewer = () => {
                         </div>
                     )}
 
-                    {/* Navigation Controls */}
-                    <div className="flex items-center justify-center gap-2 bg-zinc-900/50 rounded-xl p-3 border border-zinc-700/30">
-                        {/* Flip Board Button */}
-                        <button
-                            onClick={flipBoard}
-                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors"
-                            title="Flip board"
-                        >
-                            <RefreshCw className="h-4 w-4" />
-                        </button>
-
-                        <div className="w-px h-6 bg-zinc-700 mx-1"></div>
-
-                        <button
-                            onClick={() => goToMoveWithReset(0)}
-                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            disabled={currentMoveIndex === 0 && !isExplorationMode}
-                            title="Go to start (Home)"
-                        >
-                            <ChevronsLeft className="h-4 w-4" />
-                        </button>
-                        <button
-                            onClick={() => goToMoveWithReset(currentMoveIndex - 1)}
-                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            disabled={currentMoveIndex === 0 && !isExplorationMode}
-                            title="Previous move (←)"
-                        >
-                            <ChevronLeft className="h-4 w-4" />
-                        </button>
-                        <div className={cn(
-                            "px-4 py-1.5 rounded-lg min-w-[100px] text-center border",
-                            isExplorationMode
-                                ? "bg-amber-500/10 border-amber-500/30"
-                                : "bg-zinc-800 border-zinc-700/50"
-                        )}>
-                            <span className="text-xs text-zinc-500">Move</span>
-                            <span className={cn(
-                                "ml-2 font-bold tabular-nums",
-                                isExplorationMode ? "text-amber-400" : ""
-                            )}>
-                                {isExplorationMode ? `${explorationStartIndex}*` : `${currentMoveIndex}/${analysis.moves.length}`}
-                            </span>
-                        </div>
-                        <button
-                            onClick={() => goToMoveWithReset(currentMoveIndex + 1)}
-                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            disabled={(currentMoveIndex >= analysis.moves.length && !isExplorationMode)}
-                            title="Next move (→)"
-                        >
-                            <ChevronRight className="h-4 w-4" />
-                        </button>
-                        <button
-                            onClick={() => goToMoveWithReset(analysis.moves.length)}
-                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            disabled={(currentMoveIndex >= analysis.moves.length && !isExplorationMode)}
-                            title="Go to end (End)"
-                        >
-                            <ChevronsRight className="h-4 w-4" />
-                        </button>
-
-                        <div className="w-px h-6 bg-zinc-700 mx-1"></div>
-
-                        {/* Copy FEN Button */}
-                        <button
-                            onClick={copyFenToClipboard}
-                            className={cn(
-                                "p-2 rounded-lg transition-colors flex items-center gap-1.5",
-                                fenCopied
-                                    ? "bg-emerald-500/20 text-emerald-400"
-                                    : "bg-zinc-800 hover:bg-zinc-700"
-                            )}
-                            title="Copy FEN (C)"
-                        >
-                            {fenCopied ? (
-                                <CheckCircle className="h-4 w-4" />
-                            ) : (
-                                <Copy className="h-4 w-4" />
-                            )}
-                        </button>
-
-                        <div className="w-px h-6 bg-zinc-700 mx-1"></div>
-
-                        {/* Auto-play Button */}
-                        <button
-                            onClick={toggleAutoPlay}
-                            className={cn(
-                                "p-2 rounded-lg transition-colors",
-                                isAutoPlaying
-                                    ? "bg-blue-500/20 text-blue-400"
-                                    : "bg-zinc-800 hover:bg-zinc-700"
-                            )}
-                            title={isAutoPlaying ? "Pause (Space)" : "Auto-play (Space)"}
-                        >
-                            {isAutoPlaying ? (
-                                <Pause className="h-4 w-4" />
-                            ) : (
-                                <Play className="h-4 w-4" />
-                            )}
-                        </button>
-
-                        {/* Speed Control (only show when auto-playing) */}
-                        {isAutoPlaying && (
-                            <select
-                                value={autoPlaySpeed}
-                                onChange={(e) => setAutoPlaySpeed(Number(e.target.value))}
-                                className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    {/* Navigation Controls - Two Rows */}
+                    <div className="bg-zinc-900/50 rounded-xl p-3 border border-zinc-700/30 space-y-2">
+                        {/* Row 1: Move Navigation */}
+                        <div className="flex items-center justify-center gap-1.5">
+                            <button
+                                onClick={flipBoard}
+                                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors"
+                                title="Flip board (F)"
                             >
-                                <option value={500}>0.5s</option>
-                                <option value={1000}>1s</option>
-                                <option value={1500}>1.5s</option>
-                                <option value={2000}>2s</option>
-                                <option value={3000}>3s</option>
-                            </select>
-                        )}
+                                <RefreshCw className="h-4 w-4" />
+                            </button>
 
-                        {/* Sound Toggle */}
-                        <button
-                            onClick={() => setSoundEnabled(prev => !prev)}
-                            className={cn(
-                                "p-2 rounded-lg transition-colors",
-                                soundEnabled
-                                    ? "bg-zinc-800 hover:bg-zinc-700"
-                                    : "bg-zinc-800/50 text-zinc-500"
-                            )}
-                            title={soundEnabled ? "Mute sounds (M)" : "Enable sounds (M)"}
-                        >
-                            {soundEnabled ? (
-                                <Volume2 className="h-4 w-4" />
-                            ) : (
-                                <VolumeX className="h-4 w-4" />
-                            )}
-                        </button>
+                            <div className="w-px h-6 bg-zinc-700 mx-0.5"></div>
 
-                        {/* Keyboard Shortcuts Button */}
-                        <button
-                            onClick={() => setShowShortcuts(true)}
-                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors"
-                            title="Keyboard shortcuts (?)"
-                        >
-                            <Keyboard className="h-4 w-4" />
-                        </button>
+                            <button
+                                onClick={() => goToMoveWithReset(0)}
+                                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                disabled={currentMoveIndex === 0 && !isExplorationMode}
+                                title="Go to start (Home)"
+                            >
+                                <ChevronsLeft className="h-4 w-4" />
+                            </button>
+                            <button
+                                onClick={() => goToMoveWithReset(currentMoveIndex - 1)}
+                                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                disabled={currentMoveIndex === 0 && !isExplorationMode}
+                                title="Previous move (←)"
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <div className={cn(
+                                "px-3 py-1.5 rounded-lg min-w-[90px] text-center border text-sm",
+                                isExplorationMode
+                                    ? "bg-amber-500/10 border-amber-500/30"
+                                    : "bg-zinc-800 border-zinc-700/50"
+                            )}>
+                                <span className="text-zinc-500">Move </span>
+                                <span className={cn(
+                                    "font-bold tabular-nums",
+                                    isExplorationMode ? "text-amber-400" : ""
+                                )}>
+                                    {isExplorationMode ? `${explorationStartIndex}*` : `${currentMoveIndex}/${analysis.moves.length}`}
+                                </span>
+                            </div>
+                            <button
+                                onClick={() => goToMoveWithReset(currentMoveIndex + 1)}
+                                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                disabled={(currentMoveIndex >= analysis.moves.length && !isExplorationMode)}
+                                title="Next move (→)"
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </button>
+                            <button
+                                onClick={() => goToMoveWithReset(analysis.moves.length)}
+                                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                disabled={(currentMoveIndex >= analysis.moves.length && !isExplorationMode)}
+                                title="Go to end (End)"
+                            >
+                                <ChevronsRight className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        {/* Row 2: Tools */}
+                        <div className="flex items-center justify-center gap-1.5">
+                            {/* Copy FEN Button */}
+                            <button
+                                onClick={copyFenToClipboard}
+                                className={cn(
+                                    "p-2 rounded-lg transition-colors flex items-center gap-1.5",
+                                    fenCopied
+                                        ? "bg-emerald-500/20 text-emerald-400"
+                                        : "bg-zinc-800 hover:bg-zinc-700"
+                                )}
+                                title="Copy FEN (C)"
+                            >
+                                {fenCopied ? (
+                                    <CheckCircle className="h-4 w-4" />
+                                ) : (
+                                    <Copy className="h-4 w-4" />
+                                )}
+                            </button>
+
+                            <div className="w-px h-6 bg-zinc-700 mx-0.5"></div>
+
+                            {/* Auto-play Button */}
+                            <button
+                                onClick={toggleAutoPlay}
+                                className={cn(
+                                    "p-2 rounded-lg transition-colors",
+                                    isAutoPlaying
+                                        ? "bg-blue-500/20 text-blue-400"
+                                        : "bg-zinc-800 hover:bg-zinc-700"
+                                )}
+                                title={isAutoPlaying ? "Pause (Space)" : "Auto-play (Space)"}
+                            >
+                                {isAutoPlaying ? (
+                                    <Pause className="h-4 w-4" />
+                                ) : (
+                                    <Play className="h-4 w-4" />
+                                )}
+                            </button>
+
+                            {/* Speed Control (only show when auto-playing) */}
+                            {isAutoPlaying && (
+                                <select
+                                    value={autoPlaySpeed}
+                                    onChange={(e) => setAutoPlaySpeed(Number(e.target.value))}
+                                    className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                >
+                                    <option value={500}>0.5s</option>
+                                    <option value={1000}>1s</option>
+                                    <option value={1500}>1.5s</option>
+                                    <option value={2000}>2s</option>
+                                    <option value={3000}>3s</option>
+                                </select>
+                            )}
+
+                            {/* Sound Toggle */}
+                            <button
+                                onClick={() => setSoundEnabled(prev => !prev)}
+                                className={cn(
+                                    "p-2 rounded-lg transition-colors",
+                                    soundEnabled
+                                        ? "bg-zinc-800 hover:bg-zinc-700"
+                                        : "bg-zinc-800/50 text-zinc-500"
+                                )}
+                                title={soundEnabled ? "Mute sounds (M)" : "Enable sounds (M)"}
+                            >
+                                {soundEnabled ? (
+                                    <Volume2 className="h-4 w-4" />
+                                ) : (
+                                    <VolumeX className="h-4 w-4" />
+                                )}
+                            </button>
+
+                            {/* Keyboard Shortcuts Button */}
+                            <button
+                                onClick={() => setShowShortcuts(true)}
+                                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors"
+                                title="Keyboard shortcuts (?)"
+                            >
+                                <Keyboard className="h-4 w-4" />
+                            </button>
+                        </div>
                     </div>
 
                     {/* Phase Breakdown - Move Quality by Game Phase */}
                     {phaseBreakdown && (
-                        <div className="bg-zinc-900/70 rounded-xl p-3 border border-zinc-700/50 backdrop-blur-sm">
-                            <h3 className="text-xs font-semibold text-zinc-400 mb-3 uppercase tracking-wider">Phase Breakdown</h3>
+                        <div className="bg-zinc-900/70 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
+                            <h3 className="text-sm font-semibold text-zinc-400 mb-4 uppercase tracking-wider">Phase Breakdown</h3>
                             
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 {/* Opening Phase */}
                                 {(phaseBreakdown.opening.white.moves > 0 || phaseBreakdown.opening.black.moves > 0) && (
-                                    <div className="bg-zinc-800/50 rounded-lg p-2.5 border border-zinc-700/30">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-xs font-medium text-emerald-400">Opening</span>
-                                            <span className="text-[10px] text-zinc-500">Moves 1-10</span>
+                                    <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="text-sm font-medium text-emerald-400">Opening</span>
+                                            <span className="text-xs text-zinc-500">Moves 1-10</span>
                                         </div>
                                         {/* White */}
-                                        <div className="flex items-center gap-1 mb-1.5">
-                                            <span className="w-3 h-3 rounded bg-zinc-100 flex-shrink-0"></span>
-                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="w-4 h-4 rounded bg-zinc-100 flex-shrink-0"></span>
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 {phaseBreakdown.opening.white.brilliant > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-cyan-500 flex items-center justify-center text-[8px] font-bold text-white">✦</span>
-                                                        <span className="text-cyan-400">{phaseBreakdown.opening.white.brilliant}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center text-xs font-bold text-white">✦</span>
+                                                        <span className="text-sm text-cyan-400 font-medium">{phaseBreakdown.opening.white.brilliant}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.opening.white.best > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] font-bold text-white">✓</span>
-                                                        <span className="text-emerald-400">{phaseBreakdown.opening.white.best}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-bold text-white">✓</span>
+                                                        <span className="text-sm text-emerald-400 font-medium">{phaseBreakdown.opening.white.best}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.opening.white.good > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-lime-600 flex items-center justify-center text-[8px] font-bold text-white">●</span>
-                                                        <span className="text-lime-400">{phaseBreakdown.opening.white.good}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-lime-600 flex items-center justify-center text-xs font-bold text-white">●</span>
+                                                        <span className="text-sm text-lime-400 font-medium">{phaseBreakdown.opening.white.good}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.opening.white.book > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-zinc-500 flex items-center justify-center text-[8px] font-bold text-white">📖</span>
-                                                        <span className="text-zinc-400">{phaseBreakdown.opening.white.book}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-zinc-500 flex items-center justify-center text-[10px]">📖</span>
+                                                        <span className="text-sm text-zinc-400 font-medium">{phaseBreakdown.opening.white.book}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.opening.white.inaccuracies > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-yellow-500 flex items-center justify-center text-[8px] font-bold text-black">?!</span>
-                                                        <span className="text-yellow-400">{phaseBreakdown.opening.white.inaccuracies}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center text-xs font-bold text-black">?!</span>
+                                                        <span className="text-sm text-yellow-400 font-medium">{phaseBreakdown.opening.white.inaccuracies}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.opening.white.mistakes > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-orange-500 flex items-center justify-center text-[8px] font-bold text-white">?</span>
-                                                        <span className="text-orange-400">{phaseBreakdown.opening.white.mistakes}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white">?</span>
+                                                        <span className="text-sm text-orange-400 font-medium">{phaseBreakdown.opening.white.mistakes}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.opening.white.blunders > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-[8px] font-bold text-white">??</span>
-                                                        <span className="text-red-400">{phaseBreakdown.opening.white.blunders}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-[10px] font-bold text-white">??</span>
+                                                        <span className="text-sm text-red-400 font-medium">{phaseBreakdown.opening.white.blunders}</span>
                                                     </span>
                                                 )}
                                             </div>
                                         </div>
                                         {/* Black */}
-                                        <div className="flex items-center gap-1">
-                                            <span className="w-3 h-3 rounded bg-zinc-700 flex-shrink-0"></span>
-                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-4 h-4 rounded bg-zinc-700 flex-shrink-0"></span>
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 {phaseBreakdown.opening.black.brilliant > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-cyan-500 flex items-center justify-center text-[8px] font-bold text-white">✦</span>
-                                                        <span className="text-cyan-400">{phaseBreakdown.opening.black.brilliant}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center text-xs font-bold text-white">✦</span>
+                                                        <span className="text-sm text-cyan-400 font-medium">{phaseBreakdown.opening.black.brilliant}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.opening.black.best > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] font-bold text-white">✓</span>
-                                                        <span className="text-emerald-400">{phaseBreakdown.opening.black.best}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-bold text-white">✓</span>
+                                                        <span className="text-sm text-emerald-400 font-medium">{phaseBreakdown.opening.black.best}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.opening.black.good > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-lime-600 flex items-center justify-center text-[8px] font-bold text-white">●</span>
-                                                        <span className="text-lime-400">{phaseBreakdown.opening.black.good}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-lime-600 flex items-center justify-center text-xs font-bold text-white">●</span>
+                                                        <span className="text-sm text-lime-400 font-medium">{phaseBreakdown.opening.black.good}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.opening.black.book > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-zinc-500 flex items-center justify-center text-[8px] font-bold text-white">📖</span>
-                                                        <span className="text-zinc-400">{phaseBreakdown.opening.black.book}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-zinc-500 flex items-center justify-center text-[10px]">📖</span>
+                                                        <span className="text-sm text-zinc-400 font-medium">{phaseBreakdown.opening.black.book}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.opening.black.inaccuracies > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-yellow-500 flex items-center justify-center text-[8px] font-bold text-black">?!</span>
-                                                        <span className="text-yellow-400">{phaseBreakdown.opening.black.inaccuracies}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center text-xs font-bold text-black">?!</span>
+                                                        <span className="text-sm text-yellow-400 font-medium">{phaseBreakdown.opening.black.inaccuracies}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.opening.black.mistakes > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-orange-500 flex items-center justify-center text-[8px] font-bold text-white">?</span>
-                                                        <span className="text-orange-400">{phaseBreakdown.opening.black.mistakes}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white">?</span>
+                                                        <span className="text-sm text-orange-400 font-medium">{phaseBreakdown.opening.black.mistakes}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.opening.black.blunders > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-[8px] font-bold text-white">??</span>
-                                                        <span className="text-red-400">{phaseBreakdown.opening.black.blunders}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-[10px] font-bold text-white">??</span>
+                                                        <span className="text-sm text-red-400 font-medium">{phaseBreakdown.opening.black.blunders}</span>
                                                     </span>
                                                 )}
                                             </div>
@@ -2189,91 +2192,91 @@ const AnalysisViewer = () => {
 
                                 {/* Middlegame Phase */}
                                 {(phaseBreakdown.middlegame.white.moves > 0 || phaseBreakdown.middlegame.black.moves > 0) && (
-                                    <div className="bg-zinc-800/50 rounded-lg p-2.5 border border-zinc-700/30">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-xs font-medium text-blue-400">Middlegame</span>
-                                            <span className="text-[10px] text-zinc-500">Moves 11-20</span>
+                                    <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="text-sm font-medium text-blue-400">Middlegame</span>
+                                            <span className="text-xs text-zinc-500">Moves 11-20</span>
                                         </div>
                                         {/* White */}
-                                        <div className="flex items-center gap-1 mb-1.5">
-                                            <span className="w-3 h-3 rounded bg-zinc-100 flex-shrink-0"></span>
-                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="w-4 h-4 rounded bg-zinc-100 flex-shrink-0"></span>
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 {phaseBreakdown.middlegame.white.brilliant > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-cyan-500 flex items-center justify-center text-[8px] font-bold text-white">✦</span>
-                                                        <span className="text-cyan-400">{phaseBreakdown.middlegame.white.brilliant}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center text-xs font-bold text-white">✦</span>
+                                                        <span className="text-sm text-cyan-400 font-medium">{phaseBreakdown.middlegame.white.brilliant}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.middlegame.white.best > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] font-bold text-white">✓</span>
-                                                        <span className="text-emerald-400">{phaseBreakdown.middlegame.white.best}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-bold text-white">✓</span>
+                                                        <span className="text-sm text-emerald-400 font-medium">{phaseBreakdown.middlegame.white.best}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.middlegame.white.good > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-lime-600 flex items-center justify-center text-[8px] font-bold text-white">●</span>
-                                                        <span className="text-lime-400">{phaseBreakdown.middlegame.white.good}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-lime-600 flex items-center justify-center text-xs font-bold text-white">●</span>
+                                                        <span className="text-sm text-lime-400 font-medium">{phaseBreakdown.middlegame.white.good}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.middlegame.white.inaccuracies > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-yellow-500 flex items-center justify-center text-[8px] font-bold text-black">?!</span>
-                                                        <span className="text-yellow-400">{phaseBreakdown.middlegame.white.inaccuracies}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center text-xs font-bold text-black">?!</span>
+                                                        <span className="text-sm text-yellow-400 font-medium">{phaseBreakdown.middlegame.white.inaccuracies}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.middlegame.white.mistakes > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-orange-500 flex items-center justify-center text-[8px] font-bold text-white">?</span>
-                                                        <span className="text-orange-400">{phaseBreakdown.middlegame.white.mistakes}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white">?</span>
+                                                        <span className="text-sm text-orange-400 font-medium">{phaseBreakdown.middlegame.white.mistakes}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.middlegame.white.blunders > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-[8px] font-bold text-white">??</span>
-                                                        <span className="text-red-400">{phaseBreakdown.middlegame.white.blunders}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-[10px] font-bold text-white">??</span>
+                                                        <span className="text-sm text-red-400 font-medium">{phaseBreakdown.middlegame.white.blunders}</span>
                                                     </span>
                                                 )}
                                             </div>
                                         </div>
                                         {/* Black */}
-                                        <div className="flex items-center gap-1">
-                                            <span className="w-3 h-3 rounded bg-zinc-700 flex-shrink-0"></span>
-                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-4 h-4 rounded bg-zinc-700 flex-shrink-0"></span>
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 {phaseBreakdown.middlegame.black.brilliant > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-cyan-500 flex items-center justify-center text-[8px] font-bold text-white">✦</span>
-                                                        <span className="text-cyan-400">{phaseBreakdown.middlegame.black.brilliant}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center text-xs font-bold text-white">✦</span>
+                                                        <span className="text-sm text-cyan-400 font-medium">{phaseBreakdown.middlegame.black.brilliant}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.middlegame.black.best > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] font-bold text-white">✓</span>
-                                                        <span className="text-emerald-400">{phaseBreakdown.middlegame.black.best}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-bold text-white">✓</span>
+                                                        <span className="text-sm text-emerald-400 font-medium">{phaseBreakdown.middlegame.black.best}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.middlegame.black.good > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-lime-600 flex items-center justify-center text-[8px] font-bold text-white">●</span>
-                                                        <span className="text-lime-400">{phaseBreakdown.middlegame.black.good}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-lime-600 flex items-center justify-center text-xs font-bold text-white">●</span>
+                                                        <span className="text-sm text-lime-400 font-medium">{phaseBreakdown.middlegame.black.good}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.middlegame.black.inaccuracies > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-yellow-500 flex items-center justify-center text-[8px] font-bold text-black">?!</span>
-                                                        <span className="text-yellow-400">{phaseBreakdown.middlegame.black.inaccuracies}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center text-xs font-bold text-black">?!</span>
+                                                        <span className="text-sm text-yellow-400 font-medium">{phaseBreakdown.middlegame.black.inaccuracies}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.middlegame.black.mistakes > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-orange-500 flex items-center justify-center text-[8px] font-bold text-white">?</span>
-                                                        <span className="text-orange-400">{phaseBreakdown.middlegame.black.mistakes}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white">?</span>
+                                                        <span className="text-sm text-orange-400 font-medium">{phaseBreakdown.middlegame.black.mistakes}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.middlegame.black.blunders > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-[8px] font-bold text-white">??</span>
-                                                        <span className="text-red-400">{phaseBreakdown.middlegame.black.blunders}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-[10px] font-bold text-white">??</span>
+                                                        <span className="text-sm text-red-400 font-medium">{phaseBreakdown.middlegame.black.blunders}</span>
                                                     </span>
                                                 )}
                                             </div>
@@ -2283,91 +2286,91 @@ const AnalysisViewer = () => {
 
                                 {/* Endgame Phase */}
                                 {(phaseBreakdown.endgame.white.moves > 0 || phaseBreakdown.endgame.black.moves > 0) && (
-                                    <div className="bg-zinc-800/50 rounded-lg p-2.5 border border-zinc-700/30">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-xs font-medium text-purple-400">Endgame</span>
-                                            <span className="text-[10px] text-zinc-500">Moves 21+</span>
+                                    <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="text-sm font-medium text-purple-400">Endgame</span>
+                                            <span className="text-xs text-zinc-500">Moves 21+</span>
                                         </div>
                                         {/* White */}
-                                        <div className="flex items-center gap-1 mb-1.5">
-                                            <span className="w-3 h-3 rounded bg-zinc-100 flex-shrink-0"></span>
-                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="w-4 h-4 rounded bg-zinc-100 flex-shrink-0"></span>
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 {phaseBreakdown.endgame.white.brilliant > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-cyan-500 flex items-center justify-center text-[8px] font-bold text-white">✦</span>
-                                                        <span className="text-cyan-400">{phaseBreakdown.endgame.white.brilliant}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center text-xs font-bold text-white">✦</span>
+                                                        <span className="text-sm text-cyan-400 font-medium">{phaseBreakdown.endgame.white.brilliant}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.endgame.white.best > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] font-bold text-white">✓</span>
-                                                        <span className="text-emerald-400">{phaseBreakdown.endgame.white.best}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-bold text-white">✓</span>
+                                                        <span className="text-sm text-emerald-400 font-medium">{phaseBreakdown.endgame.white.best}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.endgame.white.good > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-lime-600 flex items-center justify-center text-[8px] font-bold text-white">●</span>
-                                                        <span className="text-lime-400">{phaseBreakdown.endgame.white.good}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-lime-600 flex items-center justify-center text-xs font-bold text-white">●</span>
+                                                        <span className="text-sm text-lime-400 font-medium">{phaseBreakdown.endgame.white.good}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.endgame.white.inaccuracies > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-yellow-500 flex items-center justify-center text-[8px] font-bold text-black">?!</span>
-                                                        <span className="text-yellow-400">{phaseBreakdown.endgame.white.inaccuracies}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center text-xs font-bold text-black">?!</span>
+                                                        <span className="text-sm text-yellow-400 font-medium">{phaseBreakdown.endgame.white.inaccuracies}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.endgame.white.mistakes > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-orange-500 flex items-center justify-center text-[8px] font-bold text-white">?</span>
-                                                        <span className="text-orange-400">{phaseBreakdown.endgame.white.mistakes}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white">?</span>
+                                                        <span className="text-sm text-orange-400 font-medium">{phaseBreakdown.endgame.white.mistakes}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.endgame.white.blunders > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-[8px] font-bold text-white">??</span>
-                                                        <span className="text-red-400">{phaseBreakdown.endgame.white.blunders}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-[10px] font-bold text-white">??</span>
+                                                        <span className="text-sm text-red-400 font-medium">{phaseBreakdown.endgame.white.blunders}</span>
                                                     </span>
                                                 )}
                                             </div>
                                         </div>
                                         {/* Black */}
-                                        <div className="flex items-center gap-1">
-                                            <span className="w-3 h-3 rounded bg-zinc-700 flex-shrink-0"></span>
-                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-4 h-4 rounded bg-zinc-700 flex-shrink-0"></span>
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 {phaseBreakdown.endgame.black.brilliant > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-cyan-500 flex items-center justify-center text-[8px] font-bold text-white">✦</span>
-                                                        <span className="text-cyan-400">{phaseBreakdown.endgame.black.brilliant}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center text-xs font-bold text-white">✦</span>
+                                                        <span className="text-sm text-cyan-400 font-medium">{phaseBreakdown.endgame.black.brilliant}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.endgame.black.best > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] font-bold text-white">✓</span>
-                                                        <span className="text-emerald-400">{phaseBreakdown.endgame.black.best}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-bold text-white">✓</span>
+                                                        <span className="text-sm text-emerald-400 font-medium">{phaseBreakdown.endgame.black.best}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.endgame.black.good > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-lime-600 flex items-center justify-center text-[8px] font-bold text-white">●</span>
-                                                        <span className="text-lime-400">{phaseBreakdown.endgame.black.good}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-lime-600 flex items-center justify-center text-xs font-bold text-white">●</span>
+                                                        <span className="text-sm text-lime-400 font-medium">{phaseBreakdown.endgame.black.good}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.endgame.black.inaccuracies > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-yellow-500 flex items-center justify-center text-[8px] font-bold text-black">?!</span>
-                                                        <span className="text-yellow-400">{phaseBreakdown.endgame.black.inaccuracies}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center text-xs font-bold text-black">?!</span>
+                                                        <span className="text-sm text-yellow-400 font-medium">{phaseBreakdown.endgame.black.inaccuracies}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.endgame.black.mistakes > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-orange-500 flex items-center justify-center text-[8px] font-bold text-white">?</span>
-                                                        <span className="text-orange-400">{phaseBreakdown.endgame.black.mistakes}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white">?</span>
+                                                        <span className="text-sm text-orange-400 font-medium">{phaseBreakdown.endgame.black.mistakes}</span>
                                                     </span>
                                                 )}
                                                 {phaseBreakdown.endgame.black.blunders > 0 && (
-                                                    <span className="flex items-center gap-0.5 text-[10px]">
-                                                        <span className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-[8px] font-bold text-white">??</span>
-                                                        <span className="text-red-400">{phaseBreakdown.endgame.black.blunders}</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-[10px] font-bold text-white">??</span>
+                                                        <span className="text-sm text-red-400 font-medium">{phaseBreakdown.endgame.black.blunders}</span>
                                                     </span>
                                                 )}
                                             </div>
@@ -2377,30 +2380,30 @@ const AnalysisViewer = () => {
                             </div>
 
                             {/* Legend */}
-                            <div className="mt-3 pt-2 border-t border-zinc-700/30">
-                                <div className="flex items-center justify-center gap-3 flex-wrap text-[9px] text-zinc-500">
-                                    <span className="flex items-center gap-1">
-                                        <span className="w-3 h-3 rounded-full bg-cyan-500 flex items-center justify-center text-[7px] font-bold text-white">✦</span>
+                            <div className="mt-4 pt-3 border-t border-zinc-700/30">
+                                <div className="flex items-center justify-center gap-4 flex-wrap text-xs text-zinc-500">
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-4 h-4 rounded-full bg-cyan-500 flex items-center justify-center text-[10px] font-bold text-white">✦</span>
                                         Brilliant
                                     </span>
-                                    <span className="flex items-center gap-1">
-                                        <span className="w-3 h-3 rounded-full bg-emerald-500 flex items-center justify-center text-[7px] font-bold text-white">✓</span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center text-[10px] font-bold text-white">✓</span>
                                         Best
                                     </span>
-                                    <span className="flex items-center gap-1">
-                                        <span className="w-3 h-3 rounded-full bg-lime-600 flex items-center justify-center text-[7px] font-bold text-white">●</span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-4 h-4 rounded-full bg-lime-600 flex items-center justify-center text-[10px] font-bold text-white">●</span>
                                         Good
                                     </span>
-                                    <span className="flex items-center gap-1">
-                                        <span className="w-3 h-3 rounded-full bg-yellow-500 flex items-center justify-center text-[7px] font-bold text-black">?!</span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-4 h-4 rounded-full bg-yellow-500 flex items-center justify-center text-[10px] font-bold text-black">?!</span>
                                         Inaccuracy
                                     </span>
-                                    <span className="flex items-center gap-1">
-                                        <span className="w-3 h-3 rounded-full bg-orange-500 flex items-center justify-center text-[7px] font-bold text-white">?</span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center text-[10px] font-bold text-white">?</span>
                                         Mistake
                                     </span>
-                                    <span className="flex items-center gap-1">
-                                        <span className="w-3 h-3 rounded-full bg-red-500 flex items-center justify-center text-[7px] font-bold text-white">??</span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center text-[10px] font-bold text-white">??</span>
                                         Blunder
                                     </span>
                                 </div>
