@@ -626,8 +626,11 @@ const AnalysisViewer = () => {
         let evaluation = move?.evaluation ?? 0;
         let mateIn = move?.mateIn ?? null;
 
-        // Flip values to White's perspective if it was Black's move
-        if (isBlackMove) {
+        // Flip values to White's perspective
+        // The evaluation in the database (EvalAfter) is from the perspective of the side to move NEXT.
+        // - After White's move (even index): Next is Black. Eval is Black's perspective. Flip it.
+        // - After Black's move (odd index): Next is White. Eval is White's perspective. Keep it.
+        if (!isBlackMove) {
             evaluation = -evaluation;
             if (mateIn !== null) {
                 mateIn = -mateIn;
@@ -710,10 +713,9 @@ const AnalysisViewer = () => {
 
             moves.forEach((move, index) => {
                 // Convert centipawns to pawns, handle mate
-                // IMPORTANT: Stockfish gives eval from the perspective of the side that just moved
-                // - After White's move (even index 0, 2, 4...): eval is from White's perspective
-                // - After Black's move (odd index 1, 3, 5...): eval is from Black's perspective
-                // We need to normalize all to White's perspective for consistent graphing
+                // IMPORTANT: Stockfish gives eval from the perspective of the side to move NEXT (EvalAfter)
+                // - After White's move (even index): Next is Black. Eval is from Black's perspective. Flip it.
+                // - After Black's move (odd index): Next is White. Eval is from White's perspective. Keep it.
                 const isBlackMove = index % 2 === 1;
 
                 let evalValue = 0;
@@ -723,7 +725,7 @@ const AnalysisViewer = () => {
                     // Mate evaluation
                     let normalizedMate = move.mateIn;
                     // Normalize to White's perspective
-                    if (isBlackMove) {
+                    if (!isBlackMove) {
                         normalizedMate = -normalizedMate;
                     }
                     evalValue = normalizedMate > 0 ? 10 : -10; // Cap mate at ±10
@@ -731,7 +733,7 @@ const AnalysisViewer = () => {
                 } else if (move.evaluation !== null) {
                     // Centipawn evaluation - normalize to White's perspective
                     let normalizedEval = move.evaluation;
-                    if (isBlackMove) {
+                    if (!isBlackMove) {
                         normalizedEval = -normalizedEval;
                     }
                     evalValue = Math.max(-10, Math.min(10, normalizedEval / 100)); // Clamp to ±10 pawns
