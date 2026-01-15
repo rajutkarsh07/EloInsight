@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, Sparkles, RefreshCw, Undo2, FlaskConical, Loader2 } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceDot } from 'recharts';
 import ChessBoardViewer from '../components/chess/ChessBoardViewer';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
@@ -661,6 +661,32 @@ const AnalysisViewer = () => {
         currentIndex: number;
         onMoveClick: (index: number) => void;
     }) => {
+        // Use ref to track container and dimensions
+        const containerRef = useRef<HTMLDivElement>(null);
+        const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+        
+        useEffect(() => {
+            const updateDimensions = () => {
+                if (containerRef.current) {
+                    const { width, height } = containerRef.current.getBoundingClientRect();
+                    if (width > 0 && height > 0) {
+                        setDimensions({ width, height });
+                    }
+                }
+            };
+            
+            // Initial measurement after a short delay
+            const timer = setTimeout(updateDimensions, 50);
+            
+            // Also listen for resize
+            window.addEventListener('resize', updateDimensions);
+            
+            return () => {
+                clearTimeout(timer);
+                window.removeEventListener('resize', updateDimensions);
+            };
+        }, []);
+        
         // Prepare data for Recharts
         const chartData = useMemo(() => {
             // Start with equal position
@@ -806,9 +832,11 @@ const AnalysisViewer = () => {
                 </div>
 
                 {/* Chart */}
-                <div className="h-32 w-full px-2" style={{ minWidth: 200, minHeight: 100 }}>
-                    <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={100}>
+                <div ref={containerRef} className="h-32 w-full px-2" style={{ minWidth: 200, minHeight: 128 }}>
+                    {dimensions.width > 0 && dimensions.height > 0 ? (
                         <AreaChart
+                            width={dimensions.width}
+                            height={dimensions.height}
                             data={chartData}
                             margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
                             onClick={handleChartClick}
@@ -877,7 +905,11 @@ const AnalysisViewer = () => {
                                 />
                             ))}
                         </AreaChart>
-                    </ResponsiveContainer>
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <div className="w-6 h-6 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin" />
+                        </div>
+                    )}
                 </div>
 
                 {/* Legend */}
