@@ -12,6 +12,7 @@ const AuthCallback = () => {
     useEffect(() => {
         const handleCallback = () => {
             const lichess = searchParams.get('lichess');
+            const google = searchParams.get('google');
             const error = searchParams.get('error');
             const accessToken = searchParams.get('accessToken');
             const refreshToken = searchParams.get('refreshToken');
@@ -26,14 +27,16 @@ const AuthCallback = () => {
                 return;
             }
 
-            if (lichess === 'success' && accessToken && refreshToken) {
+            // Handle both Lichess and Google OAuth callbacks
+            if ((lichess === 'success' || google === 'success') && accessToken && refreshToken) {
                 // Store tokens
                 localStorage.setItem('accessToken', accessToken);
                 localStorage.setItem('refreshToken', refreshToken);
 
+                const provider = lichess === 'success' ? 'Lichess' : 'Google';
                 setStatus('success');
                 setMessage(isNewUser 
-                    ? `Welcome, ${username}! Your account has been created.`
+                    ? `Welcome, ${username}! Your account has been created via ${provider}.`
                     : `Welcome back, ${username}!`
                 );
 

@@ -522,4 +522,208 @@ export class AuthService {
             }
         }
     }
+
+    // ============ Google OAuth Methods ============
+
+    // Store for Google OAuth state (in production, use Redis or database)
+    private googleStates: Map<string, { expiresAt: number }> = new Map();
+
+    /**
+     * Generate Google OAuth URL
+     */
+    getGoogleAuthUrl(): { url: string; state: string } {
+        const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+        const port = this.configService.get<string>('PORT') || '4000';
+        const apiPrefix = this.configService.get<string>('API_PREFIX') || 'api/v1';
+        const redirectUri = this.configService.get<string>('GOOGLE_REDIRECT_URI') || 
+            `http://localhost:${port}/${apiPrefix}/auth/google/callback`;
+
+        // Generate state for CSRF protection
+        const state = crypto.randomBytes(32).toString('hex');
+
+        // Store state (expires in 10 minutes)
+        this.googleStates.set(state, {
+            expiresAt: Date.now() + 10 * 60 * 1000,
+        });
+
+        // Clean up expired states
+        this.cleanupExpiredGoogleStates();
+
+        const params = new URLSearchParams({
+            client_id: clientId || '',
+            redirect_uri: redirectUri,
+            response_type: 'code',
+            scope: 'openid email profile',
+            access_type: 'offline',
+            state,
+            prompt: 'consent',
+        });
+
+        return {
+            url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
+            state,
+        };
+    }
+
+    /**
+     * Handle Google OAuth callback
+     */
+    async handleGoogleCallback(code: string, state: string): Promise<{
+        email: string;
+        name: string;
+        username: string;
+        userId: string;
+        isNewUser: boolean;
+        tokens: { accessToken: string; refreshToken: string; expiresIn: number };
+    }> {
+        // Validate state
+        const storedState = this.googleStates.get(state);
+        if (!storedState) {
+            throw new BadRequestException('Invalid or expired state parameter');
+        }
+
+        if (storedState.expiresAt < Date.now()) {
+            this.googleStates.delete(state);
+            throw new BadRequestException('OAuth session expired. Please try again.');
+        }
+
+        this.googleStates.delete(state);
+
+        const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+        const clientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
+        const port = this.configService.get<string>('PORT') || '4000';
+        const apiPrefix = this.configService.get<string>('API_PREFIX') || 'api/v1';
+        const redirectUri = this.configService.get<string>('GOOGLE_REDIRECT_URI') || 
+            `http://localhost:${port}/${apiPrefix}/auth/google/callback`;
+
+        // Exchange code for access token
+        const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                code,
+                client_id: clientId || '',
+                client_secret: clientSecret || '',
+                redirect_uri: redirectUri,
+                grant_type: 'authorization_code',
+            }).toString(),
+        });
+
+        if (!tokenResponse.ok) {
+            const errorText = await tokenResponse.text();
+            this.logger.error(`Google token exchange failed: ${errorText}`);
+            throw new BadRequestException('Failed to exchange authorization code');
+        }
+
+        const tokenData = await tokenResponse.json();
+        const googleAccessToken = tokenData.access_token;
+
+        // Get user info from Google
+        const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            headers: {
+                'Authorization': `Bearer ${googleAccessToken}`,
+            },
+        });
+
+        if (!userResponse.ok) {
+            throw new BadRequestException('Failed to get Google user info');
+        }
+
+        const googleUser = await userResponse.json();
+        const email = googleUser.email;
+        const name = googleUser.name || email.split('@')[0];
+        const googleId = googleUser.id;
+
+        // Check if user exists with this email
+        let user = await this.prisma.user.findUnique({
+            where: { email },
+            include: { linkedAccounts: true },
+        });
+
+        let isNewUser = false;
+
+        if (user) {
+            // User exists - update or create Google linked account
+            const existingGoogleLink = user.linkedAccounts?.find(a => a.platform === 'GOOGLE');
+            
+            if (existingGoogleLink) {
+                await this.prisma.linkedAccount.update({
+                    where: { id: existingGoogleLink.id },
+                    data: { 
+                        accessToken: googleAccessToken,
+                        platformUserId: googleId,
+                    },
+                });
+            } else {
+                await this.prisma.linkedAccount.create({
+                    data: {
+                        userId: user.id,
+                        platform: 'GOOGLE',
+                        platformUsername: email,
+                        platformUserId: googleId,
+                        accessToken: googleAccessToken,
+                    },
+                });
+            }
+
+            // Refresh user with linked accounts
+            user = await this.prisma.user.findUnique({
+                where: { id: user.id },
+                include: { linkedAccounts: true },
+            });
+        } else {
+            // Create new user
+            // Generate a unique username from name or email
+            let username = name.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 20);
+            
+            // Check if username exists and make it unique
+            const existingUsername = await this.prisma.user.findUnique({ where: { username } });
+            if (existingUsername) {
+                username = `${username}_${Date.now().toString(36)}`;
+            }
+
+            user = await this.prisma.user.create({
+                data: {
+                    email,
+                    username,
+                    passwordHash: '', // No password for OAuth users
+                    emailVerified: true, // Google users are auto-verified
+                    linkedAccounts: {
+                        create: {
+                            platform: 'GOOGLE',
+                            platformUsername: email,
+                            platformUserId: googleId,
+                            accessToken: googleAccessToken,
+                        },
+                    },
+                },
+                include: { linkedAccounts: true },
+            });
+
+            isNewUser = true;
+            this.logger.log(`New user ${username} created via Google OAuth`);
+        }
+
+        const tokens = await this.generateTokens(user);
+
+        return {
+            email,
+            name,
+            username: user!.username,
+            userId: user!.id,
+            isNewUser,
+            tokens: tokens.tokens,
+        };
+    }
+
+    private cleanupExpiredGoogleStates(): void {
+        const now = Date.now();
+        for (const [state, data] of this.googleStates.entries()) {
+            if (data.expiresAt < now) {
+                this.googleStates.delete(state);
+            }
+        }
+    }
 }
