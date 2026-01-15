@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, Sparkles, RefreshCw, Undo2, FlaskConical, Loader2 } from 'lucide-react';
+import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, RefreshCw, Undo2, FlaskConical, Loader2, ChevronDown, TrendingUp } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceDot } from 'recharts';
 import ChessBoardViewer from '../components/chess/ChessBoardViewer';
 import { apiClient } from '../services/apiClient';
@@ -221,6 +221,9 @@ const AnalysisViewer = () => {
         loading: false,
     });
     const explorationAbortRef = useRef<AbortController | null>(null);
+
+    // Move quality filter state - which category is expanded
+    const [expandedQualityCategory, setExpandedQualityCategory] = useState<string | null>(null);
 
     // Determine which color the user played as
     const getUserColor = useCallback((gameData: FullAnalysis): 'white' | 'black' => {
@@ -657,6 +660,128 @@ const AnalysisViewer = () => {
         if (accuracy >= 60) return 'text-orange-400';
         return 'text-red-400';
     };
+
+    // Calculate "Game Rating" based on accuracy and move quality
+    // Similar to Chess.com's "You played like a XXXX" feature
+    const calculateGameRating = useCallback((metrics: GameMetrics): number => {
+        const { accuracy, brilliantMoves, goodMoves, inaccuracies, mistakes, blunders } = metrics;
+        
+        // Base rating from accuracy (mapping accuracy to rating brackets)
+        // This is the core of the calculation
+        let baseRating: number;
+        if (accuracy >= 98) baseRating = 2800;
+        else if (accuracy >= 95) baseRating = 2500;
+        else if (accuracy >= 92) baseRating = 2300;
+        else if (accuracy >= 90) baseRating = 2100;
+        else if (accuracy >= 87) baseRating = 1900;
+        else if (accuracy >= 84) baseRating = 1750;
+        else if (accuracy >= 80) baseRating = 1600;
+        else if (accuracy >= 75) baseRating = 1450;
+        else if (accuracy >= 70) baseRating = 1300;
+        else if (accuracy >= 65) baseRating = 1150;
+        else if (accuracy >= 60) baseRating = 1000;
+        else if (accuracy >= 55) baseRating = 900;
+        else if (accuracy >= 50) baseRating = 800;
+        else if (accuracy >= 40) baseRating = 650;
+        else baseRating = 500;
+
+        // Interpolate within the bracket for smoother ratings
+        // E.g., 93% accuracy should be between 2300 and 2500
+        const accuracyBonuses = [
+            { min: 95, max: 98, low: 2500, high: 2800 },
+            { min: 92, max: 95, low: 2300, high: 2500 },
+            { min: 90, max: 92, low: 2100, high: 2300 },
+            { min: 87, max: 90, low: 1900, high: 2100 },
+            { min: 84, max: 87, low: 1750, high: 1900 },
+            { min: 80, max: 84, low: 1600, high: 1750 },
+            { min: 75, max: 80, low: 1450, high: 1600 },
+            { min: 70, max: 75, low: 1300, high: 1450 },
+            { min: 65, max: 70, low: 1150, high: 1300 },
+            { min: 60, max: 65, low: 1000, high: 1150 },
+        ];
+
+        for (const bracket of accuracyBonuses) {
+            if (accuracy >= bracket.min && accuracy < bracket.max) {
+                const ratio = (accuracy - bracket.min) / (bracket.max - bracket.min);
+                baseRating = bracket.low + ratio * (bracket.high - bracket.low);
+                break;
+            }
+        }
+
+        // Move quality adjustments
+        // Brilliant moves significantly boost the rating
+        const brilliantBonus = brilliantMoves * 75;
+        
+        // Good/Best moves give a small boost
+        const goodBonus = goodMoves * 5;
+        
+        // Penalties for bad moves
+        const inaccuracyPenalty = inaccuracies * 15;
+        const mistakePenalty = mistakes * 40;
+        const blunderPenalty = blunders * 100;
+
+        // Calculate final rating
+        let gameRating = baseRating + brilliantBonus + goodBonus - inaccuracyPenalty - mistakePenalty - blunderPenalty;
+
+        // Clamp to reasonable bounds
+        gameRating = Math.max(100, Math.min(3500, gameRating));
+
+        return Math.round(gameRating);
+    }, []);
+
+    // Get rating description based on the calculated rating
+    const getRatingDescription = (rating: number): string => {
+        if (rating >= 2700) return 'Super GM';
+        if (rating >= 2500) return 'Grandmaster';
+        if (rating >= 2300) return 'Master';
+        if (rating >= 2100) return 'Expert';
+        if (rating >= 1900) return 'Class A';
+        if (rating >= 1700) return 'Class B';
+        if (rating >= 1500) return 'Class C';
+        if (rating >= 1300) return 'Class D';
+        if (rating >= 1100) return 'Class E';
+        if (rating >= 900) return 'Beginner';
+        return 'Novice';
+    };
+
+    // Get rating color gradient
+    const getRatingColorClass = (rating: number): string => {
+        if (rating >= 2500) return 'from-amber-300 via-yellow-400 to-amber-300'; // Gold for GM+
+        if (rating >= 2200) return 'from-purple-300 to-violet-400'; // Purple for Master
+        if (rating >= 1900) return 'from-blue-300 to-cyan-400'; // Blue for Expert
+        if (rating >= 1600) return 'from-emerald-300 to-green-400'; // Green for Class A-B
+        if (rating >= 1300) return 'from-lime-300 to-green-300'; // Light green
+        if (rating >= 1000) return 'from-yellow-300 to-orange-300'; // Yellow-orange
+        return 'from-orange-300 to-red-300'; // Orange-red for beginners
+    };
+
+    // Get moves filtered by classification category
+    const getMovesByClassification = useCallback((category: string): Array<{ move: MoveAnalysis; index: number; isWhite: boolean }> => {
+        if (!analysis) return [];
+        
+        const classificationMap: Record<string, string[]> = {
+            'brilliant': ['brilliant'],
+            'best_good': ['best', 'good', 'great', 'excellent'],
+            'inaccuracy': ['inaccuracy'],
+            'mistake': ['mistake'],
+            'blunder': ['blunder'],
+        };
+        
+        const classifications = classificationMap[category] || [];
+        
+        return analysis.moves
+            .map((move, idx) => ({
+                move,
+                index: idx + 1, // 1-based index for display
+                isWhite: idx % 2 === 0,
+            }))
+            .filter(item => classifications.includes(item.move.classification));
+    }, [analysis]);
+
+    // Toggle expanded quality category
+    const toggleQualityCategory = useCallback((category: string) => {
+        setExpandedQualityCategory(prev => prev === category ? null : category);
+    }, []);
 
     // Chess.com-style Review Graph using Recharts Area Chart
     const ReviewGraph = ({ moves, currentIndex, onMoveClick }: {
@@ -1303,7 +1428,10 @@ const AnalysisViewer = () => {
                             <ChevronsRight className="h-4 w-4" />
                         </button>
                     </div>
+                </div>
 
+                {/* Middle Panel: Current Move Card + Move List */}
+                <div className="lg:col-span-4 space-y-4">
                     {/* Current Move Card */}
                     {isExplorationMode ? (
                         /* Exploration Mode Card */
@@ -1399,11 +1527,9 @@ const AnalysisViewer = () => {
                             </div>
                         </div>
                     )}
-                </div>
 
-                {/* Middle Panel: Move List */}
-                <div className="lg:col-span-4">
-                    <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl border border-zinc-700/50 backdrop-blur-sm h-full">
+                    {/* Move List */}
+                    <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl border border-zinc-700/50 backdrop-blur-sm">
                         <div className="flex items-center gap-2 p-4 border-b border-zinc-700/50">
                             <BookOpen className="h-4 w-4 text-amber-400" />
                             <h3 className="text-sm font-semibold text-zinc-300">Move List</h3>
@@ -1478,124 +1604,246 @@ const AnalysisViewer = () => {
 
                 {/* Right Panel: Metrics */}
                 <div className="lg:col-span-3 space-y-4">
-                    {/* Accuracy Cards */}
-                    <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
-                        <div className="flex items-center gap-2 mb-4">
-                            <Sparkles className="h-4 w-4 text-purple-400" />
-                            <h3 className="text-sm font-semibold text-zinc-300">Accuracy</h3>
-                        </div>
-
-                        <div className="space-y-3">
-                            {/* White accuracy */}
-                            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-xs text-zinc-400 flex items-center gap-1">
-                                        <span className="w-3 h-3 rounded bg-zinc-100"></span>
-                                        {analysis.game.whitePlayer}
-                                    </span>
-                                    <span className={cn("font-bold text-lg", getAccuracyColor(analysis.whiteMetrics.accuracy))}>
-                                        {analysis.whiteMetrics.accuracy.toFixed(1)}%
-                                    </span>
-                                </div>
-                                <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all"
-                                        style={{ width: `${analysis.whiteMetrics.accuracy}%` }}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Black accuracy */}
-                            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-xs text-zinc-400 flex items-center gap-1">
-                                        <span className="w-3 h-3 rounded bg-zinc-700"></span>
-                                        {analysis.game.blackPlayer}
-                                    </span>
-                                    <span className={cn("font-bold text-lg", getAccuracyColor(analysis.blackMetrics.accuracy))}>
-                                        {analysis.blackMetrics.accuracy.toFixed(1)}%
-                                    </span>
-                                </div>
-                                <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all"
-                                        style={{ width: `${analysis.blackMetrics.accuracy}%` }}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     {/* Move Quality Summary */}
                     <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
                         <h3 className="text-sm font-semibold text-zinc-300 mb-4">Move Quality</h3>
 
-                        <div className="space-y-2">
+                        <div className="space-y-1">
                             {/* Brilliant */}
                             {(analysis.whiteMetrics.brilliantMoves > 0 || analysis.blackMetrics.brilliantMoves > 0) && (
-                                <div className="flex items-center justify-between py-1.5 border-b border-zinc-700/30">
-                                    <span className="flex items-center gap-2 text-xs">
-                                        <Star className="h-3.5 w-3.5 text-cyan-400" />
-                                        <span className="text-cyan-400">Brilliant</span>
-                                    </span>
-                                    <div className="flex items-center gap-3 text-xs font-mono">
-                                        <span className="text-zinc-300">{analysis.whiteMetrics.brilliantMoves}</span>
-                                        <span className="text-zinc-600">|</span>
-                                        <span className="text-zinc-300">{analysis.blackMetrics.brilliantMoves}</span>
-                                    </div>
+                                <div>
+                                    <button
+                                        onClick={() => toggleQualityCategory('brilliant')}
+                                        className={cn(
+                                            "w-full flex items-center justify-between py-2 px-2 rounded-lg transition-all",
+                                            expandedQualityCategory === 'brilliant'
+                                                ? "bg-cyan-500/10 border border-cyan-500/30"
+                                                : "hover:bg-zinc-800/50 border border-transparent"
+                                        )}
+                                    >
+                                        <span className="flex items-center gap-2 text-xs">
+                                            <Star className="h-3.5 w-3.5 text-cyan-400" />
+                                            <span className="text-cyan-400">Brilliant</span>
+                                            <ChevronDown className={cn(
+                                                "h-3 w-3 text-cyan-400/50 transition-transform",
+                                                expandedQualityCategory === 'brilliant' && "rotate-180"
+                                            )} />
+                                        </span>
+                                        <div className="flex items-center gap-3 text-xs font-mono">
+                                            <span className="text-zinc-300">{analysis.whiteMetrics.brilliantMoves}</span>
+                                            <span className="text-zinc-600">|</span>
+                                            <span className="text-zinc-300">{analysis.blackMetrics.brilliantMoves}</span>
+                                        </div>
+                                    </button>
+                                    {expandedQualityCategory === 'brilliant' && (
+                                        <div className="mt-1 ml-6 space-y-0.5 max-h-32 overflow-y-auto custom-scrollbar">
+                                            {getMovesByClassification('brilliant').map(({ move, index, isWhite }) => (
+                                                <button
+                                                    key={index}
+                                                    onClick={() => goToMoveWithReset(index)}
+                                                    className={cn(
+                                                        "w-full flex items-center gap-2 px-2 py-1 rounded text-xs transition-all",
+                                                        currentMoveIndex === index
+                                                            ? "bg-cyan-500/20 text-cyan-300"
+                                                            : "hover:bg-zinc-800/50 text-zinc-400"
+                                                    )}
+                                                >
+                                                    <span className={cn("w-2 h-2 rounded", isWhite ? "bg-zinc-200" : "bg-zinc-600")} />
+                                                    <span className="text-zinc-500">{Math.ceil(index / 2)}{isWhite ? '.' : '...'}</span>
+                                                    <span className="font-mono">{move.playedMove}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
                             {/* Best/Good */}
-                            <div className="flex items-center justify-between py-1.5 border-b border-zinc-700/30">
-                                <span className="flex items-center gap-2 text-xs">
-                                    <Check className="h-3.5 w-3.5 text-green-400" />
-                                    <span className="text-green-400">Best/Good</span>
-                                </span>
-                                <div className="flex items-center gap-3 text-xs font-mono">
-                                    <span className="text-zinc-300">{analysis.whiteMetrics.goodMoves}</span>
-                                    <span className="text-zinc-600">|</span>
-                                    <span className="text-zinc-300">{analysis.blackMetrics.goodMoves}</span>
-                                </div>
+                            <div>
+                                <button
+                                    onClick={() => toggleQualityCategory('best_good')}
+                                    className={cn(
+                                        "w-full flex items-center justify-between py-2 px-2 rounded-lg transition-all",
+                                        expandedQualityCategory === 'best_good'
+                                            ? "bg-green-500/10 border border-green-500/30"
+                                            : "hover:bg-zinc-800/50 border border-transparent"
+                                    )}
+                                >
+                                    <span className="flex items-center gap-2 text-xs">
+                                        <Check className="h-3.5 w-3.5 text-green-400" />
+                                        <span className="text-green-400">Best/Good</span>
+                                        <ChevronDown className={cn(
+                                            "h-3 w-3 text-green-400/50 transition-transform",
+                                            expandedQualityCategory === 'best_good' && "rotate-180"
+                                        )} />
+                                    </span>
+                                    <div className="flex items-center gap-3 text-xs font-mono">
+                                        <span className="text-zinc-300">{analysis.whiteMetrics.goodMoves}</span>
+                                        <span className="text-zinc-600">|</span>
+                                        <span className="text-zinc-300">{analysis.blackMetrics.goodMoves}</span>
+                                    </div>
+                                </button>
+                                {expandedQualityCategory === 'best_good' && (
+                                    <div className="mt-1 ml-6 space-y-0.5 max-h-32 overflow-y-auto custom-scrollbar">
+                                        {getMovesByClassification('best_good').map(({ move, index, isWhite }) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => goToMoveWithReset(index)}
+                                                className={cn(
+                                                    "w-full flex items-center gap-2 px-2 py-1 rounded text-xs transition-all",
+                                                    currentMoveIndex === index
+                                                        ? "bg-green-500/20 text-green-300"
+                                                        : "hover:bg-zinc-800/50 text-zinc-400"
+                                                )}
+                                            >
+                                                <span className={cn("w-2 h-2 rounded", isWhite ? "bg-zinc-200" : "bg-zinc-600")} />
+                                                <span className="text-zinc-500">{Math.ceil(index / 2)}{isWhite ? '.' : '...'}</span>
+                                                <span className="font-mono">{move.playedMove}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Inaccuracies */}
-                            <div className="flex items-center justify-between py-1.5 border-b border-zinc-700/30">
-                                <span className="flex items-center gap-2 text-xs">
-                                    <MinusCircle className="h-3.5 w-3.5 text-yellow-400" />
-                                    <span className="text-yellow-400">Inaccuracies</span>
-                                </span>
-                                <div className="flex items-center gap-3 text-xs font-mono">
-                                    <span className="text-zinc-300">{analysis.whiteMetrics.inaccuracies}</span>
-                                    <span className="text-zinc-600">|</span>
-                                    <span className="text-zinc-300">{analysis.blackMetrics.inaccuracies}</span>
-                                </div>
+                            <div>
+                                <button
+                                    onClick={() => toggleQualityCategory('inaccuracy')}
+                                    className={cn(
+                                        "w-full flex items-center justify-between py-2 px-2 rounded-lg transition-all",
+                                        expandedQualityCategory === 'inaccuracy'
+                                            ? "bg-yellow-500/10 border border-yellow-500/30"
+                                            : "hover:bg-zinc-800/50 border border-transparent"
+                                    )}
+                                >
+                                    <span className="flex items-center gap-2 text-xs">
+                                        <MinusCircle className="h-3.5 w-3.5 text-yellow-400" />
+                                        <span className="text-yellow-400">Inaccuracies</span>
+                                        <ChevronDown className={cn(
+                                            "h-3 w-3 text-yellow-400/50 transition-transform",
+                                            expandedQualityCategory === 'inaccuracy' && "rotate-180"
+                                        )} />
+                                    </span>
+                                    <div className="flex items-center gap-3 text-xs font-mono">
+                                        <span className="text-zinc-300">{analysis.whiteMetrics.inaccuracies}</span>
+                                        <span className="text-zinc-600">|</span>
+                                        <span className="text-zinc-300">{analysis.blackMetrics.inaccuracies}</span>
+                                    </div>
+                                </button>
+                                {expandedQualityCategory === 'inaccuracy' && (
+                                    <div className="mt-1 ml-6 space-y-0.5 max-h-32 overflow-y-auto custom-scrollbar">
+                                        {getMovesByClassification('inaccuracy').map(({ move, index, isWhite }) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => goToMoveWithReset(index)}
+                                                className={cn(
+                                                    "w-full flex items-center gap-2 px-2 py-1 rounded text-xs transition-all",
+                                                    currentMoveIndex === index
+                                                        ? "bg-yellow-500/20 text-yellow-300"
+                                                        : "hover:bg-zinc-800/50 text-zinc-400"
+                                                )}
+                                            >
+                                                <span className={cn("w-2 h-2 rounded", isWhite ? "bg-zinc-200" : "bg-zinc-600")} />
+                                                <span className="text-zinc-500">{Math.ceil(index / 2)}{isWhite ? '.' : '...'}</span>
+                                                <span className="font-mono">{move.playedMove}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Mistakes */}
-                            <div className="flex items-center justify-between py-1.5 border-b border-zinc-700/30">
-                                <span className="flex items-center gap-2 text-xs">
-                                    <AlertTriangle className="h-3.5 w-3.5 text-orange-400" />
-                                    <span className="text-orange-400">Mistakes</span>
-                                </span>
-                                <div className="flex items-center gap-3 text-xs font-mono">
-                                    <span className="text-zinc-300">{analysis.whiteMetrics.mistakes}</span>
-                                    <span className="text-zinc-600">|</span>
-                                    <span className="text-zinc-300">{analysis.blackMetrics.mistakes}</span>
-                                </div>
+                            <div>
+                                <button
+                                    onClick={() => toggleQualityCategory('mistake')}
+                                    className={cn(
+                                        "w-full flex items-center justify-between py-2 px-2 rounded-lg transition-all",
+                                        expandedQualityCategory === 'mistake'
+                                            ? "bg-orange-500/10 border border-orange-500/30"
+                                            : "hover:bg-zinc-800/50 border border-transparent"
+                                    )}
+                                >
+                                    <span className="flex items-center gap-2 text-xs">
+                                        <AlertTriangle className="h-3.5 w-3.5 text-orange-400" />
+                                        <span className="text-orange-400">Mistakes</span>
+                                        <ChevronDown className={cn(
+                                            "h-3 w-3 text-orange-400/50 transition-transform",
+                                            expandedQualityCategory === 'mistake' && "rotate-180"
+                                        )} />
+                                    </span>
+                                    <div className="flex items-center gap-3 text-xs font-mono">
+                                        <span className="text-zinc-300">{analysis.whiteMetrics.mistakes}</span>
+                                        <span className="text-zinc-600">|</span>
+                                        <span className="text-zinc-300">{analysis.blackMetrics.mistakes}</span>
+                                    </div>
+                                </button>
+                                {expandedQualityCategory === 'mistake' && (
+                                    <div className="mt-1 ml-6 space-y-0.5 max-h-32 overflow-y-auto custom-scrollbar">
+                                        {getMovesByClassification('mistake').map(({ move, index, isWhite }) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => goToMoveWithReset(index)}
+                                                className={cn(
+                                                    "w-full flex items-center gap-2 px-2 py-1 rounded text-xs transition-all",
+                                                    currentMoveIndex === index
+                                                        ? "bg-orange-500/20 text-orange-300"
+                                                        : "hover:bg-zinc-800/50 text-zinc-400"
+                                                )}
+                                            >
+                                                <span className={cn("w-2 h-2 rounded", isWhite ? "bg-zinc-200" : "bg-zinc-600")} />
+                                                <span className="text-zinc-500">{Math.ceil(index / 2)}{isWhite ? '.' : '...'}</span>
+                                                <span className="font-mono">{move.playedMove}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Blunders */}
-                            <div className="flex items-center justify-between py-1.5">
-                                <span className="flex items-center gap-2 text-xs">
-                                    <XCircle className="h-3.5 w-3.5 text-red-400" />
-                                    <span className="text-red-400">Blunders</span>
-                                </span>
-                                <div className="flex items-center gap-3 text-xs font-mono">
-                                    <span className="text-zinc-300">{analysis.whiteMetrics.blunders}</span>
-                                    <span className="text-zinc-600">|</span>
-                                    <span className="text-zinc-300">{analysis.blackMetrics.blunders}</span>
-                                </div>
+                            <div>
+                                <button
+                                    onClick={() => toggleQualityCategory('blunder')}
+                                    className={cn(
+                                        "w-full flex items-center justify-between py-2 px-2 rounded-lg transition-all",
+                                        expandedQualityCategory === 'blunder'
+                                            ? "bg-red-500/10 border border-red-500/30"
+                                            : "hover:bg-zinc-800/50 border border-transparent"
+                                    )}
+                                >
+                                    <span className="flex items-center gap-2 text-xs">
+                                        <XCircle className="h-3.5 w-3.5 text-red-400" />
+                                        <span className="text-red-400">Blunders</span>
+                                        <ChevronDown className={cn(
+                                            "h-3 w-3 text-red-400/50 transition-transform",
+                                            expandedQualityCategory === 'blunder' && "rotate-180"
+                                        )} />
+                                    </span>
+                                    <div className="flex items-center gap-3 text-xs font-mono">
+                                        <span className="text-zinc-300">{analysis.whiteMetrics.blunders}</span>
+                                        <span className="text-zinc-600">|</span>
+                                        <span className="text-zinc-300">{analysis.blackMetrics.blunders}</span>
+                                    </div>
+                                </button>
+                                {expandedQualityCategory === 'blunder' && (
+                                    <div className="mt-1 ml-6 space-y-0.5 max-h-32 overflow-y-auto custom-scrollbar">
+                                        {getMovesByClassification('blunder').map(({ move, index, isWhite }) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => goToMoveWithReset(index)}
+                                                className={cn(
+                                                    "w-full flex items-center gap-2 px-2 py-1 rounded text-xs transition-all",
+                                                    currentMoveIndex === index
+                                                        ? "bg-red-500/20 text-red-300"
+                                                        : "hover:bg-zinc-800/50 text-zinc-400"
+                                                )}
+                                            >
+                                                <span className={cn("w-2 h-2 rounded", isWhite ? "bg-zinc-200" : "bg-zinc-600")} />
+                                                <span className="text-zinc-500">{Math.ceil(index / 2)}{isWhite ? '.' : '...'}</span>
+                                                <span className="font-mono">{move.playedMove}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -1611,6 +1859,57 @@ const AnalysisViewer = () => {
                             </span>
                         </div>
                     </div>
+
+                    {/* Game Rating - "You played like a XXXX" */}
+                    {(() => {
+                        const whiteGameRating = calculateGameRating(analysis.whiteMetrics);
+                        const blackGameRating = calculateGameRating(analysis.blackMetrics);
+                        
+                        return (
+                            <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/20 rounded-xl p-4 border border-indigo-500/30 backdrop-blur-sm">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <TrendingUp className="h-4 w-4 text-indigo-400" />
+                                    <h3 className="text-xs font-semibold text-indigo-300">Game Rating</h3>
+                                </div>
+                                
+                                <div className="flex gap-3">
+                                    {/* White Game Rating */}
+                                    <div className="flex-1 bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30 text-center">
+                                        <div className="flex items-center justify-center gap-1.5 mb-1">
+                                            <span className="w-2.5 h-2.5 rounded bg-zinc-100 shadow-sm"></span>
+                                            <span className="text-[10px] text-zinc-400 truncate max-w-[60px]">{analysis.game.whitePlayer.split(' ')[0]}</span>
+                                        </div>
+                                        <span className={cn(
+                                            "text-2xl font-bold bg-gradient-to-r bg-clip-text text-transparent block",
+                                            getRatingColorClass(whiteGameRating)
+                                        )}>
+                                            {whiteGameRating}
+                                        </span>
+                                        <span className="text-[9px] text-zinc-500">{getRatingDescription(whiteGameRating)}</span>
+                                    </div>
+                                    
+                                    {/* Black Game Rating */}
+                                    <div className="flex-1 bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30 text-center">
+                                        <div className="flex items-center justify-center gap-1.5 mb-1">
+                                            <span className="w-2.5 h-2.5 rounded bg-zinc-600 border border-zinc-500 shadow-sm"></span>
+                                            <span className="text-[10px] text-zinc-400 truncate max-w-[60px]">{analysis.game.blackPlayer.split(' ')[0]}</span>
+                                        </div>
+                                        <span className={cn(
+                                            "text-2xl font-bold bg-gradient-to-r bg-clip-text text-transparent block",
+                                            getRatingColorClass(blackGameRating)
+                                        )}>
+                                            {blackGameRating}
+                                        </span>
+                                        <span className="text-[9px] text-zinc-500">{getRatingDescription(blackGameRating)}</span>
+                                    </div>
+                                </div>
+                                
+                                <p className="text-[9px] text-indigo-400/50 text-center mt-2">
+                                    Based on accuracy &amp; move quality
+                                </p>
+                            </div>
+                        );
+                    })()}
 
                     {/* ACPL */}
                     <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
