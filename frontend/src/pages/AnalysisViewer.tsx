@@ -478,11 +478,37 @@ const AnalysisViewer = () => {
     // Using the formula: winProb = 50 + 50 * (2 / (1 + exp(-0.004 * centipawns)) - 1)
     const calculateWinProbability = useCallback((centipawns: number | null, mateIn: number | null): { white: number; draw: number; black: number } => {
         if (mateIn !== null) {
-            // Mate found
+            // Mate found or checkmate delivered
             if (mateIn > 0) {
+                // White has mate in N moves
                 return { white: 100, draw: 0, black: 0 };
-            } else {
+            } else if (mateIn < 0) {
+                // Black has mate in N moves
                 return { white: 0, draw: 0, black: 100 };
+            } else {
+                // mateIn === 0 means checkmate has been delivered
+                // Use the game result to determine who won
+                if (analysis?.game.result) {
+                    const result = analysis.game.result.toUpperCase();
+                    if (result.includes('WHITE') || result === '1-0') {
+                        return { white: 100, draw: 0, black: 0 };
+                    } else if (result.includes('BLACK') || result === '0-1') {
+                        return { white: 0, draw: 0, black: 100 };
+                    }
+                }
+                // Fallback: determine by whose turn it is (they are checkmated)
+                // At checkmate, the side to move has lost
+                // currentMoveIndex tells us the last move played
+                // Even index (0,2,4...) = White just moved = Black's turn = Black is mated = White wins
+                // Odd index (1,3,5...) = Black just moved = White's turn = White is mated = Black wins
+                const lastMoveIndex = currentMoveIndex - 1;
+                if (lastMoveIndex >= 0) {
+                    const isWhiteLastMove = lastMoveIndex % 2 === 0;
+                    return isWhiteLastMove 
+                        ? { white: 100, draw: 0, black: 0 }  // White delivered checkmate
+                        : { white: 0, draw: 0, black: 100 }; // Black delivered checkmate
+                }
+                return { white: 50, draw: 0, black: 50 };
             }
         }
         
@@ -505,7 +531,7 @@ const AnalysisViewer = () => {
             draw: Math.round(drawProb),
             black: Math.round(adjustedBlack),
         };
-    }, []);
+    }, [analysis, currentMoveIndex]);
 
     // Find key moments (biggest evaluation swings)
     const keyMoments = useMemo(() => {
@@ -1058,7 +1084,29 @@ const AnalysisViewer = () => {
 
     const getEvalBarWidth = (evaluation: number | null, mateIn: number | null): number => {
         if (mateIn !== null) {
-            return mateIn > 0 ? 100 : 0;
+            if (mateIn > 0) {
+                return 100; // White has mate
+            } else if (mateIn < 0) {
+                return 0; // Black has mate
+            } else {
+                // mateIn === 0 means checkmate delivered
+                // Use game result or move index to determine
+                if (analysis?.game.result) {
+                    const result = analysis.game.result.toUpperCase();
+                    if (result.includes('WHITE') || result === '1-0') {
+                        return 100;
+                    } else if (result.includes('BLACK') || result === '0-1') {
+                        return 0;
+                    }
+                }
+                // Fallback: determine by whose turn it is
+                const lastMoveIndex = currentMoveIndex - 1;
+                if (lastMoveIndex >= 0) {
+                    const isWhiteLastMove = lastMoveIndex % 2 === 0;
+                    return isWhiteLastMove ? 100 : 0;
+                }
+                return 50;
+            }
         }
         if (evaluation === null) return 50;
         // Scale evaluation: -500 to +500 centipawns maps to 0% to 100%
@@ -1311,8 +1359,27 @@ const AnalysisViewer = () => {
                     if (!isBlackMove) {
                         normalizedMate = -normalizedMate;
                     }
-                    evalValue = normalizedMate > 0 ? 10 : -10; // Cap mate at ±10
-                    displayEval = normalizedMate > 0 ? `M${Math.abs(move.mateIn)}` : `-M${Math.abs(move.mateIn)}`;
+                    
+                    // Handle mateIn === 0 (checkmate delivered) specially
+                    if (normalizedMate === 0) {
+                        // Use game result to determine who won
+                        const gameResult = analysis?.game.result?.toUpperCase() || '';
+                        if (gameResult.includes('WHITE') || gameResult === '1-0') {
+                            evalValue = 10; // White won
+                            displayEval = 'M0';
+                        } else if (gameResult.includes('BLACK') || gameResult === '0-1') {
+                            evalValue = -10; // Black won
+                            displayEval = '-M0';
+                        } else {
+                            // Fallback: whoever just moved delivered the checkmate
+                            // Even index = White moved = White delivered checkmate
+                            evalValue = !isBlackMove ? -10 : 10;
+                            displayEval = !isBlackMove ? '-M0' : 'M0';
+                        }
+                    } else {
+                        evalValue = normalizedMate > 0 ? 10 : -10; // Cap mate at ±10
+                        displayEval = normalizedMate > 0 ? `M${Math.abs(move.mateIn)}` : `-M${Math.abs(move.mateIn)}`;
+                    }
                 } else if (move.evaluation !== null) {
                     // Centipawn evaluation - normalize to White's perspective
                     let normalizedEval = move.evaluation;
