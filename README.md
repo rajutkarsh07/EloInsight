@@ -13,6 +13,7 @@ EloInsight democratizes chess game analysis by providing a completely free, open
 
 ### Core Analysis
 - 🔗 **Multi-Platform Integration**: Link your Chess.com and Lichess accounts
+- 🔐 **Social Login**: Sign in with Lichess or Google OAuth
 - 📥 **Automatic Game Sync**: Fetch and analyze all your completed games automatically
 - 🤖 **Free Stockfish Analysis**: Powered by the world's strongest open-source chess engine (depth 20)
 - 📊 **Comprehensive Metrics**: 
@@ -79,6 +80,7 @@ EloInsight democratizes chess game analysis by providing a completely free, open
 - **REST API** - Frontend to API Gateway
 - **gRPC** - API Gateway to Analysis Service
 - **JWT** - Authentication tokens
+- **OAuth 2.0** - Lichess and Google authentication
 
 ## 🏗️ Architecture Overview
 
