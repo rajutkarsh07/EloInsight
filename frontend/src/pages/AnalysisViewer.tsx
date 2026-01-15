@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, RefreshCw, Undo2, FlaskConical, Loader2, ChevronDown, TrendingUp, Copy, CheckCircle, Crosshair, Clock } from 'lucide-react';
+import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, RefreshCw, Undo2, FlaskConical, Loader2, ChevronDown, TrendingUp, Copy, CheckCircle, Crosshair, Clock, Play, Pause, Volume2, VolumeX, Keyboard, X, Lightbulb } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceDot } from 'recharts';
 import ChessBoardViewer from '../components/chess/ChessBoardViewer';
 import { apiClient } from '../services/apiClient';
@@ -231,6 +231,17 @@ const AnalysisViewer = () => {
     // Copy FEN feedback state
     const [fenCopied, setFenCopied] = useState(false);
 
+    // Auto-play state
+    const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+    const [autoPlaySpeed, setAutoPlaySpeed] = useState(1500); // ms per move
+    const autoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // Sound state
+    const [soundEnabled, setSoundEnabled] = useState(true);
+
+    // Keyboard shortcuts panel
+    const [showShortcuts, setShowShortcuts] = useState(false);
+
     // Determine which color the user played as
     const getUserColor = useCallback((gameData: FullAnalysis): 'white' | 'black' => {
         if (!user) return 'white';
@@ -431,25 +442,6 @@ const AnalysisViewer = () => {
     }, [gameId, getUserColor]);
 
 
-    const handleKeyDown = useCallback((e: KeyboardEvent) => {
-        if (e.key === 'ArrowLeft') {
-            goToMoveWithReset(currentMoveIndex - 1);
-        } else if (e.key === 'ArrowRight') {
-            goToMoveWithReset(currentMoveIndex + 1);
-        } else if (e.key === 'Home') {
-            goToMoveWithReset(0);
-        } else if (e.key === 'End' && analysis) {
-            goToMoveWithReset(analysis.moves.length);
-        } else if (e.key === 'Escape' && isExplorationMode) {
-            resetExploration();
-        }
-    }, [currentMoveIndex, goToMoveWithReset, analysis, isExplorationMode, resetExploration]);
-
-    useEffect(() => {
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleKeyDown]);
-
     const currentFen = useMemo(() => {
         const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -638,6 +630,299 @@ const AnalysisViewer = () => {
         const remainingSeconds = Math.floor(seconds % 60);
         return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
     };
+
+    // Phase Breakdown - Calculate stats by game phase with all classifications
+    const phaseBreakdown = useMemo(() => {
+        if (!analysis || analysis.moves.length === 0) return null;
+
+        const totalMoves = analysis.moves.length;
+        // Rough phase boundaries: Opening (first 10 moves each = 20 half-moves), 
+        // Middlegame (until ~40 half-moves), Endgame (rest)
+        const openingEnd = Math.min(20, totalMoves);
+        const middlegameEnd = Math.min(40, totalMoves);
+
+        const calculatePhaseStats = (startIdx: number, endIdx: number, color: 'white' | 'black') => {
+            let totalCpLoss = 0;
+            let moveCount = 0;
+            let brilliant = 0;
+            let best = 0;
+            let good = 0;
+            let book = 0;
+            let inaccuracies = 0;
+            let mistakes = 0;
+            let blunders = 0;
+
+            for (let i = startIdx; i < endIdx; i++) {
+                const move = analysis.moves[i];
+                const isWhiteMove = i % 2 === 0;
+                if ((color === 'white' && isWhiteMove) || (color === 'black' && !isWhiteMove)) {
+                    totalCpLoss += move.centipawnLoss || 0;
+                    moveCount++;
+                    
+                    // Count each classification
+                    switch (move.classification) {
+                        case 'brilliant': brilliant++; break;
+                        case 'best': best++; break;
+                        case 'good': case 'excellent': case 'great': good++; break;
+                        case 'book': book++; break;
+                        case 'inaccuracy': inaccuracies++; break;
+                        case 'mistake': mistakes++; break;
+                        case 'blunder': blunders++; break;
+                    }
+                }
+            }
+
+            return {
+                acpl: moveCount > 0 ? totalCpLoss / moveCount : 0,
+                moves: moveCount,
+                brilliant,
+                best,
+                good,
+                book,
+                inaccuracies,
+                mistakes,
+                blunders,
+            };
+        };
+
+        return {
+            opening: {
+                white: calculatePhaseStats(0, openingEnd, 'white'),
+                black: calculatePhaseStats(0, openingEnd, 'black'),
+            },
+            middlegame: {
+                white: calculatePhaseStats(openingEnd, middlegameEnd, 'white'),
+                black: calculatePhaseStats(openingEnd, middlegameEnd, 'black'),
+            },
+            endgame: {
+                white: calculatePhaseStats(middlegameEnd, totalMoves, 'white'),
+                black: calculatePhaseStats(middlegameEnd, totalMoves, 'black'),
+            },
+        };
+    }, [analysis]);
+
+    // Suggested Focus Areas based on mistakes
+    const suggestedFocusAreas = useMemo(() => {
+        if (!analysis || !phaseBreakdown) return [];
+
+        const suggestions: Array<{ area: string; reason: string; priority: 'high' | 'medium' | 'low' }> = [];
+        const userColor = getUserColor(analysis);
+        const metrics = userColor === 'white' ? analysis.whiteMetrics : analysis.blackMetrics;
+        const phases = phaseBreakdown;
+
+        // Check opening phase
+        const openingStats = userColor === 'white' ? phases.opening.white : phases.opening.black;
+        if (openingStats.acpl > 30 || openingStats.mistakes + openingStats.blunders > 1) {
+            suggestions.push({
+                area: 'Opening Preparation',
+                reason: `High ACPL (${openingStats.acpl.toFixed(0)}) in the opening phase`,
+                priority: openingStats.blunders > 0 ? 'high' : 'medium',
+            });
+        }
+
+        // Check middlegame phase
+        const middlegameStats = userColor === 'white' ? phases.middlegame.white : phases.middlegame.black;
+        if (middlegameStats.blunders > 0) {
+            suggestions.push({
+                area: 'Tactical Awareness',
+                reason: `${middlegameStats.blunders} blunder(s) in the middlegame`,
+                priority: 'high',
+            });
+        }
+        if (middlegameStats.mistakes > 1) {
+            suggestions.push({
+                area: 'Calculation & Visualization',
+                reason: `${middlegameStats.mistakes} mistakes in middlegame complications`,
+                priority: 'medium',
+            });
+        }
+
+        // Check endgame phase
+        const endgameStats = userColor === 'white' ? phases.endgame.white : phases.endgame.black;
+        if (endgameStats.moves > 5 && (endgameStats.acpl > 40 || endgameStats.mistakes + endgameStats.blunders > 0)) {
+            suggestions.push({
+                area: 'Endgame Technique',
+                reason: `Errors in the endgame phase (ACPL: ${endgameStats.acpl.toFixed(0)})`,
+                priority: endgameStats.blunders > 0 ? 'high' : 'medium',
+            });
+        }
+
+        // General suggestions based on overall metrics
+        if (metrics.blunders >= 2) {
+            suggestions.push({
+                area: 'Blunder Prevention',
+                reason: `${metrics.blunders} total blunders - practice "checks, captures, threats"`,
+                priority: 'high',
+            });
+        }
+
+        if (metrics.inaccuracies > 5) {
+            suggestions.push({
+                area: 'Positional Understanding',
+                reason: `${metrics.inaccuracies} inaccuracies suggest positional gaps`,
+                priority: 'low',
+            });
+        }
+
+        return suggestions.slice(0, 3); // Return top 3 suggestions
+    }, [analysis, phaseBreakdown, getUserColor]);
+
+    // Play move sound
+    const playMoveSound = useCallback((classification: string, isCapture: boolean, isCheck: boolean) => {
+        if (!soundEnabled) return;
+
+        // Create audio context for sounds
+        try {
+            const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+            const audioContext = new AudioContextClass();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            // Different sounds for different move types
+            if (classification === 'blunder') {
+                oscillator.frequency.value = 200; // Low frequency for blunder
+                gainNode.gain.value = 0.3;
+            } else if (classification === 'brilliant') {
+                oscillator.frequency.value = 800; // High frequency for brilliant
+                gainNode.gain.value = 0.2;
+            } else if (isCheck) {
+                oscillator.frequency.value = 600;
+                gainNode.gain.value = 0.15;
+            } else if (isCapture) {
+                oscillator.frequency.value = 400;
+                gainNode.gain.value = 0.1;
+            } else {
+                oscillator.frequency.value = 300; // Normal move
+                gainNode.gain.value = 0.08;
+            }
+
+            oscillator.type = 'sine';
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        } catch {
+            // Audio not supported
+        }
+    }, [soundEnabled]);
+
+    // Auto-play logic
+    const startAutoPlay = useCallback(() => {
+        if (!analysis) return;
+        setIsAutoPlaying(true);
+    }, [analysis]);
+
+    const stopAutoPlay = useCallback(() => {
+        setIsAutoPlaying(false);
+        if (autoPlayRef.current) {
+            clearInterval(autoPlayRef.current);
+            autoPlayRef.current = null;
+        }
+    }, []);
+
+    const toggleAutoPlay = useCallback(() => {
+        if (isAutoPlaying) {
+            stopAutoPlay();
+        } else {
+            startAutoPlay();
+        }
+    }, [isAutoPlaying, startAutoPlay, stopAutoPlay]);
+
+    // Auto-play effect
+    useEffect(() => {
+        if (isAutoPlaying && analysis) {
+            autoPlayRef.current = setInterval(() => {
+                setCurrentMoveIndex(prev => {
+                    if (prev >= analysis.moves.length) {
+                        stopAutoPlay();
+                        return prev;
+                    }
+                    return prev + 1;
+                });
+            }, autoPlaySpeed);
+        }
+
+        return () => {
+            if (autoPlayRef.current) {
+                clearInterval(autoPlayRef.current);
+            }
+        };
+    }, [isAutoPlaying, autoPlaySpeed, analysis, stopAutoPlay]);
+
+    // Play sound on move change
+    useEffect(() => {
+        if (analysis && currentMoveIndex > 0 && soundEnabled) {
+            const move = analysis.moves[currentMoveIndex - 1];
+            if (move) {
+                const isCapture = move.playedMove.includes('x');
+                const isCheck = move.playedMove.includes('+') || move.playedMove.includes('#');
+                playMoveSound(move.classification, isCapture, isCheck);
+            }
+        }
+    }, [currentMoveIndex, analysis, soundEnabled, playMoveSound]);
+
+    // Keyboard shortcuts handler
+    const handleKeyDown = useCallback((e: KeyboardEvent) => {
+        // Don't handle shortcuts if typing in an input
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+            return;
+        }
+
+        switch (e.key) {
+            case 'ArrowLeft':
+                e.preventDefault();
+                goToMoveWithReset(currentMoveIndex - 1);
+                break;
+            case 'ArrowRight':
+                e.preventDefault();
+                goToMoveWithReset(currentMoveIndex + 1);
+                break;
+            case 'Home':
+                e.preventDefault();
+                goToMoveWithReset(0);
+                break;
+            case 'End':
+                e.preventDefault();
+                if (analysis) goToMoveWithReset(analysis.moves.length);
+                break;
+            case 'Escape':
+                if (isExplorationMode) {
+                    resetExploration();
+                } else if (showShortcuts) {
+                    setShowShortcuts(false);
+                }
+                break;
+            case '?':
+            case 'h':
+            case 'H':
+                setShowShortcuts(prev => !prev);
+                break;
+            case ' ': // Space bar
+                e.preventDefault();
+                toggleAutoPlay();
+                break;
+            case 'f':
+            case 'F':
+                flipBoard();
+                break;
+            case 'm':
+            case 'M':
+                setSoundEnabled(prev => !prev);
+                break;
+            case 'c':
+            case 'C':
+                copyFenToClipboard();
+                break;
+        }
+    }, [currentMoveIndex, goToMoveWithReset, analysis, isExplorationMode, resetExploration, showShortcuts, toggleAutoPlay, flipBoard, copyFenToClipboard]);
+
+    // Keyboard event listener
+    useEffect(() => {
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handleKeyDown]);
 
     // Valid classification types for the ChessBoardViewer
     type BoardClassification = 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'book' | 'normal' | 'inaccuracy' | 'mistake' | 'blunder' | null;
@@ -1718,7 +2003,7 @@ const AnalysisViewer = () => {
                                     ? "bg-emerald-500/20 text-emerald-400"
                                     : "bg-zinc-800 hover:bg-zinc-700"
                             )}
-                            title="Copy FEN to clipboard"
+                            title="Copy FEN (C)"
                         >
                             {fenCopied ? (
                                 <CheckCircle className="h-4 w-4" />
@@ -1726,7 +2011,402 @@ const AnalysisViewer = () => {
                                 <Copy className="h-4 w-4" />
                             )}
                         </button>
+
+                        <div className="w-px h-6 bg-zinc-700 mx-1"></div>
+
+                        {/* Auto-play Button */}
+                        <button
+                            onClick={toggleAutoPlay}
+                            className={cn(
+                                "p-2 rounded-lg transition-colors",
+                                isAutoPlaying
+                                    ? "bg-blue-500/20 text-blue-400"
+                                    : "bg-zinc-800 hover:bg-zinc-700"
+                            )}
+                            title={isAutoPlaying ? "Pause (Space)" : "Auto-play (Space)"}
+                        >
+                            {isAutoPlaying ? (
+                                <Pause className="h-4 w-4" />
+                            ) : (
+                                <Play className="h-4 w-4" />
+                            )}
+                        </button>
+
+                        {/* Speed Control (only show when auto-playing) */}
+                        {isAutoPlaying && (
+                            <select
+                                value={autoPlaySpeed}
+                                onChange={(e) => setAutoPlaySpeed(Number(e.target.value))}
+                                className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                                <option value={500}>0.5s</option>
+                                <option value={1000}>1s</option>
+                                <option value={1500}>1.5s</option>
+                                <option value={2000}>2s</option>
+                                <option value={3000}>3s</option>
+                            </select>
+                        )}
+
+                        {/* Sound Toggle */}
+                        <button
+                            onClick={() => setSoundEnabled(prev => !prev)}
+                            className={cn(
+                                "p-2 rounded-lg transition-colors",
+                                soundEnabled
+                                    ? "bg-zinc-800 hover:bg-zinc-700"
+                                    : "bg-zinc-800/50 text-zinc-500"
+                            )}
+                            title={soundEnabled ? "Mute sounds (M)" : "Enable sounds (M)"}
+                        >
+                            {soundEnabled ? (
+                                <Volume2 className="h-4 w-4" />
+                            ) : (
+                                <VolumeX className="h-4 w-4" />
+                            )}
+                        </button>
+
+                        {/* Keyboard Shortcuts Button */}
+                        <button
+                            onClick={() => setShowShortcuts(true)}
+                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors"
+                            title="Keyboard shortcuts (?)"
+                        >
+                            <Keyboard className="h-4 w-4" />
+                        </button>
                     </div>
+
+                    {/* Phase Breakdown - Move Quality by Game Phase */}
+                    {phaseBreakdown && (
+                        <div className="bg-zinc-900/70 rounded-xl p-3 border border-zinc-700/50 backdrop-blur-sm">
+                            <h3 className="text-xs font-semibold text-zinc-400 mb-3 uppercase tracking-wider">Phase Breakdown</h3>
+                            
+                            <div className="space-y-3">
+                                {/* Opening Phase */}
+                                {(phaseBreakdown.opening.white.moves > 0 || phaseBreakdown.opening.black.moves > 0) && (
+                                    <div className="bg-zinc-800/50 rounded-lg p-2.5 border border-zinc-700/30">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-medium text-emerald-400">Opening</span>
+                                            <span className="text-[10px] text-zinc-500">Moves 1-10</span>
+                                        </div>
+                                        {/* White */}
+                                        <div className="flex items-center gap-1 mb-1.5">
+                                            <span className="w-3 h-3 rounded bg-zinc-100 flex-shrink-0"></span>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {phaseBreakdown.opening.white.brilliant > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-cyan-500 flex items-center justify-center text-[8px] font-bold text-white">✦</span>
+                                                        <span className="text-cyan-400">{phaseBreakdown.opening.white.brilliant}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.opening.white.best > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] font-bold text-white">✓</span>
+                                                        <span className="text-emerald-400">{phaseBreakdown.opening.white.best}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.opening.white.good > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-lime-600 flex items-center justify-center text-[8px] font-bold text-white">●</span>
+                                                        <span className="text-lime-400">{phaseBreakdown.opening.white.good}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.opening.white.book > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-zinc-500 flex items-center justify-center text-[8px] font-bold text-white">📖</span>
+                                                        <span className="text-zinc-400">{phaseBreakdown.opening.white.book}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.opening.white.inaccuracies > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-yellow-500 flex items-center justify-center text-[8px] font-bold text-black">?!</span>
+                                                        <span className="text-yellow-400">{phaseBreakdown.opening.white.inaccuracies}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.opening.white.mistakes > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-orange-500 flex items-center justify-center text-[8px] font-bold text-white">?</span>
+                                                        <span className="text-orange-400">{phaseBreakdown.opening.white.mistakes}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.opening.white.blunders > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-[8px] font-bold text-white">??</span>
+                                                        <span className="text-red-400">{phaseBreakdown.opening.white.blunders}</span>
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {/* Black */}
+                                        <div className="flex items-center gap-1">
+                                            <span className="w-3 h-3 rounded bg-zinc-700 flex-shrink-0"></span>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {phaseBreakdown.opening.black.brilliant > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-cyan-500 flex items-center justify-center text-[8px] font-bold text-white">✦</span>
+                                                        <span className="text-cyan-400">{phaseBreakdown.opening.black.brilliant}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.opening.black.best > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] font-bold text-white">✓</span>
+                                                        <span className="text-emerald-400">{phaseBreakdown.opening.black.best}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.opening.black.good > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-lime-600 flex items-center justify-center text-[8px] font-bold text-white">●</span>
+                                                        <span className="text-lime-400">{phaseBreakdown.opening.black.good}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.opening.black.book > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-zinc-500 flex items-center justify-center text-[8px] font-bold text-white">📖</span>
+                                                        <span className="text-zinc-400">{phaseBreakdown.opening.black.book}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.opening.black.inaccuracies > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-yellow-500 flex items-center justify-center text-[8px] font-bold text-black">?!</span>
+                                                        <span className="text-yellow-400">{phaseBreakdown.opening.black.inaccuracies}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.opening.black.mistakes > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-orange-500 flex items-center justify-center text-[8px] font-bold text-white">?</span>
+                                                        <span className="text-orange-400">{phaseBreakdown.opening.black.mistakes}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.opening.black.blunders > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-[8px] font-bold text-white">??</span>
+                                                        <span className="text-red-400">{phaseBreakdown.opening.black.blunders}</span>
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Middlegame Phase */}
+                                {(phaseBreakdown.middlegame.white.moves > 0 || phaseBreakdown.middlegame.black.moves > 0) && (
+                                    <div className="bg-zinc-800/50 rounded-lg p-2.5 border border-zinc-700/30">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-medium text-blue-400">Middlegame</span>
+                                            <span className="text-[10px] text-zinc-500">Moves 11-20</span>
+                                        </div>
+                                        {/* White */}
+                                        <div className="flex items-center gap-1 mb-1.5">
+                                            <span className="w-3 h-3 rounded bg-zinc-100 flex-shrink-0"></span>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {phaseBreakdown.middlegame.white.brilliant > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-cyan-500 flex items-center justify-center text-[8px] font-bold text-white">✦</span>
+                                                        <span className="text-cyan-400">{phaseBreakdown.middlegame.white.brilliant}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.middlegame.white.best > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] font-bold text-white">✓</span>
+                                                        <span className="text-emerald-400">{phaseBreakdown.middlegame.white.best}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.middlegame.white.good > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-lime-600 flex items-center justify-center text-[8px] font-bold text-white">●</span>
+                                                        <span className="text-lime-400">{phaseBreakdown.middlegame.white.good}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.middlegame.white.inaccuracies > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-yellow-500 flex items-center justify-center text-[8px] font-bold text-black">?!</span>
+                                                        <span className="text-yellow-400">{phaseBreakdown.middlegame.white.inaccuracies}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.middlegame.white.mistakes > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-orange-500 flex items-center justify-center text-[8px] font-bold text-white">?</span>
+                                                        <span className="text-orange-400">{phaseBreakdown.middlegame.white.mistakes}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.middlegame.white.blunders > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-[8px] font-bold text-white">??</span>
+                                                        <span className="text-red-400">{phaseBreakdown.middlegame.white.blunders}</span>
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {/* Black */}
+                                        <div className="flex items-center gap-1">
+                                            <span className="w-3 h-3 rounded bg-zinc-700 flex-shrink-0"></span>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {phaseBreakdown.middlegame.black.brilliant > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-cyan-500 flex items-center justify-center text-[8px] font-bold text-white">✦</span>
+                                                        <span className="text-cyan-400">{phaseBreakdown.middlegame.black.brilliant}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.middlegame.black.best > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] font-bold text-white">✓</span>
+                                                        <span className="text-emerald-400">{phaseBreakdown.middlegame.black.best}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.middlegame.black.good > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-lime-600 flex items-center justify-center text-[8px] font-bold text-white">●</span>
+                                                        <span className="text-lime-400">{phaseBreakdown.middlegame.black.good}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.middlegame.black.inaccuracies > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-yellow-500 flex items-center justify-center text-[8px] font-bold text-black">?!</span>
+                                                        <span className="text-yellow-400">{phaseBreakdown.middlegame.black.inaccuracies}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.middlegame.black.mistakes > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-orange-500 flex items-center justify-center text-[8px] font-bold text-white">?</span>
+                                                        <span className="text-orange-400">{phaseBreakdown.middlegame.black.mistakes}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.middlegame.black.blunders > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-[8px] font-bold text-white">??</span>
+                                                        <span className="text-red-400">{phaseBreakdown.middlegame.black.blunders}</span>
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Endgame Phase */}
+                                {(phaseBreakdown.endgame.white.moves > 0 || phaseBreakdown.endgame.black.moves > 0) && (
+                                    <div className="bg-zinc-800/50 rounded-lg p-2.5 border border-zinc-700/30">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-medium text-purple-400">Endgame</span>
+                                            <span className="text-[10px] text-zinc-500">Moves 21+</span>
+                                        </div>
+                                        {/* White */}
+                                        <div className="flex items-center gap-1 mb-1.5">
+                                            <span className="w-3 h-3 rounded bg-zinc-100 flex-shrink-0"></span>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {phaseBreakdown.endgame.white.brilliant > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-cyan-500 flex items-center justify-center text-[8px] font-bold text-white">✦</span>
+                                                        <span className="text-cyan-400">{phaseBreakdown.endgame.white.brilliant}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.endgame.white.best > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] font-bold text-white">✓</span>
+                                                        <span className="text-emerald-400">{phaseBreakdown.endgame.white.best}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.endgame.white.good > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-lime-600 flex items-center justify-center text-[8px] font-bold text-white">●</span>
+                                                        <span className="text-lime-400">{phaseBreakdown.endgame.white.good}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.endgame.white.inaccuracies > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-yellow-500 flex items-center justify-center text-[8px] font-bold text-black">?!</span>
+                                                        <span className="text-yellow-400">{phaseBreakdown.endgame.white.inaccuracies}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.endgame.white.mistakes > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-orange-500 flex items-center justify-center text-[8px] font-bold text-white">?</span>
+                                                        <span className="text-orange-400">{phaseBreakdown.endgame.white.mistakes}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.endgame.white.blunders > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-[8px] font-bold text-white">??</span>
+                                                        <span className="text-red-400">{phaseBreakdown.endgame.white.blunders}</span>
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {/* Black */}
+                                        <div className="flex items-center gap-1">
+                                            <span className="w-3 h-3 rounded bg-zinc-700 flex-shrink-0"></span>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {phaseBreakdown.endgame.black.brilliant > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-cyan-500 flex items-center justify-center text-[8px] font-bold text-white">✦</span>
+                                                        <span className="text-cyan-400">{phaseBreakdown.endgame.black.brilliant}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.endgame.black.best > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] font-bold text-white">✓</span>
+                                                        <span className="text-emerald-400">{phaseBreakdown.endgame.black.best}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.endgame.black.good > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-lime-600 flex items-center justify-center text-[8px] font-bold text-white">●</span>
+                                                        <span className="text-lime-400">{phaseBreakdown.endgame.black.good}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.endgame.black.inaccuracies > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-yellow-500 flex items-center justify-center text-[8px] font-bold text-black">?!</span>
+                                                        <span className="text-yellow-400">{phaseBreakdown.endgame.black.inaccuracies}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.endgame.black.mistakes > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-orange-500 flex items-center justify-center text-[8px] font-bold text-white">?</span>
+                                                        <span className="text-orange-400">{phaseBreakdown.endgame.black.mistakes}</span>
+                                                    </span>
+                                                )}
+                                                {phaseBreakdown.endgame.black.blunders > 0 && (
+                                                    <span className="flex items-center gap-0.5 text-[10px]">
+                                                        <span className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-[8px] font-bold text-white">??</span>
+                                                        <span className="text-red-400">{phaseBreakdown.endgame.black.blunders}</span>
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Legend */}
+                            <div className="mt-3 pt-2 border-t border-zinc-700/30">
+                                <div className="flex items-center justify-center gap-3 flex-wrap text-[9px] text-zinc-500">
+                                    <span className="flex items-center gap-1">
+                                        <span className="w-3 h-3 rounded-full bg-cyan-500 flex items-center justify-center text-[7px] font-bold text-white">✦</span>
+                                        Brilliant
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <span className="w-3 h-3 rounded-full bg-emerald-500 flex items-center justify-center text-[7px] font-bold text-white">✓</span>
+                                        Best
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <span className="w-3 h-3 rounded-full bg-lime-600 flex items-center justify-center text-[7px] font-bold text-white">●</span>
+                                        Good
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <span className="w-3 h-3 rounded-full bg-yellow-500 flex items-center justify-center text-[7px] font-bold text-black">?!</span>
+                                        Inaccuracy
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <span className="w-3 h-3 rounded-full bg-orange-500 flex items-center justify-center text-[7px] font-bold text-white">?</span>
+                                        Mistake
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <span className="w-3 h-3 rounded-full bg-red-500 flex items-center justify-center text-[7px] font-bold text-white">??</span>
+                                        Blunder
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Middle Panel: Current Move Card + Move List */}
@@ -2327,8 +3007,155 @@ const AnalysisViewer = () => {
                         </div>
                     )}
 
+                    {/* Suggested Focus Areas */}
+                    {suggestedFocusAreas.length > 0 && (
+                        <div className="bg-gradient-to-br from-amber-900/20 to-orange-900/10 rounded-xl p-4 border border-amber-500/30 backdrop-blur-sm">
+                            <div className="flex items-center gap-2 mb-3">
+                                <Lightbulb className="h-4 w-4 text-amber-400" />
+                                <h3 className="text-xs font-semibold text-amber-300">Suggested Focus Areas</h3>
+                            </div>
+                            
+                            <div className="space-y-2">
+                                {suggestedFocusAreas.map((suggestion, idx) => (
+                                    <div 
+                                        key={idx}
+                                        className={cn(
+                                            "rounded-lg p-2.5 border",
+                                            suggestion.priority === 'high' 
+                                                ? "bg-red-500/10 border-red-500/30" 
+                                                : suggestion.priority === 'medium'
+                                                ? "bg-amber-500/10 border-amber-500/30"
+                                                : "bg-zinc-800/50 border-zinc-700/30"
+                                        )}
+                                    >
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className={cn(
+                                                "text-xs font-medium",
+                                                suggestion.priority === 'high' ? "text-red-400" :
+                                                suggestion.priority === 'medium' ? "text-amber-400" :
+                                                "text-zinc-300"
+                                            )}>
+                                                {suggestion.area}
+                                            </span>
+                                            <span className={cn(
+                                                "text-[9px] px-1.5 py-0.5 rounded",
+                                                suggestion.priority === 'high' 
+                                                    ? "bg-red-500/20 text-red-400" 
+                                                    : suggestion.priority === 'medium'
+                                                    ? "bg-amber-500/20 text-amber-400"
+                                                    : "bg-zinc-700/50 text-zinc-500"
+                                            )}>
+                                                {suggestion.priority}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-zinc-500">{suggestion.reason}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                 </div>
             </div>
+
+            {/* Keyboard Shortcuts Modal */}
+            {showShortcuts && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-zinc-900 rounded-2xl border border-zinc-700 shadow-2xl max-w-md w-full max-h-[80vh] overflow-y-auto">
+                        <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+                            <div className="flex items-center gap-2">
+                                <Keyboard className="h-5 w-5 text-blue-400" />
+                                <h2 className="text-lg font-semibold text-white">Keyboard Shortcuts</h2>
+                            </div>
+                            <button
+                                onClick={() => setShowShortcuts(false)}
+                                className="p-1.5 rounded-lg hover:bg-zinc-800 transition-colors"
+                            >
+                                <X className="h-5 w-5 text-zinc-400" />
+                            </button>
+                        </div>
+                        
+                        <div className="p-4 space-y-4">
+                            {/* Navigation */}
+                            <div>
+                                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Navigation</h3>
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-800/50">
+                                        <span className="text-sm text-zinc-300">Previous move</span>
+                                        <kbd className="px-2 py-0.5 rounded bg-zinc-700 text-xs font-mono text-zinc-300">←</kbd>
+                                    </div>
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-800/50">
+                                        <span className="text-sm text-zinc-300">Next move</span>
+                                        <kbd className="px-2 py-0.5 rounded bg-zinc-700 text-xs font-mono text-zinc-300">→</kbd>
+                                    </div>
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-800/50">
+                                        <span className="text-sm text-zinc-300">Go to start</span>
+                                        <kbd className="px-2 py-0.5 rounded bg-zinc-700 text-xs font-mono text-zinc-300">Home</kbd>
+                                    </div>
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-800/50">
+                                        <span className="text-sm text-zinc-300">Go to end</span>
+                                        <kbd className="px-2 py-0.5 rounded bg-zinc-700 text-xs font-mono text-zinc-300">End</kbd>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Playback */}
+                            <div>
+                                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Playback</h3>
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-800/50">
+                                        <span className="text-sm text-zinc-300">Play/Pause auto-play</span>
+                                        <kbd className="px-2 py-0.5 rounded bg-zinc-700 text-xs font-mono text-zinc-300">Space</kbd>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Board */}
+                            <div>
+                                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Board</h3>
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-800/50">
+                                        <span className="text-sm text-zinc-300">Flip board</span>
+                                        <kbd className="px-2 py-0.5 rounded bg-zinc-700 text-xs font-mono text-zinc-300">F</kbd>
+                                    </div>
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-800/50">
+                                        <span className="text-sm text-zinc-300">Copy FEN</span>
+                                        <kbd className="px-2 py-0.5 rounded bg-zinc-700 text-xs font-mono text-zinc-300">C</kbd>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Other */}
+                            <div>
+                                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Other</h3>
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-800/50">
+                                        <span className="text-sm text-zinc-300">Toggle sound</span>
+                                        <kbd className="px-2 py-0.5 rounded bg-zinc-700 text-xs font-mono text-zinc-300">M</kbd>
+                                    </div>
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-800/50">
+                                        <span className="text-sm text-zinc-300">Show shortcuts</span>
+                                        <kbd className="px-2 py-0.5 rounded bg-zinc-700 text-xs font-mono text-zinc-300">?</kbd>
+                                    </div>
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-zinc-800/50">
+                                        <span className="text-sm text-zinc-300">Exit exploration / Close</span>
+                                        <kbd className="px-2 py-0.5 rounded bg-zinc-700 text-xs font-mono text-zinc-300">Esc</kbd>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-zinc-800">
+                            <button
+                                onClick={() => setShowShortcuts(false)}
+                                className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition-colors"
+                            >
+                                Got it!
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
