@@ -30,10 +30,18 @@ interface MoveAnalysis {
 }
 
 // Extract destination square from SAN notation (e.g., "Nf3" -> "f3", "e4" -> "e4", "Qxd5" -> "d5")
+// Note: For castling, this returns undefined - castling is handled separately
 const extractDestinationSquare = (san: string): string | undefined => {
     if (!san) return undefined;
-    // Remove check/checkmate symbols and promotion
-    const cleaned = san.replace(/[+#=QRBN]$/g, '').replace(/[+#]/g, '');
+    
+    // Castling doesn't have a simple destination square
+    if (san === 'O-O' || san === 'O-O-O') {
+        return undefined; // Will be handled separately
+    }
+    
+    // Remove check/checkmate symbols and promotion piece (but keep the destination)
+    // e.g., "h8=Q+" -> "h8", "exd8=Q#" -> "d8"
+    const cleaned = san.replace(/[+#]/g, '').replace(/=[QRBN]/, '');
     // Match the last two characters that form a valid square (letter a-h + number 1-8)
     const match = cleaned.match(/([a-h][1-8])$/);
     return match ? match[1] : undefined;
@@ -62,17 +70,53 @@ const parseFenToSquares = (fen: string): Record<string, string> => {
 };
 
 // Find the source square by comparing two FENs (before and after a move)
-const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare: string | undefined): string | undefined => {
+const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare: string | undefined, playedMove?: string): string | undefined => {
     if (!fenBefore || !fenAfter || !destinationSquare) return undefined;
     
     const before = parseFenToSquares(fenBefore);
     const after = parseFenToSquares(fenAfter);
     
+    // Handle castling first (O-O or O-O-O notation)
+    if (playedMove === 'O-O' || playedMove === 'O-O-O') {
+        // Determine the row based on which side castled (check if white or black king moved)
+        const row = after['g1']?.toLowerCase() === 'k' || after['c1']?.toLowerCase() === 'k' ? '1' : '8';
+        return 'e' + row; // King always starts on e-file
+    }
+    
     // The piece that moved TO the destination
     const movedPiece = after[destinationSquare];
     if (!movedPiece) return undefined;
     
-    // Find where this piece came FROM
+    // Handle promotion: pawn becomes queen/rook/bishop/knight
+    // Look for a pawn that disappeared from an adjacent file on the previous rank
+    const isPromotion = playedMove?.includes('=');
+    if (isPromotion) {
+        const destCol = destinationSquare.charCodeAt(0) - 97; // 0-7
+        const destRow = parseInt(destinationSquare[1]);
+        
+        // Pawn promotes on rank 8 (white) or rank 1 (black)
+        // Source is one rank behind the destination
+        const sourceRow = destRow === 8 ? 7 : 2; // If promoted to 8, came from 7; if to 1, came from 2
+        
+        // Check same file first (non-capture promotion)
+        const sameFileSource = String.fromCharCode(97 + destCol) + sourceRow;
+        if (before[sameFileSource]?.toLowerCase() === 'p' && !after[sameFileSource]) {
+            return sameFileSource;
+        }
+        
+        // Check adjacent files (capture promotion)
+        for (const colOffset of [-1, 1]) {
+            const srcCol = destCol + colOffset;
+            if (srcCol >= 0 && srcCol <= 7) {
+                const captureSource = String.fromCharCode(97 + srcCol) + sourceRow;
+                if (before[captureSource]?.toLowerCase() === 'p' && !after[captureSource]) {
+                    return captureSource;
+                }
+            }
+        }
+    }
+    
+    // Standard move: find where this piece came FROM
     // Look for a square that had the same piece before but is now empty or different
     for (const square of Object.keys(before)) {
         if (square === destinationSquare) continue;
@@ -93,6 +137,16 @@ const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare
             if (before[kingSourceSquare]?.toLowerCase() === 'k') {
                 return kingSourceSquare;
             }
+        }
+    }
+    
+    // Fallback for any piece that disappeared and destination has a piece
+    // Find any square where a piece vanished
+    for (const square of Object.keys(before)) {
+        if (square === destinationSquare) continue;
+        if (before[square] && !after[square]) {
+            // This square had a piece and now it's empty - could be our source
+            return square;
         }
     }
     
@@ -301,7 +355,7 @@ const AnalysisViewer = () => {
         let lastMoveUci = move.playedMoveUci || undefined;
         
         // If playedMoveUci is not available, derive it by comparing FENs
-        if (!lastMoveUci && destinationSquare) {
+        if (!lastMoveUci) {
             // Get the FEN before this move (previous position)
             const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
             const previousFen = currentMoveIndex <= 1 
@@ -309,11 +363,23 @@ const AnalysisViewer = () => {
                 : analysis.moves[currentMoveIndex - 2]?.fen || startingFen;
             const currentFen = move.fen;
             
-            // Find source square by comparing FENs
-            const sourceSquare = findSourceSquare(previousFen, currentFen, destinationSquare);
+            // Handle castling destination square
+            let castlingDestination = destinationSquare;
+            if (move.playedMove === 'O-O') {
+                // Kingside castling - king goes to g1 or g8
+                const row = currentMoveIndex % 2 === 1 ? '1' : '8'; // White moves on odd indices
+                castlingDestination = 'g' + row;
+            } else if (move.playedMove === 'O-O-O') {
+                // Queenside castling - king goes to c1 or c8
+                const row = currentMoveIndex % 2 === 1 ? '1' : '8';
+                castlingDestination = 'c' + row;
+            }
             
-            if (sourceSquare) {
-                lastMoveUci = sourceSquare + destinationSquare;
+            // Find source square by comparing FENs
+            const sourceSquare = findSourceSquare(previousFen, currentFen, castlingDestination, move.playedMove);
+            
+            if (sourceSquare && castlingDestination) {
+                lastMoveUci = sourceSquare + castlingDestination;
             }
         }
 
