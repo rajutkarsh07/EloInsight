@@ -33,12 +33,12 @@ interface MoveAnalysis {
 // Note: For castling, this returns undefined - castling is handled separately
 const extractDestinationSquare = (san: string): string | undefined => {
     if (!san) return undefined;
-    
+
     // Castling doesn't have a simple destination square
     if (san === 'O-O' || san === 'O-O-O') {
         return undefined; // Will be handled separately
     }
-    
+
     // Remove check/checkmate symbols and promotion piece (but keep the destination)
     // e.g., "h8=Q+" -> "h8", "exd8=Q#" -> "d8"
     const cleaned = san.replace(/[+#]/g, '').replace(/=[QRBN]/, '');
@@ -52,7 +52,7 @@ const parseFenToSquares = (fen: string): Record<string, string> => {
     const pieces: Record<string, string> = {};
     const [position] = fen.split(' ');
     const rows = position.split('/');
-    
+
     for (let rowIdx = 0; rowIdx < 8; rowIdx++) {
         const row = rows[rowIdx];
         let colIdx = 0;
@@ -72,38 +72,38 @@ const parseFenToSquares = (fen: string): Record<string, string> => {
 // Find the source square by comparing two FENs (before and after a move)
 const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare: string | undefined, playedMove?: string): string | undefined => {
     if (!fenBefore || !fenAfter || !destinationSquare) return undefined;
-    
+
     const before = parseFenToSquares(fenBefore);
     const after = parseFenToSquares(fenAfter);
-    
+
     // Handle castling first (O-O or O-O-O notation)
     if (playedMove === 'O-O' || playedMove === 'O-O-O') {
         // Determine the row based on which side castled (check if white or black king moved)
         const row = after['g1']?.toLowerCase() === 'k' || after['c1']?.toLowerCase() === 'k' ? '1' : '8';
         return 'e' + row; // King always starts on e-file
     }
-    
+
     // The piece that moved TO the destination
     const movedPiece = after[destinationSquare];
     if (!movedPiece) return undefined;
-    
+
     // Handle promotion: pawn becomes queen/rook/bishop/knight
     // Look for a pawn that disappeared from an adjacent file on the previous rank
     const isPromotion = playedMove?.includes('=');
     if (isPromotion) {
         const destCol = destinationSquare.charCodeAt(0) - 97; // 0-7
         const destRow = parseInt(destinationSquare[1]);
-        
+
         // Pawn promotes on rank 8 (white) or rank 1 (black)
         // Source is one rank behind the destination
         const sourceRow = destRow === 8 ? 7 : 2; // If promoted to 8, came from 7; if to 1, came from 2
-        
+
         // Check same file first (non-capture promotion)
         const sameFileSource = String.fromCharCode(97 + destCol) + sourceRow;
         if (before[sameFileSource]?.toLowerCase() === 'p' && !after[sameFileSource]) {
             return sameFileSource;
         }
-        
+
         // Check adjacent files (capture promotion)
         for (const colOffset of [-1, 1]) {
             const srcCol = destCol + colOffset;
@@ -115,18 +115,18 @@ const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare
             }
         }
     }
-    
+
     // Standard move: find where this piece came FROM
     // Look for a square that had the same piece before but is now empty or different
     for (const square of Object.keys(before)) {
         if (square === destinationSquare) continue;
-        
+
         // Same piece type was here before, and now it's gone or different
         if (before[square] === movedPiece && after[square] !== movedPiece) {
             return square;
         }
     }
-    
+
     // Handle castling: if king moved 2 squares, source is the original king position
     if (movedPiece.toLowerCase() === 'k') {
         const destCol = destinationSquare.charCodeAt(0) - 97;
@@ -139,7 +139,7 @@ const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare
             }
         }
     }
-    
+
     // Fallback for any piece that disappeared and destination has a piece
     // Find any square where a piece vanished
     for (const square of Object.keys(before)) {
@@ -149,7 +149,7 @@ const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare
             return square;
         }
     }
-    
+
     return undefined;
 };
 
@@ -353,16 +353,16 @@ const AnalysisViewer = () => {
         // Get last move UCI for highlighting the played move squares
         // This shows the source (darker) and destination (lighter) of the last move
         let lastMoveUci = move.playedMoveUci || undefined;
-        
+
         // If playedMoveUci is not available, derive it by comparing FENs
         if (!lastMoveUci) {
             // Get the FEN before this move (previous position)
             const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-            const previousFen = currentMoveIndex <= 1 
-                ? startingFen 
+            const previousFen = currentMoveIndex <= 1
+                ? startingFen
                 : analysis.moves[currentMoveIndex - 2]?.fen || startingFen;
             const currentFen = move.fen;
-            
+
             // Handle castling destination square
             let castlingDestination = destinationSquare;
             if (move.playedMove === 'O-O') {
@@ -374,10 +374,10 @@ const AnalysisViewer = () => {
                 const row = currentMoveIndex % 2 === 1 ? '1' : '8';
                 castlingDestination = 'c' + row;
             }
-            
+
             // Find source square by comparing FENs
             const sourceSquare = findSourceSquare(previousFen, currentFen, castlingDestination, move.playedMove);
-            
+
             if (sourceSquare && castlingDestination) {
                 lastMoveUci = sourceSquare + castlingDestination;
             }
@@ -443,15 +443,17 @@ const AnalysisViewer = () => {
         const move = analysis.moves[currentMoveIndex - 1];
 
         // Normalize to White's perspective
-        // currentMoveIndex - 1 gives us the array index (0-based)
-        // Index 0, 2, 4... = White's moves (even), Index 1, 3, 5... = Black's moves (odd)
-        const isBlackMove = (currentMoveIndex - 1) % 2 === 1;
+        // The backend stores evalAfter which is from the OPPONENT's perspective:
+        // - After White's move (even index 0, 2, 4...): eval is from Black's perspective → negate
+        // - After Black's move (odd index 1, 3, 5...): eval is from White's perspective → already correct
+        const isWhiteMove = (currentMoveIndex - 1) % 2 === 0;
 
         let evaluation = move?.evaluation ?? 0;
         let mateIn = move?.mateIn ?? null;
 
-        // Flip values to White's perspective if it was Black's move
-        if (isBlackMove) {
+        // Flip values to White's perspective if it was White's move
+        // (because evalAfter is stored from opponent's perspective)
+        if (isWhiteMove) {
             evaluation = -evaluation;
             if (mateIn !== null) {
                 mateIn = -mateIn;
@@ -508,11 +510,11 @@ const AnalysisViewer = () => {
 
             moves.forEach((move, index) => {
                 // Convert centipawns to pawns, handle mate
-                // IMPORTANT: Stockfish gives eval from the perspective of the side that just moved
-                // - After White's move (even index 0, 2, 4...): eval is from White's perspective
-                // - After Black's move (odd index 1, 3, 5...): eval is from Black's perspective
+                // IMPORTANT: Backend stores evalAfter which is from the OPPONENT's perspective:
+                // - After White's move (even index 0, 2, 4...): eval is from Black's perspective → negate
+                // - After Black's move (odd index 1, 3, 5...): eval is from White's perspective → already correct
                 // We need to normalize all to White's perspective for consistent graphing
-                const isBlackMove = index % 2 === 1;
+                const isWhiteMove = index % 2 === 0;
 
                 let evalValue = 0;
                 let displayEval = '0.0';
@@ -520,8 +522,8 @@ const AnalysisViewer = () => {
                 if (move.mateIn !== null) {
                     // Mate evaluation
                     let normalizedMate = move.mateIn;
-                    // Normalize to White's perspective
-                    if (isBlackMove) {
+                    // Normalize to White's perspective (negate for White's moves)
+                    if (isWhiteMove) {
                         normalizedMate = -normalizedMate;
                     }
                     evalValue = normalizedMate > 0 ? 10 : -10; // Cap mate at ±10
@@ -529,7 +531,7 @@ const AnalysisViewer = () => {
                 } else if (move.evaluation !== null) {
                     // Centipawn evaluation - normalize to White's perspective
                     let normalizedEval = move.evaluation;
-                    if (isBlackMove) {
+                    if (isWhiteMove) {
                         normalizedEval = -normalizedEval;
                     }
                     evalValue = Math.max(-10, Math.min(10, normalizedEval / 100)); // Clamp to ±10 pawns
