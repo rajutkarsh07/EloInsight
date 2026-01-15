@@ -84,17 +84,66 @@ export function extractGameId(url: string, platform: 'chess.com' | 'lichess'): s
     }
 }
 
+import { detectOpeningFromMoves } from './openings';
+
 /**
- * Parse ECO code from PGN
+ * Parse ECO code from PGN - supports multiple formats
+ * Falls back to opening detection from move sequence if tags are missing
  */
 export function parseEcoFromPgn(pgn: string): { eco?: string; name?: string } {
+    // Standard ECO tag
     const ecoMatch = pgn.match(/\[ECO\s+"([^"]+)"\]/);
+    // Standard Opening tag
     const openingMatch = pgn.match(/\[Opening\s+"([^"]+)"\]/);
 
-    return {
-        eco: ecoMatch ? ecoMatch[1] : undefined,
-        name: openingMatch ? openingMatch[1] : undefined,
-    };
+    let eco = ecoMatch ? ecoMatch[1] : undefined;
+    let name = openingMatch ? openingMatch[1] : undefined;
+
+    // Chess.com uses ECOUrl tag like [ECOUrl "https://www.chess.com/openings/Sicilian-Defense-Open-2...Nc6-3.d4"]
+    if (!name) {
+        const ecoUrlMatch = pgn.match(/\[ECOUrl\s+"([^"]+)"\]/);
+        if (ecoUrlMatch) {
+            const url = ecoUrlMatch[1];
+            // Extract opening name from URL: .../openings/Sicilian-Defense-Open-...
+            const openingFromUrl = url.match(/openings\/([^\/\?]+)/);
+            if (openingFromUrl) {
+                // Convert URL format to readable name: "Sicilian-Defense-Open" -> "Sicilian Defense Open"
+                name = openingFromUrl[1]
+                    .replace(/-/g, ' ')
+                    .replace(/\d+\.+\w+/g, '') // Remove move numbers like "2...Nc6"
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                
+                // Capitalize first letter of each word
+                name = name.replace(/\b\w/g, c => c.toUpperCase());
+            }
+        }
+    }
+
+    // Try to get ECO from ECOUrl if not found
+    if (!eco && name) {
+        // Try to infer ECO from opening name patterns
+        const ecoUrlMatch = pgn.match(/\[ECOUrl\s+"[^"]*\/([A-E]\d{2})/);
+        if (ecoUrlMatch) {
+            eco = ecoUrlMatch[1];
+        }
+    }
+
+    // FALLBACK: Detect opening from move sequence if no tags found
+    if (!eco && !name && pgn) {
+        const detected = detectOpeningFromMoves(pgn);
+        if (detected.name) {
+            eco = detected.eco;
+            name = detected.name;
+            console.log(`[parseEcoFromPgn] Detected from moves: ECO=${eco}, Name=${name}`);
+        }
+    }
+
+    if (eco || name) {
+        console.log(`[parseEcoFromPgn] Result: ECO=${eco}, Name=${name}`);
+    }
+
+    return { eco, name };
 }
 
 /**

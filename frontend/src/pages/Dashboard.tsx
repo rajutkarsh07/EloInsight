@@ -665,7 +665,11 @@ const Dashboard = () => {
                         </div>
                     ) : dashboardData && dashboardData.openings.length > 0 ? (
                         <div className="space-y-2">
-                            {dashboardData.openings.map((opening, index) => (
+                            {/* Show known openings first, filter out "Unknown Opening" for display purposes */}
+                            {dashboardData.openings
+                                .filter(o => o.fullName !== 'Unknown Opening')
+                                .slice(0, 5)
+                                .map((opening, index) => (
                                 <div
                                     key={index}
                                     className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors group"
@@ -691,11 +695,20 @@ const Dashboard = () => {
                                     </div>
                                 </div>
                             ))}
+                            {/* Show message if only unknown openings exist */}
+                            {dashboardData.openings.filter(o => o.fullName !== 'Unknown Opening').length === 0 && (
+                                <div className="text-center py-6 text-muted-foreground border-2 border-dashed border-muted rounded-lg">
+                                    <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                    <p className="text-sm">Opening data not available for your games</p>
+                                    <p className="text-xs mt-1 opacity-70">Re-sync games to detect openings</p>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="text-center py-8 text-muted-foreground">
                             <BookOpen className="h-10 w-10 mx-auto mb-2 opacity-50" />
                             <p>No opening data available</p>
+                            <p className="text-xs mt-1 opacity-70">Analyze games to see your opening stats</p>
                         </div>
                     )}
                 </div>
