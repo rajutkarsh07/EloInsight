@@ -112,15 +112,59 @@ export class AnalysisController {
     @ApiBearerAuth('JWT-auth')
     @ApiOperation({ summary: 'Analyze a full chess game' })
     @ApiParam({ name: 'gameId', description: 'Game identifier' })
+    @ApiQuery({ name: 'async', required: false, description: 'Run analysis asynchronously (recommended for better UX)' })
     @ApiResponse({ status: 200, description: 'Game analyzed successfully', type: GameAnalysisResponseDto })
+    @ApiResponse({ status: 202, description: 'Analysis queued (async mode)' })
     @ApiResponse({ status: 400, description: 'Invalid PGN' })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     @ApiResponse({ status: 503, description: 'Analysis service unavailable' })
     async analyzeGame(
         @Param('gameId') gameId: string,
         @Body() dto: AnalyzeGameDto,
+        @Query('async') asyncMode: string,
         @Request() req: any,
-    ): Promise<GameAnalysisResponseDto> {
+    ): Promise<GameAnalysisResponseDto | { status: string; message: string; gameId: string }> {
+        // Check if game exists
+        const game = await this.prisma.game.findUnique({
+            where: { id: gameId },
+        });
+
+        if (!game) {
+            throw new HttpException('Game not found', HttpStatus.NOT_FOUND);
+        }
+
+        // For async mode, queue the job and return immediately
+        if (asyncMode === 'true') {
+            // Check if already processing
+            if (game.analysisStatus === 'PROCESSING') {
+                return {
+                    status: 'processing',
+                    message: 'Analysis is already in progress',
+                    gameId,
+                };
+            }
+
+            // Mark as queued and start background processing
+            await this.prisma.game.update({
+                where: { id: gameId },
+                data: {
+                    analysisStatus: 'PROCESSING',
+                    analysisRequestedAt: new Date(),
+                },
+            });
+
+            // Fire and forget - run analysis in background
+            this.runBackgroundAnalysis(gameId, game.pgn, dto.depth || 20, req.user?.id)
+                .catch(err => this.logger.error(`Background analysis failed for ${gameId}:`, err));
+
+            return {
+                status: 'queued',
+                message: 'Analysis has been queued. Poll GET /analysis/game/:gameId/status for progress.',
+                gameId,
+            };
+        }
+
+        // Synchronous mode (original behavior)
         try {
             // Update game status to PROCESSING
             await this.prisma.game.update({
@@ -163,6 +207,82 @@ export class AnalysisController {
 
             this.handleGrpcError(error);
         }
+    }
+
+    /**
+     * Run analysis in background (fire-and-forget pattern)
+     */
+    private async runBackgroundAnalysis(
+        gameId: string,
+        pgn: string,
+        depth: number,
+        userId?: string,
+    ): Promise<void> {
+        try {
+            this.logger.log(`Starting background analysis for game ${gameId}`);
+
+            const result = await this.analysisService.analyzeGame(
+                { gameId, pgn, depth },
+                userId,
+            );
+
+            await this.saveAnalysisToDatabase(gameId, result, depth);
+
+            await this.prisma.game.update({
+                where: { id: gameId },
+                data: { analysisStatus: 'COMPLETED' },
+            });
+
+            this.logger.log(`Background analysis completed for game ${gameId}`);
+        } catch (error) {
+            this.logger.error(`Background analysis failed for game ${gameId}:`, error);
+            await this.prisma.game.update({
+                where: { id: gameId },
+                data: { analysisStatus: 'FAILED' },
+            }).catch(() => {});
+        }
+    }
+
+    @Get('game/:gameId/status')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth('JWT-auth')
+    @ApiOperation({ summary: 'Get analysis status for a game' })
+    @ApiParam({ name: 'gameId', description: 'Game identifier' })
+    @ApiResponse({ status: 200, description: 'Analysis status retrieved' })
+    async getAnalysisStatus(@Param('gameId') gameId: string, @Request() req: any) {
+        const game = await this.prisma.game.findFirst({
+            where: {
+                id: gameId,
+                userId: req.user.id,
+            },
+            include: {
+                analysis: true,
+            },
+        });
+
+        if (!game) {
+            throw new HttpException('Game not found', HttpStatus.NOT_FOUND);
+        }
+
+        const hasAnalysis = !!game.analysis;
+        const status = game.analysisStatus || (hasAnalysis ? 'COMPLETED' : 'NOT_ANALYZED');
+
+        return {
+            gameId,
+            status: status.toLowerCase(),
+            hasAnalysis,
+            requestedAt: game.analysisRequestedAt?.toISOString() || null,
+            completedAt: hasAnalysis ? game.analysis.analyzedAt?.toISOString() : null,
+            // If completed, include summary metrics
+            ...(hasAnalysis && {
+                summary: {
+                    whiteAccuracy: Number(game.analysis.accuracyWhite) || 0,
+                    blackAccuracy: Number(game.analysis.accuracyBlack) || 0,
+                    totalMoves: game.analysis.totalPositions,
+                    depth: game.analysis.analysisDepth,
+                },
+            }),
+        };
     }
 
     private async saveAnalysisToDatabase(gameId: string, result: any, depth: number) {
