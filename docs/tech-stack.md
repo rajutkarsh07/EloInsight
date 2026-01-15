@@ -28,30 +28,40 @@ EloInsight uses a modern, polyglot tech stack optimized for performance, develop
 - Self-documenting code
 
 ### UI Framework
-**Material UI (MUI) v5**
-- Comprehensive component library
-- Customizable theming
-- Accessibility built-in
-- Responsive design system
+**TailwindCSS**
+- Utility-first CSS framework
+- Highly customizable
+- No CSS files needed
+- Dark theme built-in
 
-**Why MUI?**
-- ✅ Production-ready components
-- ✅ Excellent documentation
-- ✅ Active community
-- ✅ Chess-specific components easy to build
+**Why TailwindCSS?**
+- ✅ Faster development with utility classes
+- ✅ Smaller bundle size (purges unused CSS)
+- ✅ Easy dark mode support
+- ✅ Consistent design system
+
+### Component Libraries
+**Lucide React**
+- Beautiful icon library
+- Tree-shakeable
+- Consistent design
+
+**Sonner**
+- Toast notifications
+- Beautiful animations
+- Easy to use
 
 ### State Management
-**Redux Toolkit**
-- Simplified Redux setup
-- Built-in best practices
-- DevTools integration
-- TypeScript support
+**React Context + Hooks**
+- Built-in React state management
+- AuthContext for authentication
+- GamesContext for game data caching
+- No external dependencies needed
 
-**React Query (TanStack Query)**
-- Server state management
-- Automatic caching
-- Background refetching
-- Optimistic updates
+**Why not Redux?**
+- App complexity doesn't require it
+- Context + hooks sufficient for our needs
+- Less boilerplate code
 
 ### Data Visualization
 **Recharts**

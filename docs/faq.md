@@ -68,16 +68,39 @@ Yes, you can delete your account at any time from your profile settings. This wi
 Times vary based on game length and server load.
 
 ### What metrics do you provide?
-- **Accuracy**: How close your moves are to the best moves
+- **Accuracy**: How close your moves are to the best moves (0-100%)
 - **ACPL**: Average Centipawn Loss per move
 - **Blunders**: Moves losing 300+ centipawns
 - **Mistakes**: Moves losing 100-300 centipawns
 - **Inaccuracies**: Moves losing 50-100 centipawns
-- **Performance Rating**: Estimated rating based on play quality
+- **Best Moves**: Moves within 10cp of engine's choice
+- **Brilliant Moves**: Sacrifices leading to advantage
+- **Performance Rating**: "You played like a XXXX" rating based on play quality
 - **Opening Analysis**: Opening name and variations
 
+### What analysis features are available?
+- **Phase Breakdown**: See move quality by game phase (Opening/Middlegame/Endgame)
+- **Evaluation Graph**: Interactive chart showing evaluation over time
+- **Key Moments**: Auto-detected blunders, turning points, brilliant moves
+- **Win Probability**: Visual win/draw/loss probability bar
+- **Engine Lines (PV)**: Top engine continuations with evaluations
+- **Suggested Focus Areas**: AI-powered study recommendations
+- **Time Analysis**: Time spent per move (when available)
+- **Auto-play**: Automatically advance through moves
+- **Exploration Mode**: Make moves to analyze alternative lines
+
+### What keyboard shortcuts are available?
+Press `?` or `H` in the analysis viewer to see all shortcuts:
+- `←` / `→`: Previous/Next move
+- `Home` / `End`: First/Last move
+- `Space`: Play/Pause auto-play
+- `F`: Flip board
+- `C`: Copy FEN
+- `M`: Toggle sound
+- `Esc`: Exit exploration mode
+
 ### Can I analyze specific positions?
-Yes! You can analyze any position by entering a FEN string in the position analysis tool.
+Yes! You can analyze any position by entering a FEN string in the position analysis tool. You can also use the Copy FEN button to copy any position from your game.
 
 ### What is Stockfish?
 Stockfish is the world's strongest open-source chess engine with an Elo rating over 3500. It's completely free and used by millions of chess players worldwide.
@@ -126,12 +149,13 @@ Currently, we support Chess.com and Lichess. Support for other platforms may be 
 ## Technical Questions
 
 ### What technology stack do you use?
-- **Frontend**: React + TypeScript + Material UI
-- **Backend**: NestJS, Go, Python
-- **Database**: PostgreSQL
+- **Frontend**: React + TypeScript + TailwindCSS + Vite
+- **Backend**: NestJS (API Gateway), Go (Analysis Service)
+- **Database**: PostgreSQL with Prisma ORM
 - **Cache**: Redis
-- **Queue**: RabbitMQ
 - **Engine**: Stockfish 16
+- **Charts**: Recharts
+- **Chess Logic**: chess.js + react-chessboard
 
 See [tech-stack.md](tech-stack.md) for details.
 

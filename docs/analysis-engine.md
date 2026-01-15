@@ -741,6 +741,90 @@ The evaluation module includes 50+ test cases covering:
 - Brilliant move detection
 - Win probability calculations
 
+## Frontend Analysis Features
+
+The frontend (`AnalysisViewer.tsx`) provides rich visualization of analysis data:
+
+### Phase Breakdown
+
+Divides game into phases and shows move quality per phase:
+
+```typescript
+// Phase boundaries (half-moves)
+const openingEnd = Math.min(20, totalMoves);    // Moves 1-10
+const middlegameEnd = Math.min(40, totalMoves); // Moves 11-20
+const endgame = totalMoves;                      // Moves 21+
+
+// Stats per phase include:
+interface PhaseStats {
+  brilliant: number;
+  best: number;
+  good: number;
+  book: number;
+  inaccuracies: number;
+  mistakes: number;
+  blunders: number;
+  acpl: number;
+}
+```
+
+### Key Moments Detection
+
+Automatically identifies critical positions:
+
+```typescript
+// Detected moments:
+// 1. Blunders (cpLoss > 300)
+// 2. Turning Points (eval swing > 200cp crossing 0)
+// 3. Brilliant Moves
+// 4. Missed Wins (was winning, now losing)
+```
+
+### Win Probability Visualization
+
+Converts evaluation to visual win/draw/loss probability:
+
+```typescript
+// Sigmoid formula for win probability
+const calculateWinProbability = (cp: number) => {
+  if (mateIn !== null) return mateIn > 0 ? 100 : 0;
+  const winProb = 50 + 50 * (2 / (1 + Math.exp(-0.004 * cp)) - 1);
+  return { white: winProb, draw: 10, black: 100 - winProb - 10 };
+};
+```
+
+### Suggested Focus Areas
+
+AI-powered recommendations based on phase performance:
+
+| Condition | Suggestion |
+|-----------|------------|
+| Opening ACPL > 30 | "Opening Preparation" |
+| Middlegame blunders | "Tactical Awareness" |
+| Multiple middlegame mistakes | "Calculation & Visualization" |
+| Endgame errors | "Endgame Technique" |
+| 2+ total blunders | "Blunder Prevention" |
+| Many inaccuracies | "Positional Understanding" |
+
+### Game Rating Display
+
+Frontend calculation of "You played like a XXXX":
+
+```typescript
+// Skill descriptions based on rating:
+// <800: "Beginner"
+// 800-1000: "Casual Player"
+// 1000-1200: "Intermediate"
+// 1200-1400: "Club Player"
+// 1400-1600: "Tournament Player"
+// 1600-1800: "Advanced Player"
+// 1800-2000: "Expert"
+// 2000-2200: "Candidate Master"
+// 2200-2400: "Master"
+// 2400-2600: "International Master"
+// 2600+: "Grandmaster"
+```
+
 ---
 
 **Related Documentation:**

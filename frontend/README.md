@@ -4,45 +4,47 @@ Modern React + TypeScript frontend for the EloInsight chess analysis platform.
 
 ## 🛠️ Tech Stack
 
-- **React 18** - UI library
+- **React 18** - UI library with hooks
 - **TypeScript** - Type safety
 - **Vite** - Build tool and dev server
-- **Material UI (MUI)** - Component library
-- **React Router** - Client-side routing
-- **Axios** - HTTP client
-- **react-chessboard** - Chess board component
-- **chess.js** - Chess logic and validation
+- **TailwindCSS** - Utility-first CSS framework
+- **React Router v6** - Client-side routing
+- **Recharts** - Data visualization (evaluation graphs)
+- **Lucide React** - Icon library
+- **react-chessboard** - Interactive chess board component
+- **chess.js** - Chess logic, move validation, FEN/PGN parsing
+- **Sonner** - Toast notifications
+- **clsx/tailwind-merge** - Conditional class utilities
 
 ## 📁 Project Structure
 
 ```
 src/
 ├── components/          # Reusable components
-│   ├── common/         # Generic UI components
 │   ├── chess/          # Chess-specific components
-│   │   └── ChessBoardViewer.tsx
-│   └── layout/         # Layout components
-│       └── MainLayout.tsx
+│   │   └── ChessBoardViewer.tsx  # Interactive board with arrows & highlights
+│   ├── layout/         # Layout components
+│   │   └── MainLayout.tsx        # App shell with sidebar
+│   └── ui/             # UI primitives (buttons, cards, etc.)
+├── contexts/           # React context providers
+│   ├── AuthContext.tsx          # Authentication state
+│   └── GamesContext.tsx         # Games cache & state
 ├── pages/              # Page components (routes)
-│   ├── Login.tsx
-│   ├── Dashboard.tsx
-│   ├── GamesList.tsx
-│   └── AnalysisViewer.tsx
+│   ├── Login.tsx               # Authentication
+│   ├── Register.tsx            # User registration
+│   ├── Dashboard.tsx           # Overview statistics
+│   ├── GamesList.tsx           # Games table with filters
+│   ├── AnalysisList.tsx        # Analyzed games list
+│   ├── AnalysisViewer.tsx      # Full game analysis (main feature)
+│   ├── Settings.tsx            # User settings
+│   └── Profile.tsx             # User profile
 ├── services/           # API service layer
-│   ├── apiClient.ts    # Axios instance with interceptors
-│   ├── authService.ts  # Authentication API calls
-│   └── gamesService.ts # Games API calls
-├── routes/             # Route configuration
-│   └── index.tsx       # React Router setup
-├── types/              # TypeScript type definitions
-│   └── api.ts          # API response types
-├── theme/              # Material UI theme
-│   └── theme.ts        # Light/dark theme config
-├── hooks/              # Custom React hooks (future)
-├── utils/              # Utility functions (future)
-├── App.tsx             # Root component
+│   └── apiClient.ts            # Axios instance with interceptors
+├── lib/                # Utility functions
+│   └── utils.ts                # cn() helper for classnames
+├── App.tsx             # Root component with routes
 ├── main.tsx            # Entry point
-└── index.css           # Global styles
+└── index.css           # TailwindCSS imports & global styles
 ```
 
 ## 🚀 Getting Started
@@ -64,7 +66,7 @@ src/
    cp .env.example .env
    ```
    
-   Edit `.env` and configure:
+   Edit `.env`:
    ```env
    VITE_API_URL=http://localhost:4000/api/v1
    ```
@@ -80,211 +82,196 @@ src/
 
 ```bash
 npm run build
+npm run preview  # Preview production build
 ```
 
-Preview production build:
-```bash
-npm run preview
-```
+## 🎮 Key Features
 
-## 🏗️ Architecture
+### Analysis Viewer (`AnalysisViewer.tsx`)
 
-### Component Organization
+The main analysis page with comprehensive features:
 
-#### **Pages** (`/pages`)
-Top-level route components that compose smaller components.
+#### Board & Navigation
+- **Interactive Chess Board**: Click squares, drag pieces to explore positions
+- **Exploration Mode**: Make moves to analyze alternative lines (live engine evaluation)
+- **Auto-play**: Automatically advance through moves (0.5s - 3s speed options)
+- **Keyboard Shortcuts**: Full navigation with hotkeys
+- **Board Flip**: View from either player's perspective
 
-- `Login.tsx` - Authentication page
-- `Dashboard.tsx` - Overview with statistics
-- `GamesList.tsx` - Table of user's games
-- `AnalysisViewer.tsx` - Detailed game analysis
+#### Analysis Components
+- **Evaluation Graph**: Interactive chart showing game evaluation over time
+- **Move Quality Summary**: Count of brilliant/best/good/inaccuracy/mistake/blunder moves
+- **Phase Breakdown**: Move quality breakdown by Opening/Middlegame/Endgame
+- **Win Probability Bar**: Real-time win/draw/loss probabilities
+- **Key Moments**: Auto-detected critical positions
+- **Engine Lines (PV)**: Top engine continuations
+- **Suggested Focus Areas**: AI-powered study recommendations
+- **Game Rating**: "You played like a XXXX" performance rating
 
-#### **Components** (`/components`)
-Reusable UI components organized by category.
+#### Move Information
+- **Current Move Card**: Detailed move analysis with classification
+- **Move List**: Full game notation with move highlighting
+- **Time Analysis**: Time spent per move (when available)
 
-**Common**: Generic components (buttons, cards, modals)  
-**Chess**: Chess-specific components (board, move list)  
-**Layout**: App structure (header, sidebar, footer)
+#### Utilities
+- **Copy FEN**: One-click position copying
+- **Similar Games**: Links to explore position on Lichess/Chess.com
+- **Sound Effects**: Audio feedback for moves
 
-#### **Services** (`/services`)
-API communication layer with clean abstractions.
+### Keyboard Shortcuts
 
-**apiClient.ts**:
-- Axios instance configuration
-- Request/response interceptors
-- Automatic token refresh
-- Error handling
+| Key | Action |
+|-----|--------|
+| `←` / `→` | Previous/Next move |
+| `Home` / `End` | First/Last move |
+| `Space` | Play/Pause auto-play |
+| `F` | Flip board |
+| `C` | Copy FEN |
+| `M` | Toggle sound |
+| `?` / `H` | Show shortcuts |
+| `Esc` | Exit exploration mode |
 
-**authService.ts**:
-- Login/logout
-- Token management
-- User profile
+### Games List (`GamesList.tsx`)
 
-**gamesService.ts**:
-- Fetch games
-- Request analysis
-- Sync with platforms
+- **Filters**: Platform, result, time control, won by, analyzed status, date range
+- **Pagination**: Navigate large game collections
+- **One-click Analysis**: Start analysis directly from the list
+- **Concurrent Limit**: Max 3 simultaneous analyses
 
-### State Management
+### Analysis List (`AnalysisList.tsx`)
 
-Currently using React's built-in state management:
-- `useState` for local component state
-- `localStorage` for authentication tokens
-- Props for component communication
+- **Analyzed Games**: View all completed analyses
+- **Sorting**: Sort by analysis date
+- **Quick Stats**: Accuracy, ACPL, blunder counts at a glance
 
-**Future**: Consider adding Redux Toolkit or Zustand for global state when needed.
+## 🎨 Styling
 
-### Routing
+### TailwindCSS
 
-React Router v6 with:
-- Protected routes (require authentication)
-- Nested routes (layout wrapper)
-- Programmatic navigation
-- URL parameters
-
-### API Integration
-
-**Base Configuration**:
-```typescript
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api/v1';
-```
-
-**Authentication Flow**:
-1. User logs in → receives access + refresh tokens
-2. Tokens stored in localStorage
-3. Access token added to all requests via interceptor
-4. On 401 error → auto-refresh token
-5. If refresh fails → redirect to login
-
-**Making API Calls**:
-```typescript
-import { gamesService } from './services/gamesService';
-
-// Fetch games
-const games = await gamesService.getGames({ page: 1, limit: 20 });
-
-// Request analysis
-const job = await gamesService.requestAnalysis(gameId);
-```
-
-### Theme Customization
-
-Material UI theme configured in `src/theme/theme.ts`:
-
-```typescript
-import { theme, darkTheme } from './theme/theme';
-
-// Use in ThemeProvider
-<ThemeProvider theme={theme}>
-  <App />
-</ThemeProvider>
-```
-
-**Customization**:
-- Colors (primary, secondary, etc.)
-- Typography (fonts, sizes)
-- Component styles (buttons, cards)
-- Spacing and breakpoints
-
-## 🎨 Styling Approach
-
-### Material UI Components
-Primary styling method using MUI's `sx` prop:
+All styling uses Tailwind utility classes:
 
 ```tsx
-<Box sx={{ p: 2, bgcolor: 'primary.main' }}>
-  Content
-</Box>
+<div className="bg-zinc-900 rounded-xl p-4 border border-zinc-700">
+  <h2 className="text-lg font-semibold text-white">Title</h2>
+</div>
 ```
 
-### Global Styles
-Minimal global styles in `index.css` for:
-- CSS reset
-- Font loading
-- Root element styles
+### Color Scheme
 
-### Component-Specific Styles
-Use MUI's styling solutions:
-- `sx` prop for one-off styles
-- `styled()` for reusable styled components
-- Theme overrides for global component styles
+Dark theme with zinc-based neutrals:
+- **Background**: `bg-zinc-950`, `bg-zinc-900`
+- **Cards**: `bg-zinc-800`, `bg-zinc-900`
+- **Borders**: `border-zinc-700`, `border-zinc-600`
+- **Text**: `text-white`, `text-zinc-400`
+
+### Move Classification Colors
+
+| Classification | Color |
+|---------------|-------|
+| Brilliant | `cyan-500` |
+| Best | `emerald-500` |
+| Good | `lime-600` |
+| Book | `zinc-500` |
+| Inaccuracy | `yellow-500` |
+| Mistake | `orange-500` |
+| Blunder | `red-500` |
+
+### cn() Utility
+
+Conditional classnames using `clsx` + `tailwind-merge`:
+
+```tsx
+import { cn } from '../lib/utils';
+
+<button className={cn(
+  "px-4 py-2 rounded-lg",
+  isActive ? "bg-blue-500" : "bg-zinc-700",
+  disabled && "opacity-50 cursor-not-allowed"
+)}>
+  Click me
+</button>
+```
 
 ## 🔐 Authentication
 
-### Login Flow
+### Flow
 
-1. User enters credentials
-2. `authService.login()` called
-3. Tokens stored in localStorage
-4. User redirected to dashboard
+1. User logs in with email/password
+2. JWT tokens stored in `localStorage`
+3. `AuthContext` provides auth state app-wide
+4. API client interceptor adds `Authorization` header
+5. Auto token refresh on 401 errors
 
 ### Protected Routes
 
 ```tsx
-<ProtectedRoute>
-  <Dashboard />
-</ProtectedRoute>
+// In App.tsx
+<Route element={<ProtectedRoute />}>
+  <Route path="/dashboard" element={<Dashboard />} />
+  <Route path="/games" element={<GamesList />} />
+  {/* ... */}
+</Route>
 ```
 
-Checks for valid token, redirects to login if missing.
+## 📊 State Management
 
-### Token Refresh
+### Context Providers
 
-Automatic token refresh on 401 errors:
-1. Request fails with 401
-2. Interceptor catches error
-3. Attempts token refresh
-4. Retries original request
-5. If refresh fails → logout
+- **AuthContext**: User authentication state, login/logout
+- **GamesContext**: Games list cache, pagination, sync status
+
+### Local State
+
+Most components use `useState` and `useMemo` for local state management.
 
 ## 🎮 Chess Components
 
 ### ChessBoardViewer
 
-Interactive chess board component:
+Interactive chess board with advanced features:
 
 ```tsx
 <ChessBoardViewer
   fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
   interactive={true}
-  onPositionChange={(fen) => console.log(fen)}
+  bestMove="e2e4"           // Arrow for best move
+  lastMove="d7d5"           // Highlight last move
+  classification="blunder"  // Show classification badge
+  destinationSquare="d5"    // Badge placement
+  boardOrientation="white"  // View orientation
+  onMove={(from, to) => {}} // Move callback
 />
 ```
 
-**Props**:
-- `fen` - Position in FEN notation
-- `pgn` - Game in PGN format
-- `interactive` - Allow move input
-- `onPositionChange` - Callback on position change
-
-**Features**:
+#### Features
 - Drag and drop moves
-- Legal move validation
-- Position display
-- PGN parsing
+- Legal move validation (via chess.js)
+- Best move arrows (green)
+- Last move highlights
+- Classification badges on destination squares
+- Responsive sizing
 
-## 📝 TypeScript Types
+## 📝 TypeScript
 
-All API types defined in `src/types/api.ts`:
+Strong typing throughout:
 
 ```typescript
-interface Game {
-  id: string;
-  platform: 'chess.com' | 'lichess';
-  whitePlayer: string;
-  blackPlayer: string;
-  result: '1-0' | '0-1' | '1/2-1/2';
-  // ... more fields
+interface MoveAnalysis {
+  moveNumber: number;
+  halfMove: number;
+  fen: string;
+  evaluation: number | null;
+  mateIn: number | null;
+  bestMove: string;
+  playedMove: string;
+  classification: string;
+  centipawnLoss: number | null;
+  pv: string[];
+  depth: number | null;
 }
 ```
 
-**Benefits**:
-- Type safety
-- IntelliSense support
-- Compile-time error checking
-- Self-documenting code
-
-## 🧪 Testing (Future)
+## 🧪 Testing
 
 Planned testing setup:
 - **Vitest** - Unit testing
@@ -293,31 +280,13 @@ Planned testing setup:
 
 ## 📦 Build & Deployment
 
-### Development Build
-```bash
-npm run dev
-```
-
-### Production Build
-```bash
-npm run build
-```
-
-Output in `dist/` directory.
-
 ### Environment Variables
 
-**Development** (`.env`):
-```env
-VITE_API_URL=http://localhost:4000/api/v1
-```
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VITE_API_URL` | Backend API URL | `http://localhost:4000/api/v1` |
 
-**Production** (`.env.production`):
-```env
-VITE_API_URL=https://api.eloinsight.dev/api/v1
-```
-
-### Docker Build
+### Docker
 
 ```dockerfile
 FROM node:18-alpine as build
@@ -330,63 +299,21 @@ RUN npm run build
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
 ```
-
-## 🚧 Current Status
-
-### ✅ Implemented
-- Project structure
-- Material UI theme
-- Routing with protected routes
-- API client with interceptors
-- Authentication service
-- Chess board component
-- Login page
-- Dashboard page
-- Games list page
-- Analysis viewer page
-
-### 🔜 Next Steps
-- Connect to backend API
-- Add real data fetching
-- Implement WebSocket for real-time updates
-- Add error boundaries
-- Add loading states
-- Add form validation
-- Add unit tests
-- Add E2E tests
-
-## 🎯 Demo Mode
-
-Currently running in **demo mode** with:
-- Mock data for all pages
-- No backend connection required
-- Placeholder authentication
-- Static chess positions
-
-**To connect to backend**:
-1. Update `VITE_API_URL` in `.env`
-2. Remove mock data from pages
-3. Uncomment API calls in services
 
 ## 🤝 Contributing
 
-See main project [CONTRIBUTING.md](../docs/contributing.md) for guidelines.
-
 ### Code Style
 
-- Use TypeScript for all new files
-- Follow React best practices
-- Use functional components with hooks
-- Use MUI components when possible
-- Keep components small and focused
-- Write self-documenting code
+- Use TypeScript for all files
+- Functional components with hooks
+- TailwindCSS for styling (no CSS files)
+- Keep components focused and small
 
 ### Naming Conventions
 
 - **Components**: PascalCase (`ChessBoardViewer.tsx`)
-- **Files**: camelCase for utilities, PascalCase for components
+- **Utilities**: camelCase (`apiClient.ts`)
 - **Variables**: camelCase
 - **Constants**: UPPER_SNAKE_CASE
 - **Types/Interfaces**: PascalCase
@@ -394,10 +321,11 @@ See main project [CONTRIBUTING.md](../docs/contributing.md) for guidelines.
 ## 📚 Resources
 
 - [React Documentation](https://react.dev)
+- [TailwindCSS Docs](https://tailwindcss.com/docs)
 - [TypeScript Handbook](https://www.typescriptlang.org/docs/)
-- [Material UI Docs](https://mui.com/material-ui/)
 - [React Router Docs](https://reactrouter.com/)
-- [Vite Guide](https://vitejs.dev/guide/)
+- [Recharts](https://recharts.org/)
+- [chess.js](https://github.com/jhlywa/chess.js)
 
 ## 📄 License
 

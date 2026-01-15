@@ -11,51 +11,74 @@ EloInsight democratizes chess game analysis by providing a completely free, open
 
 ## ✨ Features
 
-### Current Roadmap
+### Core Analysis
 - 🔗 **Multi-Platform Integration**: Link your Chess.com and Lichess accounts
 - 📥 **Automatic Game Sync**: Fetch and analyze all your completed games automatically
-- 🤖 **Free Stockfish Analysis**: Powered by the world's strongest open-source chess engine
+- 🤖 **Free Stockfish Analysis**: Powered by the world's strongest open-source chess engine (depth 20)
 - 📊 **Comprehensive Metrics**: 
-  - Accuracy percentage
+  - Accuracy percentage for both players
   - Average Centipawn Loss (ACPL)
   - Blunders, mistakes, and inaccuracies detection
-  - Performance rating calculation
+  - Performance rating calculation ("You played like a XXXX")
+
+### Advanced Analysis Features
+- 📈 **Phase Breakdown**: Move quality breakdown by game phase (Opening/Middlegame/Endgame) with visual icons
+- 📉 **Evaluation Graph**: Interactive game evaluation chart with click-to-navigate
+- 🎯 **Key Moments**: Auto-detected critical positions (blunders, turning points, brilliant moves)
+- 📊 **Win Probability**: Real-time win/draw/loss probability bar
+- 🔍 **Engine Lines (PV)**: Top engine continuations with evaluations
+- 💡 **Suggested Focus Areas**: AI-powered study recommendations based on your mistakes
+- ⏱️ **Time Analysis**: Time spent per move with statistics
+- 🔗 **Similar Games**: Quick links to explore positions on Lichess/Chess.com
+
+### Interactive Board Features
+- 🎮 **Exploration Mode**: Make moves on the board to analyze alternative lines
+- ▶️ **Auto-play Mode**: Automatically advance through moves with adjustable speed (0.5s - 3s)
+- 🔊 **Move Sounds**: Audio feedback for moves, captures, checks, and blunders
+- ⌨️ **Keyboard Shortcuts**: Full keyboard navigation (arrows, space, F, C, M, ?)
+- 📋 **Copy FEN**: One-click FEN copying for any position
+- 🔄 **Board Flip**: View from either player's perspective
+
+### Game Management
 - 🎯 **Manual Analysis**: Analyze any position using FEN notation
 - 📈 **Progress Tracking**: Track your improvement over time
-- 🎨 **Modern UI**: Beautiful, responsive interface built with Material UI
+- 🔍 **Advanced Filtering**: Filter games by platform, result, time control, analysis status, and date
+- 📄 **Pagination**: Efficient browsing of large game collections
 
 ### Future Enhancements
 - Opening repertoire analysis
-- Tactical pattern recognition
-- Personalized improvement suggestions
+- Tactical pattern recognition (pins, forks, skewers)
 - Tournament preparation tools
 - Social features and game sharing
+- Board themes and piece styles
 
 ## 🛠️ Tech Stack
 
 ### Frontend
-- **React** with TypeScript
-- **Material UI** for component library
-- **Redux Toolkit** for state management
-- **React Query** for data fetching
-- **Recharts** for data visualization
+- **React 18** with TypeScript
+- **Vite** for fast development and building
+- **TailwindCSS** for utility-first styling
+- **Recharts** for evaluation graphs and data visualization
+- **React Router v6** for navigation
+- **Lucide React** for icons
+- **react-chessboard** for interactive chess board
+- **chess.js** for move validation and game logic
 
 ### Backend Services
-- **NestJS** (API Gateway & User Service)
-- **Go** (Stockfish Analysis Engine)
-- **Python** (Game Metadata & Statistics)
+- **NestJS** (API Gateway - TypeScript)
+- **Go** (Analysis Service with Stockfish integration)
+- **NestJS** (Game Sync Service - TypeScript)
 
 ### Infrastructure
-- **PostgreSQL** - Primary database
+- **PostgreSQL** - Primary database with Prisma ORM
 - **Redis** - Caching and session management
-- **RabbitMQ** - Message queue for async analysis
 - **Docker** - Containerization
-- **Kubernetes** - Orchestration (production)
+- **Docker Compose** - Local development orchestration
 
 ### Communication
-- **REST API** - Frontend to backend
-- **gRPC** - Inter-service communication
-- **WebSockets** - Real-time analysis updates
+- **REST API** - Frontend to API Gateway
+- **gRPC** - API Gateway to Analysis Service
+- **JWT** - Authentication tokens
 
 ## 🏗️ Architecture Overview
 
