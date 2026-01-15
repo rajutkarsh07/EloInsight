@@ -1750,7 +1750,10 @@ const AnalysisViewer = () => {
                                         </span>
                                     </div>
                                     {analysis.game.openingName && (
-                                        <span className="text-xs text-zinc-500 max-w-[200px] truncate text-center">
+                                        <span 
+                                            className="text-xs text-zinc-500 max-w-[200px] truncate text-center cursor-help hover:text-zinc-300 transition-colors"
+                                            title={analysis.game.openingName}
+                                        >
                                             {analysis.game.openingName}
                                         </span>
                                     )}
