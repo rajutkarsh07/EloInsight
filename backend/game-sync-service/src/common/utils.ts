@@ -1,4 +1,5 @@
 import { GameResult, TimeClass } from './types';
+import { detectOpeningFromMoves } from './openings';
 
 /**
  * Parse time control string to determine time class
@@ -83,8 +84,6 @@ export function extractGameId(url: string, platform: 'chess.com' | 'lichess'): s
         return match ? match[1] : url;
     }
 }
-
-import { detectOpeningFromMoves } from './openings';
 
 /**
  * Parse ECO code from PGN - supports multiple formats
