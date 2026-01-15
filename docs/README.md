@@ -67,10 +67,33 @@ cd backend/analysis-service && make build && ./bin/analysis-service
 ### Service Ports
 | Service | Port | URL |
 |---------|------|-----|
-| Frontend | 3000 | http://localhost:3000 |
-| API Gateway | 4000 | http://localhost:4000 |
+| Frontend (Vite) | 5173 | http://localhost:5173 |
+| API Gateway | 4000 | http://localhost:4000/api/v1 |
+| Swagger Docs | 4000 | http://localhost:4000/api/docs |
 | Game Sync | 3002 | http://localhost:3002 |
 | Analysis (gRPC) | 50051 | grpc://localhost:50051 |
+
+## ✨ Key Features
+
+### Analysis Viewer
+- **Phase Breakdown**: Move quality breakdown by Opening/Middlegame/Endgame with visual icons
+- **Evaluation Graph**: Interactive chart with click-to-navigate
+- **Key Moments**: Auto-detected blunders, turning points, brilliant moves
+- **Win Probability**: Real-time win/draw/loss probability bar
+- **Engine Lines**: Top engine continuations (PV)
+- **Suggested Focus Areas**: AI-powered study recommendations
+- **Auto-play Mode**: Advance through moves automatically (adjustable speed)
+- **Keyboard Shortcuts**: Full navigation with hotkeys (arrows, space, F, C, M, ?)
+- **Exploration Mode**: Make moves to analyze alternative lines
+- **Move Sounds**: Audio feedback for moves, captures, checks
+- **Time Analysis**: Time spent per move statistics
+- **Similar Games**: Quick links to Lichess/Chess.com position explorers
+
+### Game Management
+- **Multi-platform Sync**: Import from Chess.com and Lichess
+- **Advanced Filtering**: Platform, result, time control, analysis status, date
+- **Pagination**: Efficient browsing of large game collections
+- **Concurrent Analysis**: Up to 3 simultaneous analyses
 
 ## 📁 Documentation Structure
 
