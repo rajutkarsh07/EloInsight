@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart3, Eye, RotateCw, Target, TrendingUp, CheckCircle2, Filter, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Filters {
     platform: string;
     timeControl: string;
     accuracy: string;
     dateRange: string;
+    opening: string;
 }
 
 // Get time control category
@@ -83,6 +85,7 @@ interface AnalyzedGamesResponse {
 
 const AnalysisList = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [games, setGames] = useState<AnalyzedGame[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -97,6 +100,7 @@ const AnalysisList = () => {
         timeControl: 'all',
         accuracy: 'all',
         dateRange: 'all',
+        opening: 'all',
     });
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>('desc'); // Default: newest first
 
@@ -137,8 +141,20 @@ const AnalysisList = () => {
             timeControl: 'all',
             accuracy: 'all',
             dateRange: 'all',
+            opening: 'all',
         });
     };
+
+    // Get unique openings from games
+    const uniqueOpenings = useMemo(() => {
+        const openings = new Set<string>();
+        games.forEach(game => {
+            if (game.openingName) {
+                openings.add(game.openingName);
+            }
+        });
+        return Array.from(openings).sort();
+    }, [games]);
 
     const hasActiveFilters = Object.values(filters).some(v => v !== 'all');
 
@@ -169,6 +185,11 @@ const AnalysisList = () => {
             // Date range filter
             if (filters.dateRange !== 'all') {
                 if (!isWithinDateRange(game.playedAt, filters.dateRange)) return false;
+            }
+            
+            // Opening filter
+            if (filters.opening !== 'all') {
+                if (game.openingName !== filters.opening) return false;
             }
             
             return true;
@@ -218,11 +239,44 @@ const AnalysisList = () => {
         return <span className={cn(baseClass, "bg-violet-500/20 text-violet-400")}>lichess</span>;
     };
 
-    const getResultBadge = (result: string) => {
+    const getResultBadge = (game: AnalyzedGame) => {
         const baseClass = "px-2.5 py-1 rounded text-xs font-bold";
-        if (result === '1-0') return <span className={cn(baseClass, "bg-zinc-500/20 text-zinc-300")}>1-0</span>;
-        if (result === '0-1') return <span className={cn(baseClass, "bg-zinc-500/20 text-zinc-300")}>0-1</span>;
-        return <span className={cn(baseClass, "bg-zinc-500/20 text-zinc-400")}>Draw</span>;
+        const { result, whitePlayer, blackPlayer } = game;
+        
+        // Determine if the user played as white or black
+        const usernames = [
+            user?.username?.toLowerCase(),
+            user?.chessComUsername?.toLowerCase(),
+            user?.lichessUsername?.toLowerCase()
+        ].filter(Boolean);
+        
+        const isUserWhite = usernames.some(u => whitePlayer.toLowerCase() === u);
+        const isUserBlack = usernames.some(u => blackPlayer.toLowerCase() === u);
+        
+        // Determine result text
+        if (result === '1/2-1/2' || result === '0.5-0.5') {
+            return <span className={cn(baseClass, "bg-zinc-500/20 text-zinc-400")}>Draw</span>;
+        }
+        
+        if (result === '1-0') {
+            if (isUserWhite) {
+                return <span className={cn(baseClass, "bg-emerald-500/20 text-emerald-400")}>Won</span>;
+            } else if (isUserBlack) {
+                return <span className={cn(baseClass, "bg-red-500/20 text-red-400")}>Lost</span>;
+            }
+            return <span className={cn(baseClass, "bg-zinc-500/20 text-zinc-300")}>1-0</span>;
+        }
+        
+        if (result === '0-1') {
+            if (isUserBlack) {
+                return <span className={cn(baseClass, "bg-emerald-500/20 text-emerald-400")}>Won</span>;
+            } else if (isUserWhite) {
+                return <span className={cn(baseClass, "bg-red-500/20 text-red-400")}>Lost</span>;
+            }
+            return <span className={cn(baseClass, "bg-zinc-500/20 text-zinc-300")}>0-1</span>;
+        }
+        
+        return <span className={cn(baseClass, "bg-zinc-500/20 text-zinc-400")}>{result}</span>;
     };
 
     const formatTimeControl = (tc: string): string => {
@@ -383,6 +437,25 @@ const AnalysisList = () => {
                             <option value="6months">Last 6 Months</option>
                         </select>
                     </div>
+
+                    {/* Opening Filter */}
+                    {uniqueOpenings.length > 0 && (
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">Opening</label>
+                            <select
+                                value={filters.opening}
+                                onChange={(e) => updateFilter('opening', e.target.value)}
+                                className="h-9 w-[180px] rounded-md border border-input bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >
+                                <option value="all">All Openings</option>
+                                {uniqueOpenings.map(opening => (
+                                    <option key={opening} value={opening} title={opening}>
+                                        {opening.length > 25 ? opening.substring(0, 22) + '...' : opening}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                 </div>
 
                 {/* Results count */}
@@ -479,14 +552,17 @@ const AnalysisList = () => {
                                                     </span>
                                                 </div>
                                                 {game.openingName && (
-                                                    <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                                    <span 
+                                                        className="text-xs text-muted-foreground truncate max-w-[200px] cursor-help"
+                                                        title={game.openingName}
+                                                    >
                                                         {game.openingName}
                                                     </span>
                                                 )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            {getResultBadge(game.result)}
+                                            {getResultBadge(game)}
                                         </td>
                                         <td className="px-6 py-4">
                                             {game.analysis && (
