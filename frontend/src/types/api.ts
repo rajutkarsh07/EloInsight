@@ -5,6 +5,9 @@ export interface User {
     username: string;
     chessComUsername?: string;
     lichessUsername?: string;
+    // OAuth verified status
+    lichessVerified?: boolean;
+    chessComVerified?: boolean;
     createdAt: string;
 }
 

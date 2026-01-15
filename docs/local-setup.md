@@ -137,6 +137,12 @@ CORS_ORIGIN="http://localhost:5173"
 # Analysis Service (gRPC)
 ANALYSIS_SERVICE_URL="localhost:50051"
 
+# Lichess OAuth (optional - for account verification)
+# Get credentials at: https://lichess.org/account/oauth/app
+# Set redirect URI to: http://localhost:4000/api/v1/auth/lichess/callback
+LICHESS_CLIENT_ID="your-lichess-client-id"
+FRONTEND_URL="http://localhost:5173"
+
 # Node environment
 NODE_ENV="development"
 ```
@@ -477,6 +483,8 @@ go mod download
 | `API_PREFIX` | ❌ | api/v1 | API route prefix |
 | `CORS_ORIGIN` | ❌ | http://localhost:5173 | Allowed CORS origins |
 | `ANALYSIS_SERVICE_URL` | ❌ | localhost:50051 | gRPC analysis service |
+| `LICHESS_CLIENT_ID` | ❌ | - | Lichess OAuth client ID |
+| `FRONTEND_URL` | ❌ | http://localhost:5173 | Frontend URL for OAuth redirect |
 | `NODE_ENV` | ❌ | development | Environment mode |
 
 ### Game Sync (`backend/game-sync-service/.env`)
