@@ -468,9 +468,15 @@ const AnalysisList = () => {
                                                         {formatTimeControl(game.timeControl)}
                                                     </span>
                                                 </div>
-                                                <div className="flex flex-col text-sm">
-                                                    <span>⚪ {game.whitePlayer}</span>
-                                                    <span className="text-muted-foreground">⚫ {game.blackPlayer}</span>
+                                                <div className="flex flex-col gap-0.5 text-sm">
+                                                    <span className="flex items-center gap-1.5">
+                                                        <span className="w-2.5 h-2.5 rounded bg-zinc-100 flex-shrink-0"></span>
+                                                        {game.whitePlayer}
+                                                    </span>
+                                                    <span className="text-muted-foreground flex items-center gap-1.5">
+                                                        <span className="w-2.5 h-2.5 rounded bg-zinc-600 flex-shrink-0"></span>
+                                                        {game.blackPlayer}
+                                                    </span>
                                                 </div>
                                                 {game.openingName && (
                                                     <span className="text-xs text-muted-foreground truncate max-w-[200px]">
@@ -517,9 +523,15 @@ const AnalysisList = () => {
                                         <td className="px-6 py-4">
                                             {game.analysis && (
                                                 <div className="flex flex-col items-center text-xs">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-red-400">⚪ {game.analysis.blundersWhite + game.analysis.mistakesWhite}</span>
-                                                        <span className="text-red-400">⚫ {game.analysis.blundersBlack + game.analysis.mistakesBlack}</span>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-red-400 flex items-center gap-1">
+                                                            <span className="w-2 h-2 rounded bg-zinc-100 flex-shrink-0"></span>
+                                                            {game.analysis.blundersWhite + game.analysis.mistakesWhite}
+                                                        </span>
+                                                        <span className="text-red-400 flex items-center gap-1">
+                                                            <span className="w-2 h-2 rounded bg-zinc-600 flex-shrink-0"></span>
+                                                            {game.analysis.blundersBlack + game.analysis.mistakesBlack}
+                                                        </span>
                                                     </div>
                                                     <span className="text-muted-foreground">
                                                         ({game.analysis.blundersWhite + game.analysis.blundersBlack} blunders)
