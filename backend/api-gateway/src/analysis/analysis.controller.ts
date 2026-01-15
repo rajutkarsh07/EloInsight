@@ -337,6 +337,7 @@ export class AnalysisController {
                 bestMove: move.bestMove,
                 bestMoveUci: move.bestMoveUci || null, // UCI format for arrow display
                 playedMove: move.playedMove,
+                playedMoveUci: move.playedMoveUci || null, // UCI format for last move highlight
                 isBlunder: move.classification === 10,
                 isMistake: move.classification === 9,
                 isInaccuracy: move.classification === 8,
@@ -502,6 +503,7 @@ export class AnalysisController {
                 bestMove: pos.bestMove,
                 bestMoveUci: pos.bestMoveUci, // UCI format for arrow display
                 playedMove: pos.playedMove,
+                playedMoveUci: pos.playedMoveUci, // UCI format for last move highlight
                 classification: pos.classification.toLowerCase(),
                 centipawnLoss: pos.centipawnLoss,
                 isBlunder: pos.isBlunder,

@@ -16,6 +16,7 @@ interface MoveAnalysis {
     bestMove: string;
     bestMoveUci?: string | null; // UCI format for arrow display
     playedMove: string;
+    playedMoveUci?: string | null; // UCI format for last move highlight (e.g., "e2e4")
     classification: string;
     centipawnLoss: number | null;
     isBlunder: boolean;
@@ -36,6 +37,66 @@ const extractDestinationSquare = (san: string): string | undefined => {
     // Match the last two characters that form a valid square (letter a-h + number 1-8)
     const match = cleaned.match(/([a-h][1-8])$/);
     return match ? match[1] : undefined;
+};
+
+// Parse FEN to get piece positions as a map: square -> piece
+const parseFenToSquares = (fen: string): Record<string, string> => {
+    const pieces: Record<string, string> = {};
+    const [position] = fen.split(' ');
+    const rows = position.split('/');
+    
+    for (let rowIdx = 0; rowIdx < 8; rowIdx++) {
+        const row = rows[rowIdx];
+        let colIdx = 0;
+        for (const char of row) {
+            if (char >= '1' && char <= '8') {
+                colIdx += parseInt(char);
+            } else {
+                const square = String.fromCharCode(97 + colIdx) + (8 - rowIdx);
+                pieces[square] = char;
+                colIdx++;
+            }
+        }
+    }
+    return pieces;
+};
+
+// Find the source square by comparing two FENs (before and after a move)
+const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare: string | undefined): string | undefined => {
+    if (!fenBefore || !fenAfter || !destinationSquare) return undefined;
+    
+    const before = parseFenToSquares(fenBefore);
+    const after = parseFenToSquares(fenAfter);
+    
+    // The piece that moved TO the destination
+    const movedPiece = after[destinationSquare];
+    if (!movedPiece) return undefined;
+    
+    // Find where this piece came FROM
+    // Look for a square that had the same piece before but is now empty or different
+    for (const square of Object.keys(before)) {
+        if (square === destinationSquare) continue;
+        
+        // Same piece type was here before, and now it's gone or different
+        if (before[square] === movedPiece && after[square] !== movedPiece) {
+            return square;
+        }
+    }
+    
+    // Handle castling: if king moved 2 squares, source is the original king position
+    if (movedPiece.toLowerCase() === 'k') {
+        const destCol = destinationSquare.charCodeAt(0) - 97;
+        const destRow = destinationSquare[1];
+        // Check for castling (king on e-file moving to c or g)
+        if (destCol === 2 || destCol === 6) { // c or g file
+            const kingSourceSquare = 'e' + destRow;
+            if (before[kingSourceSquare]?.toLowerCase() === 'k') {
+                return kingSourceSquare;
+            }
+        }
+    }
+    
+    return undefined;
 };
 
 interface GameMetrics {
@@ -235,9 +296,30 @@ const AnalysisViewer = () => {
         const shouldShowArrow = ['inaccuracy', 'mistake', 'blunder'].includes(move.classification);
         const bestMoveUci = shouldShowArrow && move.bestMoveUci ? move.bestMoveUci : undefined;
 
+        // Get last move UCI for highlighting the played move squares
+        // This shows the source (darker) and destination (lighter) of the last move
+        let lastMoveUci = move.playedMoveUci || undefined;
+        
+        // If playedMoveUci is not available, derive it by comparing FENs
+        if (!lastMoveUci && destinationSquare) {
+            // Get the FEN before this move (previous position)
+            const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+            const previousFen = currentMoveIndex <= 1 
+                ? startingFen 
+                : analysis.moves[currentMoveIndex - 2]?.fen || startingFen;
+            const currentFen = move.fen;
+            
+            // Find source square by comparing FENs
+            const sourceSquare = findSourceSquare(previousFen, currentFen, destinationSquare);
+            
+            if (sourceSquare) {
+                lastMoveUci = sourceSquare + destinationSquare;
+            }
+        }
+
         return {
             bestMove: bestMoveUci,
-            lastMove: undefined,
+            lastMove: lastMoveUci,
             classification,
             destinationSquare,
         };
@@ -833,6 +915,7 @@ const AnalysisViewer = () => {
                                 fen={currentFen}
                                 interactive={false}
                                 bestMove={currentMoveData.bestMove}
+                                lastMove={currentMoveData.lastMove}
                                 destinationSquare={currentMoveData.destinationSquare}
                                 classification={currentMoveData.classification}
                                 boardOrientation={boardOrientation}
