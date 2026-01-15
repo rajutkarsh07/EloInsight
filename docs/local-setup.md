@@ -4,6 +4,21 @@ Complete guide to running EloInsight locally **without Docker** (native developm
 
 ---
 
+## What You'll Get
+
+Once setup is complete, you'll have access to:
+
+- **Analysis Viewer** with Phase Breakdown, Evaluation Graph, Key Moments
+- **Auto-play Mode** with adjustable speed (0.5s - 3s)
+- **Keyboard Shortcuts** for navigation (←, →, Space, F, C, M, ?)
+- **Move Sounds** for feedback on moves, captures, and blunders
+- **Exploration Mode** to analyze alternative lines
+- **Win Probability** visualization
+- **Suggested Focus Areas** based on your mistakes
+- **Game Sync** from Chess.com and Lichess
+
+---
+
 ## Prerequisites
 
 Install the following tools on your system:
@@ -347,6 +362,34 @@ Then login at `http://localhost:5173` with:
 
 ---
 
+## Using the Analysis Viewer
+
+After analyzing a game, you'll have access to powerful features:
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `←` / `→` | Previous / Next move |
+| `Home` / `End` | First / Last move |
+| `Space` | Play / Pause auto-play |
+| `F` | Flip board |
+| `C` | Copy FEN to clipboard |
+| `M` | Toggle move sounds |
+| `?` or `H` | Show shortcuts panel |
+| `Esc` | Exit exploration mode |
+
+### Features Available
+
+- **Phase Breakdown**: See move quality by Opening/Middlegame/Endgame with visual icons
+- **Evaluation Graph**: Click any point to jump to that position
+- **Auto-play**: Automatically advance through moves (adjust speed with dropdown)
+- **Exploration Mode**: Click pieces to analyze alternative lines
+- **Key Moments**: Auto-detected blunders, turning points, and brilliant moves
+- **Suggested Focus Areas**: AI recommendations based on your mistakes
+
+---
+
 ## Troubleshooting
 
 ### `protoc-gen-go: program not found`
@@ -519,10 +562,10 @@ grpcurl -plaintext localhost:50051 grpc.health.v1.Health/Check
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │   ┌─────────────┐                                               │
-│   │  Frontend   │  React + Vite                                 │
+│   │  Frontend   │  React + Vite + TailwindCSS                   │
 │   │  :5173      │  User Interface                               │
 │   └──────┬──────┘                                               │
-│          │ HTTP                                                  │
+│          │ HTTP (REST API)                                       │
 │          ▼                                                       │
 │   ┌─────────────┐      gRPC      ┌─────────────┐               │
 │   │ API Gateway │ ◄────────────► │  Analysis   │               │
@@ -544,6 +587,18 @@ grpcurl -plaintext localhost:50051 grpc.health.v1.Health/Check
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+## Tech Stack Summary
+
+| Component | Technology |
+|-----------|------------|
+| **Frontend** | React 18 + TypeScript + TailwindCSS + Vite |
+| **API Gateway** | NestJS + Prisma ORM |
+| **Analysis Service** | Go + Stockfish + gRPC |
+| **Game Sync** | NestJS + Chess.com/Lichess APIs |
+| **Database** | PostgreSQL 15+ |
+| **Charts** | Recharts |
+| **Chess Logic** | chess.js + react-chessboard |
 
 ---
 
