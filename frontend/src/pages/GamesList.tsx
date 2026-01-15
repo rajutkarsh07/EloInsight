@@ -680,14 +680,16 @@ const GamesList = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="flex flex-col">
-                                                    <span className="font-medium">
-                                                        ⚪ {game.whitePlayer}
-                                                        {whiteElo && <span className="text-muted-foreground text-xs ml-1">({whiteElo})</span>}
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="font-medium flex items-center gap-2">
+                                                        <span className="w-3 h-3 rounded bg-zinc-100 flex-shrink-0"></span>
+                                                        {game.whitePlayer}
+                                                        {whiteElo && <span className="text-muted-foreground text-xs">({whiteElo})</span>}
                                                     </span>
-                                                    <span className="text-muted-foreground">
-                                                        ⚫ {game.blackPlayer}
-                                                        {blackElo && <span className="text-xs ml-1">({blackElo})</span>}
+                                                    <span className="text-muted-foreground flex items-center gap-2">
+                                                        <span className="w-3 h-3 rounded bg-zinc-600 flex-shrink-0"></span>
+                                                        {game.blackPlayer}
+                                                        {blackElo && <span className="text-xs">({blackElo})</span>}
                                                     </span>
                                                 </div>
                                             </td>
