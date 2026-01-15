@@ -5,6 +5,45 @@ import { Observable, firstValueFrom, timeout, catchError, throwError, ReplaySubj
 import { join } from 'path';
 import { Metadata, credentials, status } from '@grpc/grpc-js';
 
+/**
+ * Simple semaphore to limit concurrent operations
+ */
+class Semaphore {
+    private permits: number;
+    private waiting: Array<() => void> = [];
+
+    constructor(permits: number) {
+        this.permits = permits;
+    }
+
+    async acquire(): Promise<void> {
+        if (this.permits > 0) {
+            this.permits--;
+            return;
+        }
+        return new Promise((resolve) => {
+            this.waiting.push(resolve);
+        });
+    }
+
+    release(): void {
+        if (this.waiting.length > 0) {
+            const next = this.waiting.shift();
+            next?.();
+        } else {
+            this.permits++;
+        }
+    }
+
+    get availablePermits(): number {
+        return this.permits;
+    }
+
+    get queueLength(): number {
+        return this.waiting.length;
+    }
+}
+
 // Import types from proto definitions
 export interface AnalyzePositionRequest {
     fen: string;
@@ -152,9 +191,14 @@ export class AnalysisGrpcService implements OnModuleInit {
     private analysisClient: AnalysisServiceClient;
     private grpcClient: ClientGrpc;
     private readonly timeoutMs: number;
+    private readonly maxConcurrentGameAnalyses: number;
+    private readonly gameAnalysisSemaphore: Semaphore;
 
     constructor(private readonly configService: ConfigService) {
         this.timeoutMs = this.configService.get<number>('ANALYSIS_TIMEOUT_MS', 60000);
+        this.maxConcurrentGameAnalyses = this.configService.get<number>('MAX_CONCURRENT_GAME_ANALYSES', 1);
+        this.gameAnalysisSemaphore = new Semaphore(this.maxConcurrentGameAnalyses);
+        this.logger.log(`Game analysis concurrency limit: ${this.maxConcurrentGameAnalyses}`);
     }
 
     async onModuleInit() {
@@ -257,20 +301,27 @@ export class AnalysisGrpcService implements OnModuleInit {
     }
 
     /**
-     * Analyze a full game
+     * Analyze a full game (limited to 1 concurrent analysis)
      */
     async analyzeGame(
         request: AnalyzeGameRequest,
         userId?: string,
     ): Promise<GameAnalysis> {
-        this.logger.log(`Analyzing game: ${request.gameId}`);
+        const queuePosition = this.gameAnalysisSemaphore.queueLength;
+        if (queuePosition > 0) {
+            this.logger.log(`Game ${request.gameId} queued (position ${queuePosition + 1})`);
+        }
+
+        // Acquire semaphore - blocks if another game is being analyzed
+        await this.gameAnalysisSemaphore.acquire();
+        this.logger.log(`Analyzing game: ${request.gameId} (acquired lock)`);
 
         const metadata = this.createMetadata(userId);
 
         try {
             const result = await firstValueFrom(
                 this.analysisClient.analyzeGame(request, metadata).pipe(
-                    timeout(this.timeoutMs * 5), // Game analysis takes longer
+                    timeout(this.timeoutMs * 15), // 15 min timeout for full game analysis
                     catchError((err) => this.handleGrpcError(err, 'analyzeGame')),
                 ),
             );
@@ -278,29 +329,58 @@ export class AnalysisGrpcService implements OnModuleInit {
         } catch (error) {
             this.logger.error(`Game analysis failed: ${error.message}`);
             throw error;
+        } finally {
+            this.gameAnalysisSemaphore.release();
+            this.logger.log(`Game ${request.gameId} released lock`);
         }
     }
 
     /**
-     * Analyze game with streaming progress updates
+     * Analyze game with streaming progress updates (limited to 1 concurrent analysis)
      */
     analyzeGameStream(
         request: AnalyzeGameRequest,
         userId?: string,
     ): Observable<GameAnalysisProgress> {
-        this.logger.log(`Starting streaming game analysis: ${request.gameId}`);
-
-        const metadata = this.createMetadata(userId);
         const subject = new ReplaySubject<GameAnalysisProgress>();
 
-        this.analysisClient.analyzeGameStream(request, metadata).pipe(
-            timeout(this.timeoutMs * 10), // Full game can take a while
-            catchError((err) => this.handleGrpcError(err, 'analyzeGameStream')),
-        ).subscribe({
-            next: (value) => subject.next(value),
-            error: (err) => subject.error(err),
-            complete: () => subject.complete(),
-        });
+        // Handle semaphore asynchronously for streaming
+        (async () => {
+            const queuePosition = this.gameAnalysisSemaphore.queueLength;
+            if (queuePosition > 0) {
+                this.logger.log(`Game ${request.gameId} stream queued (position ${queuePosition + 1})`);
+                // Notify client they're queued
+                subject.next({
+                    gameId: request.gameId,
+                    currentMove: 0,
+                    totalMoves: 0,
+                    progressPercent: 0,
+                    status: 'queued',
+                });
+            }
+
+            await this.gameAnalysisSemaphore.acquire();
+            this.logger.log(`Starting streaming game analysis: ${request.gameId} (acquired lock)`);
+
+            const metadata = this.createMetadata(userId);
+
+            this.analysisClient.analyzeGameStream(request, metadata).pipe(
+                timeout(this.timeoutMs * 15), // 15 min timeout
+                catchError((err) => this.handleGrpcError(err, 'analyzeGameStream')),
+            ).subscribe({
+                next: (value) => subject.next(value),
+                error: (err) => {
+                    this.gameAnalysisSemaphore.release();
+                    this.logger.log(`Game ${request.gameId} stream released lock (error)`);
+                    subject.error(err);
+                },
+                complete: () => {
+                    this.gameAnalysisSemaphore.release();
+                    this.logger.log(`Game ${request.gameId} stream released lock (complete)`);
+                    subject.complete();
+                },
+            });
+        })();
 
         return subject.asObservable();
     }
@@ -328,6 +408,17 @@ export class AnalysisGrpcService implements OnModuleInit {
             this.logger.error(`Get best moves failed: ${error.message}`);
             throw error;
         }
+    }
+
+    /**
+     * Get game analysis queue status
+     */
+    getQueueStatus(): { available: number; queued: number; maxConcurrent: number } {
+        return {
+            available: this.gameAnalysisSemaphore.availablePermits,
+            queued: this.gameAnalysisSemaphore.queueLength,
+            maxConcurrent: this.maxConcurrentGameAnalyses,
+        };
     }
 
     /**
