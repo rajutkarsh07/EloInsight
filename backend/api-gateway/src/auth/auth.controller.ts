@@ -185,4 +185,52 @@ export class AuthController {
         await this.authService.disconnectLichess(user.id);
         return { message: 'Lichess account disconnected' };
     }
+
+    // ============ Google OAuth Endpoints ============
+
+    @Get('google/login')
+    @ApiOperation({ summary: 'Login or register via Google OAuth' })
+    @ApiResponse({ status: 302, description: 'Redirects to Google OAuth page' })
+    async googleLogin(@Res() res: Response) {
+        const { url } = this.authService.getGoogleAuthUrl();
+        res.redirect(url);
+    }
+
+    @Get('google/url')
+    @ApiOperation({ summary: 'Get Google OAuth URL (for SPA)' })
+    @ApiResponse({ status: 200, description: 'Returns the OAuth URL' })
+    async getGoogleAuthUrl() {
+        const { url, state } = this.authService.getGoogleAuthUrl();
+        return { url, state };
+    }
+
+    @Get('google/callback')
+    @ApiOperation({ summary: 'Handle Google OAuth callback' })
+    @ApiQuery({ name: 'code', description: 'Authorization code from Google' })
+    @ApiQuery({ name: 'state', description: 'State parameter for CSRF protection' })
+    @ApiResponse({ status: 302, description: 'Redirects to appropriate page on success' })
+    async googleCallback(
+        @Query('code') code: string,
+        @Query('state') state: string,
+        @Res() res: Response,
+    ) {
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+        
+        try {
+            const result = await this.authService.handleGoogleCallback(code, state);
+            
+            // Redirect to auth callback with tokens
+            const params = new URLSearchParams({
+                google: 'success',
+                username: result.username,
+                accessToken: result.tokens.accessToken,
+                refreshToken: result.tokens.refreshToken,
+                isNewUser: result.isNewUser ? 'true' : 'false',
+            });
+            res.redirect(`${frontendUrl}/auth/callback?${params.toString()}`);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'OAuth failed';
+            res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(errorMessage)}`);
+        }
+    }
 }
