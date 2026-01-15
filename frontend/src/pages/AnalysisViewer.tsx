@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, Sparkles, RefreshCw } from 'lucide-react';
+import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, RefreshCw } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot } from 'recharts';
 import ChessBoardViewer from '../components/chess/ChessBoardViewer';
 import { apiClient } from '../services/apiClient';
@@ -1041,62 +1041,6 @@ const AnalysisViewer = () => {
                             <ChevronsRight className="h-4 w-4" />
                         </button>
                     </div>
-
-                    {/* Current Move Card */}
-                    {currentMoveIndex > 0 && analysis.moves[currentMoveIndex - 1] && (
-                        <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-                                    <Target className="h-4 w-4 text-blue-400" />
-                                    Move {currentMoveIndex}
-                                </h3>
-                                <span className={cn(
-                                    "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border",
-                                    getClassificationColor(analysis.moves[currentMoveIndex - 1].classification)
-                                )}>
-                                    {getClassificationIcon(analysis.moves[currentMoveIndex - 1].classification)}
-                                    {analysis.moves[currentMoveIndex - 1].classification.charAt(0).toUpperCase() +
-                                        analysis.moves[currentMoveIndex - 1].classification.slice(1)}
-                                </span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
-                                    <span className="text-xs text-zinc-500 block mb-1">Played</span>
-                                    <span className="font-mono font-bold text-lg text-white">
-                                        {analysis.moves[currentMoveIndex - 1].playedMove}
-                                    </span>
-                                </div>
-                                <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
-                                    <span className="text-xs text-zinc-500 block mb-1">Best</span>
-                                    <span className="font-mono font-bold text-lg text-emerald-400">
-                                        {analysis.moves[currentMoveIndex - 1].bestMove}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-zinc-700/30">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs text-zinc-500">Eval:</span>
-                                    <span className={cn(
-                                        "font-mono font-bold",
-                                        (currentEval.evaluation ?? 0) >= 0 ? "text-zinc-200" : "text-zinc-400"
-                                    )}>
-                                        {formatEval(currentEval.evaluation, currentEval.mateIn)}
-                                    </span>
-                                </div>
-                                {analysis.moves[currentMoveIndex - 1].centipawnLoss !== null &&
-                                    analysis.moves[currentMoveIndex - 1].centipawnLoss! > 0 && (
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs text-zinc-500">CP Loss:</span>
-                                            <span className="font-mono font-bold text-orange-400">
-                                                -{analysis.moves[currentMoveIndex - 1].centipawnLoss}
-                                            </span>
-                                        </div>
-                                    )}
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 {/* Middle Panel: Move List */}
@@ -1176,53 +1120,71 @@ const AnalysisViewer = () => {
 
                 {/* Right Panel: Metrics */}
                 <div className="lg:col-span-3 space-y-4">
-                    {/* Accuracy Cards */}
-                    <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
-                        <div className="flex items-center gap-2 mb-4">
-                            <Sparkles className="h-4 w-4 text-purple-400" />
-                            <h3 className="text-sm font-semibold text-zinc-300">Accuracy</h3>
-                        </div>
+                    {/* Current Move Card */}
+                    {currentMoveIndex > 0 && analysis.moves[currentMoveIndex - 1] ? (
+                        <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+                                    <Target className="h-4 w-4 text-blue-400" />
+                                    Move {currentMoveIndex}
+                                </h3>
+                                <span className={cn(
+                                    "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border",
+                                    getClassificationColor(analysis.moves[currentMoveIndex - 1].classification)
+                                )}>
+                                    {getClassificationIcon(analysis.moves[currentMoveIndex - 1].classification)}
+                                    {analysis.moves[currentMoveIndex - 1].classification.charAt(0).toUpperCase() +
+                                        analysis.moves[currentMoveIndex - 1].classification.slice(1)}
+                                </span>
+                            </div>
 
-                        <div className="space-y-3">
-                            {/* White accuracy */}
-                            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-xs text-zinc-400 flex items-center gap-1">
-                                        <span className="w-3 h-3 rounded bg-zinc-100"></span>
-                                        {analysis.game.whitePlayer}
-                                    </span>
-                                    <span className={cn("font-bold text-lg", getAccuracyColor(analysis.whiteMetrics.accuracy))}>
-                                        {analysis.whiteMetrics.accuracy.toFixed(1)}%
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
+                                    <span className="text-xs text-zinc-500 block mb-1">Played</span>
+                                    <span className="font-mono font-bold text-lg text-white">
+                                        {analysis.moves[currentMoveIndex - 1].playedMove}
                                     </span>
                                 </div>
-                                <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all"
-                                        style={{ width: `${analysis.whiteMetrics.accuracy}%` }}
-                                    />
+                                <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
+                                    <span className="text-xs text-zinc-500 block mb-1">Best</span>
+                                    <span className="font-mono font-bold text-lg text-emerald-400">
+                                        {analysis.moves[currentMoveIndex - 1].bestMove}
+                                    </span>
                                 </div>
                             </div>
 
-                            {/* Black accuracy */}
-                            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-xs text-zinc-400 flex items-center gap-1">
-                                        <span className="w-3 h-3 rounded bg-zinc-700"></span>
-                                        {analysis.game.blackPlayer}
-                                    </span>
-                                    <span className={cn("font-bold text-lg", getAccuracyColor(analysis.blackMetrics.accuracy))}>
-                                        {analysis.blackMetrics.accuracy.toFixed(1)}%
+                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-zinc-700/30">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-zinc-500">Eval:</span>
+                                    <span className={cn(
+                                        "font-mono font-bold",
+                                        (currentEval.evaluation ?? 0) >= 0 ? "text-zinc-200" : "text-zinc-400"
+                                    )}>
+                                        {formatEval(currentEval.evaluation, currentEval.mateIn)}
                                     </span>
                                 </div>
-                                <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all"
-                                        style={{ width: `${analysis.blackMetrics.accuracy}%` }}
-                                    />
-                                </div>
+                                {analysis.moves[currentMoveIndex - 1].centipawnLoss !== null &&
+                                    analysis.moves[currentMoveIndex - 1].centipawnLoss! > 0 && (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-zinc-500">CP Loss:</span>
+                                            <span className="font-mono font-bold text-orange-400">
+                                                -{analysis.moves[currentMoveIndex - 1].centipawnLoss}
+                                            </span>
+                                        </div>
+                                    )}
                             </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
+                            <div className="flex items-center gap-2 mb-3">
+                                <Target className="h-4 w-4 text-blue-400" />
+                                <h3 className="text-sm font-semibold text-zinc-300">Current Move</h3>
+                            </div>
+                            <p className="text-xs text-zinc-500 text-center py-4">
+                                Use arrow keys or buttons to navigate through moves
+                            </p>
+                        </div>
+                    )}
 
                     {/* Move Quality Summary */}
                     <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
