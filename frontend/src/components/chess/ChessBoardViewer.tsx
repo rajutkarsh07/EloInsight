@@ -1,14 +1,16 @@
 import { Chessboard } from 'react-chessboard';
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 
 interface ChessBoardViewerProps {
     fen?: string;
     interactive?: boolean;
-    bestMove?: string; // UCI format like "e2e4"
+    bestMove?: string; // UCI format like "e2e4" - shows green arrow for suggested move
+    lastMove?: string; // UCI format like "e2e4" - highlights the last played move
     destinationSquare?: string; // Square where the last move landed (e.g., "e4")
     classification?: 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'book' | 'normal' | 'inaccuracy' | 'mistake' | 'blunder' | null;
     showArrow?: boolean;
     showClassification?: boolean;
+    showLastMoveHighlight?: boolean;
     boardOrientation?: 'white' | 'black';
 }
 
@@ -42,10 +44,12 @@ const ChessBoardViewer = ({
     fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
     interactive = false,
     bestMove,
+    lastMove,
     destinationSquare,
     classification,
     showArrow = true,
     showClassification = true,
+    showLastMoveHighlight = true,
     boardOrientation = 'white',
 }: ChessBoardViewerProps) => {
     
@@ -63,7 +67,59 @@ const ChessBoardViewer = ({
         }];
     }, [bestMove, showArrow]);
 
-    // Build options object for react-chessboard v5
+    // Determine if a square is light or dark
+    const isLightSquare = (sq: string) => {
+        const col = sq.charCodeAt(0) - 97; // a=0, h=7
+        const row = parseInt(sq[1]) - 1;   // 1=0, 8=7
+        return (col + row) % 2 === 1;
+    };
+
+    // Custom square styles for last move highlighting
+    const customSquareStyles = useMemo(() => {
+        if (!showLastMoveHighlight) return {};
+        
+        const styles: Record<string, React.CSSProperties> = {};
+        
+        // If we have full UCI move (e.g., "e2e4"), highlight both squares
+        if (lastMove) {
+            const squares = uciToSquares(lastMove);
+            if (squares) {
+                const fromIsLight = isLightSquare(squares.from);
+                const toIsLight = isLightSquare(squares.to);
+                
+                // Source square (where piece came FROM) - darker highlight
+                styles[squares.from] = {
+                    backgroundColor: fromIsLight 
+                        ? 'rgba(255, 255, 120, 0.5)' // Light square: yellowish
+                        : 'rgba(186, 172, 68, 0.65)', // Dark square: darker gold
+                    boxShadow: 'inset 0 0 3px rgba(0,0,0,0.2)',
+                };
+                // Destination square (where piece went TO) - brighter highlight
+                styles[squares.to] = {
+                    backgroundColor: toIsLight 
+                        ? 'rgba(255, 255, 100, 0.6)' // Light square: bright yellow
+                        : 'rgba(205, 190, 80, 0.7)', // Dark square: gold
+                    boxShadow: 'inset 0 0 3px rgba(0,0,0,0.15)',
+                };
+                return styles;
+            }
+        }
+        
+        // Fallback: if no UCI but we have destination square, at least highlight that
+        if (destinationSquare) {
+            const destIsLight = isLightSquare(destinationSquare);
+            styles[destinationSquare] = {
+                backgroundColor: destIsLight 
+                    ? 'rgba(255, 255, 100, 0.6)' // Light square: bright yellow
+                    : 'rgba(205, 190, 80, 0.7)', // Dark square: gold
+                boxShadow: 'inset 0 0 3px rgba(0,0,0,0.15)',
+            };
+        }
+        
+        return styles;
+    }, [lastMove, destinationSquare, showLastMoveHighlight]);
+
+    // Build options object for react-chessboard
     const boardOptions = useMemo(() => ({
         position: fen,
         boardOrientation: boardOrientation,
@@ -73,7 +129,8 @@ const ChessBoardViewer = ({
         darkSquareStyle: { backgroundColor: '#779556' },
         lightSquareStyle: { backgroundColor: '#ebecd0' },
         arrows: arrows,
-    }), [fen, interactive, arrows, boardOrientation]);
+        squareStyles: customSquareStyles, // Last move highlighting
+    }), [fen, interactive, arrows, boardOrientation, customSquareStyles]);
 
     // Get destination square for icon placement
     const iconSquare = destinationSquare;
@@ -83,6 +140,11 @@ const ChessBoardViewer = ({
 
     // Adjust badge position based on board orientation
     const isFlipped = boardOrientation === 'black';
+
+    // Debug: log the custom square styles
+    if (Object.keys(customSquareStyles).length > 0) {
+        console.log('🎨 Square highlights:', customSquareStyles);
+    }
 
     return (
         <div style={{ width: '100%', maxWidth: '560px', margin: '0 auto', position: 'relative' }}>

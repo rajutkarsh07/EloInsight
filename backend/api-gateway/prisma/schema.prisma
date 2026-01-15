@@ -265,9 +265,10 @@ model PositionAnalysis {
   mateIn     Int? @map("mate_in") // Positive: white mates, Negative: black mates
 
   // Moves
-  bestMove    String  @map("best_move") @db.VarChar(10)
-  bestMoveUci String? @map("best_move_uci") @db.VarChar(10) // UCI format for arrows
-  playedMove  String  @map("played_move") @db.VarChar(10)
+  bestMove      String  @map("best_move") @db.VarChar(10)
+  bestMoveUci   String? @map("best_move_uci") @db.VarChar(10) // UCI format for arrows
+  playedMove    String  @map("played_move") @db.VarChar(10)
+  playedMoveUci String? @map("played_move_uci") @db.VarChar(10) // UCI format for last move highlight
 
   // Classification flags
   isBlunder      Boolean            @default(false) @map("is_blunder")
