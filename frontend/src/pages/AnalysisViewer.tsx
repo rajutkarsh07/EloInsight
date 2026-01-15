@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, RefreshCw, Undo2, FlaskConical, Loader2, ChevronDown, TrendingUp } from 'lucide-react';
+import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, RefreshCw, Undo2, FlaskConical, Loader2, ChevronDown, TrendingUp, Copy, CheckCircle, Crosshair } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceDot } from 'recharts';
 import ChessBoardViewer from '../components/chess/ChessBoardViewer';
 import { apiClient } from '../services/apiClient';
@@ -224,6 +224,9 @@ const AnalysisViewer = () => {
 
     // Move quality filter state - which category is expanded
     const [expandedQualityCategory, setExpandedQualityCategory] = useState<string | null>(null);
+
+    // Copy FEN feedback state
+    const [fenCopied, setFenCopied] = useState(false);
 
     // Determine which color the user played as
     const getUserColor = useCallback((gameData: FullAnalysis): 'white' | 'black' => {
@@ -465,6 +468,117 @@ const AnalysisViewer = () => {
         console.warn('FEN not available for move', currentMoveIndex);
         return startingFen;
     }, [analysis, currentMoveIndex, isExplorationMode, explorationFen]);
+
+    // Copy FEN to clipboard
+    const copyFenToClipboard = useCallback(() => {
+        if (currentFen) {
+            navigator.clipboard.writeText(currentFen).then(() => {
+                setFenCopied(true);
+                setTimeout(() => setFenCopied(false), 2000);
+            });
+        }
+    }, [currentFen]);
+
+    // Calculate win probability from centipawn evaluation
+    // Using the formula: winProb = 50 + 50 * (2 / (1 + exp(-0.004 * centipawns)) - 1)
+    const calculateWinProbability = useCallback((centipawns: number | null, mateIn: number | null): { white: number; draw: number; black: number } => {
+        if (mateIn !== null) {
+            // Mate found
+            if (mateIn > 0) {
+                return { white: 100, draw: 0, black: 0 };
+            } else {
+                return { white: 0, draw: 0, black: 100 };
+            }
+        }
+        
+        if (centipawns === null) {
+            return { white: 50, draw: 0, black: 50 };
+        }
+        
+        // Convert centipawns to win probability using sigmoid function
+        const winProb = 50 + 50 * (2 / (1 + Math.exp(-0.004 * centipawns)) - 1);
+        
+        // Estimate draw probability (higher near 0 eval)
+        const drawProb = Math.max(0, 20 - Math.abs(centipawns) / 25);
+        
+        // Adjust win/loss probabilities for draw
+        const adjustedWhite = Math.max(0, Math.min(100, winProb - drawProb / 2));
+        const adjustedBlack = Math.max(0, Math.min(100, 100 - winProb - drawProb / 2));
+        
+        return {
+            white: Math.round(adjustedWhite),
+            draw: Math.round(drawProb),
+            black: Math.round(adjustedBlack),
+        };
+    }, []);
+
+    // Find key moments (biggest evaluation swings)
+    const keyMoments = useMemo(() => {
+        if (!analysis || analysis.moves.length < 2) return [];
+        
+        const moments: Array<{
+            moveIndex: number;
+            move: MoveAnalysis;
+            evalSwing: number;
+            type: 'blunder' | 'mistake' | 'brilliant' | 'turning_point';
+            description: string;
+        }> = [];
+        
+        for (let i = 1; i < analysis.moves.length; i++) {
+            const currentMove = analysis.moves[i];
+            const prevMove = analysis.moves[i - 1];
+            
+            // Calculate eval swing (normalized to white's perspective)
+            const isBlackMove = i % 2 === 1;
+            let prevEval = prevMove.evaluation ?? 0;
+            let currEval = currentMove.evaluation ?? 0;
+            
+            // Normalize to white's perspective
+            if (i % 2 === 0) { // After white's move
+                prevEval = -(prevMove.evaluation ?? 0);
+                currEval = -(currentMove.evaluation ?? 0);
+            }
+            
+            const evalSwing = Math.abs(currEval - prevEval);
+            
+            // Identify key moments based on classification and eval swing
+            if (currentMove.classification === 'blunder' || evalSwing > 200) {
+                moments.push({
+                    moveIndex: i + 1,
+                    move: currentMove,
+                    evalSwing,
+                    type: currentMove.classification === 'blunder' ? 'blunder' : 
+                          currentMove.classification === 'brilliant' ? 'brilliant' : 'turning_point',
+                    description: currentMove.classification === 'blunder' 
+                        ? `${isBlackMove ? 'Black' : 'White'} blunders with ${currentMove.playedMove}`
+                        : currentMove.classification === 'brilliant'
+                        ? `Brilliant ${currentMove.playedMove}!`
+                        : `Game-changing ${currentMove.playedMove}`,
+                });
+            } else if (currentMove.classification === 'brilliant') {
+                moments.push({
+                    moveIndex: i + 1,
+                    move: currentMove,
+                    evalSwing,
+                    type: 'brilliant',
+                    description: `Brilliant ${currentMove.playedMove}!`,
+                });
+            } else if (currentMove.classification === 'mistake' && evalSwing > 100) {
+                moments.push({
+                    moveIndex: i + 1,
+                    move: currentMove,
+                    evalSwing,
+                    type: 'mistake',
+                    description: `${isBlackMove ? 'Black' : 'White'} mistakes with ${currentMove.playedMove}`,
+                });
+            }
+        }
+        
+        // Sort by eval swing and take top 5
+        return moments
+            .sort((a, b) => b.evalSwing - a.evalSwing)
+            .slice(0, 5);
+    }, [analysis]);
 
     // Valid classification types for the ChessBoardViewer
     type BoardClassification = 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'book' | 'normal' | 'inaccuracy' | 'mistake' | 'blunder' | null;
@@ -1287,6 +1401,112 @@ const AnalysisViewer = () => {
                 onMoveClick={goToMoveWithReset}
             />
 
+            {/* Win Probability + Key Moments Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Win Probability */}
+                {(() => {
+                    const winProb = calculateWinProbability(currentEval.evaluation, currentEval.mateIn);
+                    return (
+                        <div className="bg-zinc-900/95 rounded-xl border border-zinc-800/80 p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-sm font-medium text-zinc-300">Win Probability</span>
+                                <span className="text-xs text-zinc-500">
+                                    Move {currentMoveIndex}/{analysis.moves.length}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                {/* Probability Bar */}
+                                <div className="flex-1 h-6 rounded-lg overflow-hidden flex">
+                                    <div 
+                                        className="bg-gradient-to-r from-zinc-100 to-zinc-200 transition-all duration-300 flex items-center justify-center"
+                                        style={{ width: `${winProb.white}%` }}
+                                    >
+                                        {winProb.white > 15 && (
+                                            <span className="text-xs font-bold text-zinc-800">{winProb.white}%</span>
+                                        )}
+                                    </div>
+                                    {winProb.draw > 5 && (
+                                        <div 
+                                            className="bg-zinc-500 transition-all duration-300 flex items-center justify-center"
+                                            style={{ width: `${winProb.draw}%` }}
+                                        >
+                                            {winProb.draw > 10 && (
+                                                <span className="text-xs font-bold text-white">{winProb.draw}%</span>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div 
+                                        className="bg-gradient-to-r from-zinc-700 to-zinc-800 transition-all duration-300 flex items-center justify-center flex-1"
+                                        style={{ width: `${winProb.black}%` }}
+                                    >
+                                        {winProb.black > 15 && (
+                                            <span className="text-xs font-bold text-zinc-200">{winProb.black}%</span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex justify-between mt-2 text-[10px] text-zinc-500">
+                                <span className="flex items-center gap-1">
+                                    <span className="w-2 h-2 rounded-sm bg-zinc-200"></span>
+                                    White
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <span className="w-2 h-2 rounded-sm bg-zinc-500"></span>
+                                    Draw
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <span className="w-2 h-2 rounded-sm bg-zinc-700"></span>
+                                    Black
+                                </span>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* Key Moments */}
+                <div className="bg-zinc-900/95 rounded-xl border border-zinc-800/80 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                        <Crosshair className="h-4 w-4 text-rose-400" />
+                        <span className="text-sm font-medium text-zinc-300">Key Moments</span>
+                    </div>
+                    {keyMoments.length > 0 ? (
+                        <div className="space-y-1.5 max-h-28 overflow-y-auto custom-scrollbar">
+                            {keyMoments.map((moment, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => goToMoveWithReset(moment.moveIndex)}
+                                    className={cn(
+                                        "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-all text-left",
+                                        currentMoveIndex === moment.moveIndex
+                                            ? "bg-rose-500/20 ring-1 ring-rose-500/50"
+                                            : "hover:bg-zinc-800/50"
+                                    )}
+                                >
+                                    <span className={cn(
+                                        "w-5 h-5 rounded flex items-center justify-center flex-shrink-0",
+                                        moment.type === 'blunder' ? "bg-red-500/20" :
+                                        moment.type === 'mistake' ? "bg-orange-500/20" :
+                                        moment.type === 'brilliant' ? "bg-cyan-500/20" :
+                                        "bg-rose-500/20"
+                                    )}>
+                                        {moment.type === 'blunder' ? <XCircle className="h-3 w-3 text-red-400" /> :
+                                         moment.type === 'mistake' ? <AlertTriangle className="h-3 w-3 text-orange-400" /> :
+                                         moment.type === 'brilliant' ? <Star className="h-3 w-3 text-cyan-400" /> :
+                                         <Zap className="h-3 w-3 text-rose-400" />}
+                                    </span>
+                                    <span className="flex-1 text-zinc-400 truncate">{moment.description}</span>
+                                    <span className="text-zinc-600 font-mono">#{moment.moveIndex}</span>
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-zinc-500 text-center py-3">
+                            No critical moments detected in this game
+                        </p>
+                    )}
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Left Panel: Board & Controls */}
                 <div className="lg:col-span-5 space-y-4">
@@ -1427,6 +1647,26 @@ const AnalysisViewer = () => {
                         >
                             <ChevronsRight className="h-4 w-4" />
                         </button>
+
+                        <div className="w-px h-6 bg-zinc-700 mx-1"></div>
+
+                        {/* Copy FEN Button */}
+                        <button
+                            onClick={copyFenToClipboard}
+                            className={cn(
+                                "p-2 rounded-lg transition-colors flex items-center gap-1.5",
+                                fenCopied
+                                    ? "bg-emerald-500/20 text-emerald-400"
+                                    : "bg-zinc-800 hover:bg-zinc-700"
+                            )}
+                            title="Copy FEN to clipboard"
+                        >
+                            {fenCopied ? (
+                                <CheckCircle className="h-4 w-4" />
+                            ) : (
+                                <Copy className="h-4 w-4" />
+                            )}
+                        </button>
                     </div>
                 </div>
 
@@ -1525,6 +1765,31 @@ const AnalysisViewer = () => {
                                         </div>
                                     )}
                             </div>
+
+                            {/* Engine Line (PV) */}
+                            {analysis.moves[currentMoveIndex - 1].pv && analysis.moves[currentMoveIndex - 1].pv.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-zinc-700/30">
+                                    <span className="text-xs text-zinc-500 block mb-1.5">Best Line:</span>
+                                    <div className="flex flex-wrap gap-1">
+                                        {analysis.moves[currentMoveIndex - 1].pv.slice(0, 6).map((move, idx) => (
+                                            <span 
+                                                key={idx} 
+                                                className={cn(
+                                                    "px-1.5 py-0.5 rounded text-xs font-mono",
+                                                    idx === 0 
+                                                        ? "bg-emerald-500/20 text-emerald-400 font-semibold" 
+                                                        : "bg-zinc-700/50 text-zinc-400"
+                                                )}
+                                            >
+                                                {move}
+                                            </span>
+                                        ))}
+                                        {analysis.moves[currentMoveIndex - 1].pv.length > 6 && (
+                                            <span className="text-xs text-zinc-500">...</span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
