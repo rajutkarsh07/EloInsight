@@ -204,9 +204,9 @@ const ChessBoardViewer = ({
     const isFlipped = boardOrientation === 'black';
 
     // Debug: log the custom square styles
-    if (Object.keys(customSquareStyles).length > 0) {
-        console.log('🎨 Square highlights:', customSquareStyles);
-    }
+    // if (Object.keys(customSquareStyles).length > 0) {
+    //     console.log('🎨 Square highlights:', customSquareStyles);
+    // }
 
     return (
         <div style={{ width: '100%', maxWidth: '560px', margin: '0 auto', position: 'relative' }}>
