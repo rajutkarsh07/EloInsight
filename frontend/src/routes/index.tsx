@@ -3,6 +3,7 @@ import MainLayout from '../components/layout/MainLayout';
 import Login from '../pages/Login';
 import Signup from '../pages/Signup';
 import VerifyEmail from '../pages/VerifyEmail';
+import AuthCallback from '../pages/AuthCallback';
 import Dashboard from '../pages/Dashboard';
 import GamesList from '../pages/GamesList';
 import AnalysisList from '../pages/AnalysisList';
@@ -66,6 +67,10 @@ const routeConfig = [
     {
         path: '/verify-email',
         element: <VerifyEmail />,
+    },
+    {
+        path: '/auth/callback',
+        element: <AuthCallback />,
     },
     {
         element: <ProtectedRoute />,

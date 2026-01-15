@@ -99,12 +99,30 @@ export class AuthController {
 
     // ============ Lichess OAuth Endpoints ============
 
+    @Get('lichess/login')
+    @ApiOperation({ summary: 'Login or register via Lichess OAuth' })
+    @ApiResponse({ status: 302, description: 'Redirects to Lichess OAuth page' })
+    async lichessLogin(@Res() res: Response) {
+        // null userId means login/register flow
+        const { url } = this.authService.getLichessAuthUrl(null);
+        res.redirect(url);
+    }
+
+    @Get('lichess/login/url')
+    @ApiOperation({ summary: 'Get Lichess OAuth URL for login (for SPA)' })
+    @ApiResponse({ status: 200, description: 'Returns the OAuth URL' })
+    async getLichessLoginUrl() {
+        // null userId means login/register flow
+        const { url, state } = this.authService.getLichessAuthUrl(null);
+        return { url, state };
+    }
+
     @Get('lichess')
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
-    @ApiOperation({ summary: 'Initiate Lichess OAuth flow' })
+    @ApiOperation({ summary: 'Link Lichess account to existing user' })
     @ApiResponse({ status: 302, description: 'Redirects to Lichess OAuth page' })
-    async lichessAuth(@Req() req: Request, @Res() res: Response) {
+    async lichessLink(@Req() req: Request, @Res() res: Response) {
         const user = req.user as { id: string };
         const { url } = this.authService.getLichessAuthUrl(user.id);
         res.redirect(url);
@@ -113,9 +131,9 @@ export class AuthController {
     @Get('lichess/url')
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
-    @ApiOperation({ summary: 'Get Lichess OAuth URL (for SPA)' })
+    @ApiOperation({ summary: 'Get Lichess OAuth URL for linking (for SPA)' })
     @ApiResponse({ status: 200, description: 'Returns the OAuth URL' })
-    async getLichessAuthUrl(@Req() req: Request) {
+    async getLichessLinkUrl(@Req() req: Request) {
         const user = req.user as { id: string };
         const { url, state } = this.authService.getLichessAuthUrl(user.id);
         return { url, state };
@@ -125,7 +143,7 @@ export class AuthController {
     @ApiOperation({ summary: 'Handle Lichess OAuth callback' })
     @ApiQuery({ name: 'code', description: 'Authorization code from Lichess' })
     @ApiQuery({ name: 'state', description: 'State parameter for CSRF protection' })
-    @ApiResponse({ status: 302, description: 'Redirects to settings page on success' })
+    @ApiResponse({ status: 302, description: 'Redirects to appropriate page on success' })
     async lichessCallback(
         @Query('code') code: string,
         @Query('state') state: string,
@@ -134,13 +152,25 @@ export class AuthController {
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
         
         try {
-            const { username } = await this.authService.handleLichessCallback(code, state);
-            // Redirect to settings with success message
-            res.redirect(`${frontendUrl}/settings?lichess=connected&username=${encodeURIComponent(username)}`);
+            const result = await this.authService.handleLichessCallback(code, state);
+            
+            if (result.tokens) {
+                // Login/Register flow - redirect to dashboard with tokens
+                const params = new URLSearchParams({
+                    lichess: 'success',
+                    username: result.username,
+                    accessToken: result.tokens.accessToken,
+                    refreshToken: result.tokens.refreshToken,
+                    isNewUser: result.isNewUser ? 'true' : 'false',
+                });
+                res.redirect(`${frontendUrl}/auth/callback?${params.toString()}`);
+            } else {
+                // Linking flow - redirect to settings
+                res.redirect(`${frontendUrl}/settings?lichess=connected&username=${encodeURIComponent(result.username)}`);
+            }
         } catch (error) {
-            // Redirect to settings with error message
             const errorMessage = error instanceof Error ? error.message : 'OAuth failed';
-            res.redirect(`${frontendUrl}/settings?lichess=error&message=${encodeURIComponent(errorMessage)}`);
+            res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(errorMessage)}`);
         }
     }
 
