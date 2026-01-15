@@ -102,7 +102,7 @@ export class UsersController {
             if (i === 0) {
                 streakType = gameResult === 'draw' ? 'none' : gameResult;
                 currentStreak = gameResult === 'draw' ? 0 : 1;
-            } else if (streakType === gameResult && gameResult !== 'draw') {
+            } else if (streakType !== 'none' && streakType === gameResult) {
                 currentStreak++;
             }
 
@@ -274,6 +274,8 @@ export class UsersController {
             username: user.username,
             chessComUsername: user.chessComUsername,
             lichessUsername: user.lichessUsername,
+            lichessVerified: user.lichessVerified,
+            chessComVerified: user.chessComVerified,
         };
     }
 

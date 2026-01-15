@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { LoginDto, RegisterDto, VerifyResponseDto } from './dto/auth.dto';
 import { EmailService } from './email.service';
 import { PrismaService } from '../prisma/prisma.service';
+import * as crypto from 'crypto';
 
 // Interface matching the Prisma User model structure roughly for internal use if needed
 // But efficiently we will just return the Prisma User object or partials
@@ -182,6 +183,9 @@ export class AuthService {
                 isVerified: user.emailVerified,
                 chessComUsername: chessComAccount?.platformUsername || null,
                 lichessUsername: lichessAccount?.platformUsername || null,
+                // OAuth verified status (accessToken presence indicates OAuth verification)
+                lichessVerified: !!lichessAccount?.accessToken,
+                chessComVerified: !!chessComAccount?.accessToken,
             },
             tokens: {
                 accessToken,
@@ -206,6 +210,9 @@ export class AuthService {
             ...user,
             chessComUsername: chessComAccount?.platformUsername || null,
             lichessUsername: lichessAccount?.platformUsername || null,
+            // OAuth verified if accessToken exists
+            lichessVerified: !!lichessAccount?.accessToken,
+            chessComVerified: !!chessComAccount?.accessToken,
         };
     }
 
@@ -272,5 +279,173 @@ export class AuthService {
 
         // Return updated user with linked accounts
         return this.getUserById(userId);
+    }
+
+    // ============ Lichess OAuth Methods ============
+
+    // Store for PKCE code verifiers (in production, use Redis or database)
+    private codeVerifiers: Map<string, { verifier: string; userId: string; expiresAt: number }> = new Map();
+
+    /**
+     * Generate Lichess OAuth URL with PKCE
+     */
+    getLichessAuthUrl(userId: string): { url: string; state: string } {
+        const clientId = this.configService.get<string>('LICHESS_CLIENT_ID');
+        const port = this.configService.get<string>('PORT') || '4000';
+        const apiPrefix = this.configService.get<string>('API_PREFIX') || 'api/v1';
+        // Redirect to backend API endpoint, not frontend
+        const redirectUri = this.configService.get<string>('LICHESS_REDIRECT_URI') || 
+            `http://localhost:${port}/${apiPrefix}/auth/lichess/callback`;
+
+        // Generate PKCE code verifier and challenge
+        const codeVerifier = this.generateCodeVerifier();
+        const codeChallenge = this.generateCodeChallenge(codeVerifier);
+        
+        // Generate state for CSRF protection
+        const state = crypto.randomBytes(32).toString('hex');
+
+        // Store verifier with state (expires in 10 minutes)
+        this.codeVerifiers.set(state, {
+            verifier: codeVerifier,
+            userId,
+            expiresAt: Date.now() + 10 * 60 * 1000,
+        });
+
+        // Clean up expired verifiers
+        this.cleanupExpiredVerifiers();
+
+        const params = new URLSearchParams({
+            response_type: 'code',
+            client_id: clientId || '',
+            redirect_uri: redirectUri,
+            scope: 'preference:read',
+            code_challenge_method: 'S256',
+            code_challenge: codeChallenge,
+            state,
+        });
+
+        return {
+            url: `https://lichess.org/oauth?${params.toString()}`,
+            state,
+        };
+    }
+
+    /**
+     * Handle Lichess OAuth callback
+     */
+    async handleLichessCallback(code: string, state: string): Promise<{ username: string; userId: string }> {
+        // Validate state and get stored data
+        const storedData = this.codeVerifiers.get(state);
+        if (!storedData) {
+            throw new BadRequestException('Invalid or expired state parameter');
+        }
+
+        if (storedData.expiresAt < Date.now()) {
+            this.codeVerifiers.delete(state);
+            throw new BadRequestException('OAuth session expired. Please try again.');
+        }
+
+        const { verifier, userId } = storedData;
+        this.codeVerifiers.delete(state);
+
+        const clientId = this.configService.get<string>('LICHESS_CLIENT_ID');
+        const port = this.configService.get<string>('PORT') || '4000';
+        const apiPrefix = this.configService.get<string>('API_PREFIX') || 'api/v1';
+        // Must match the redirect URI used in getLichessAuthUrl
+        const redirectUri = this.configService.get<string>('LICHESS_REDIRECT_URI') || 
+            `http://localhost:${port}/${apiPrefix}/auth/lichess/callback`;
+
+        // Exchange code for access token
+        const tokenResponse = await fetch('https://lichess.org/api/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                grant_type: 'authorization_code',
+                code,
+                code_verifier: verifier,
+                redirect_uri: redirectUri,
+                client_id: clientId || '',
+            }).toString(),
+        });
+
+        if (!tokenResponse.ok) {
+            const errorText = await tokenResponse.text();
+            this.logger.error(`Lichess token exchange failed: ${errorText}`);
+            throw new BadRequestException('Failed to exchange authorization code');
+        }
+
+        const tokenData = await tokenResponse.json();
+        const accessToken = tokenData.access_token;
+
+        // Get user info from Lichess
+        const userResponse = await fetch('https://lichess.org/api/account', {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+            },
+        });
+
+        if (!userResponse.ok) {
+            throw new BadRequestException('Failed to get Lichess user info');
+        }
+
+        const lichessUser = await userResponse.json();
+        const lichessUsername = lichessUser.username;
+
+        // Update user's linked account with verified Lichess username
+        // accessToken presence indicates OAuth verification
+        await this.prisma.linkedAccount.upsert({
+            where: {
+                userId_platform: {
+                    userId,
+                    platform: 'LICHESS',
+                },
+            },
+            update: {
+                platformUsername: lichessUsername,
+                accessToken: accessToken,
+            },
+            create: {
+                userId,
+                platform: 'LICHESS',
+                platformUsername: lichessUsername,
+                accessToken: accessToken,
+            },
+        });
+
+        this.logger.log(`Lichess account ${lichessUsername} verified for user ${userId}`);
+
+        return { username: lichessUsername, userId };
+    }
+
+    /**
+     * Disconnect Lichess account
+     */
+    async disconnectLichess(userId: string): Promise<void> {
+        await this.prisma.linkedAccount.deleteMany({
+            where: {
+                userId,
+                platform: 'LICHESS',
+            },
+        });
+    }
+
+    // PKCE helpers
+    private generateCodeVerifier(): string {
+        return crypto.randomBytes(32).toString('base64url');
+    }
+
+    private generateCodeChallenge(verifier: string): string {
+        return crypto.createHash('sha256').update(verifier).digest('base64url');
+    }
+
+    private cleanupExpiredVerifiers(): void {
+        const now = Date.now();
+        for (const [state, data] of this.codeVerifiers.entries()) {
+            if (data.expiresAt < now) {
+                this.codeVerifiers.delete(state);
+            }
+        }
     }
 }
