@@ -1,5 +1,6 @@
 import { Chessboard } from 'react-chessboard';
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
+import { Chess } from 'chess.js';
 
 interface ChessBoardViewerProps {
     fen?: string;
@@ -12,6 +13,7 @@ interface ChessBoardViewerProps {
     showClassification?: boolean;
     showLastMoveHighlight?: boolean;
     boardOrientation?: 'white' | 'black';
+    onMove?: (move: { from: string; to: string; promotion?: string; fen: string; san: string }) => void;
 }
 
 // Convert UCI notation to square pair
@@ -51,6 +53,7 @@ const ChessBoardViewer = ({
     showClassification = true,
     showLastMoveHighlight = true,
     boardOrientation = 'white',
+    onMove,
 }: ChessBoardViewerProps) => {
     
     // Custom arrows for best move (green arrow)
@@ -119,6 +122,64 @@ const ChessBoardViewer = ({
         return styles;
     }, [lastMove, destinationSquare, showLastMoveHighlight]);
 
+    // Handle piece drop for interactive mode
+    // react-chessboard passes { piece, sourceSquare, targetSquare }
+    // piece is an object with { isSparePiece, position, pieceType }
+    // pieceType is like "wP", "bK", etc.
+    const handlePieceDrop = useCallback((args: { 
+        piece: { isSparePiece: boolean; position: string; pieceType: string }; 
+        sourceSquare: string; 
+        targetSquare: string | null 
+    }): boolean => {
+        const { piece, sourceSquare, targetSquare } = args;
+        
+        if (!interactive || !onMove || !targetSquare) return false;
+        
+        try {
+            const chess = new Chess(fen);
+            
+            // piece.pieceType is like "wP", "bK", etc.
+            const pieceType = piece.pieceType;
+            
+            // Check if it's the right color's turn
+            const isWhiteTurn = chess.turn() === 'w';
+            const isWhitePiece = pieceType[0] === 'w';
+            
+            if (isWhiteTurn !== isWhitePiece) {
+                console.log('Not your turn!');
+                return false;
+            }
+            
+            // Check if it's a pawn promotion
+            const isPawnPromotion = 
+                pieceType[1]?.toUpperCase() === 'P' && 
+                ((isWhitePiece && targetSquare[1] === '8') || (!isWhitePiece && targetSquare[1] === '1'));
+            
+            // Try to make the move
+            const move = chess.move({
+                from: sourceSquare,
+                to: targetSquare,
+                promotion: isPawnPromotion ? 'q' : undefined, // Default to queen promotion
+            });
+            
+            if (move) {
+                onMove({
+                    from: sourceSquare,
+                    to: targetSquare,
+                    promotion: isPawnPromotion ? 'q' : undefined,
+                    fen: chess.fen(),
+                    san: move.san,
+                });
+                return true;
+            }
+            
+            return false;
+        } catch (error) {
+            console.error('Invalid move:', error);
+            return false;
+        }
+    }, [fen, interactive, onMove]);
+
     // Build options object for react-chessboard
     const boardOptions = useMemo(() => ({
         position: fen,
@@ -129,8 +190,9 @@ const ChessBoardViewer = ({
         darkSquareStyle: { backgroundColor: '#779556' },
         lightSquareStyle: { backgroundColor: '#ebecd0' },
         arrows: arrows,
-        squareStyles: customSquareStyles, // Last move highlighting
-    }), [fen, interactive, arrows, boardOrientation, customSquareStyles]);
+        squareStyles: customSquareStyles,
+        onPieceDrop: interactive ? handlePieceDrop : undefined,
+    }), [fen, interactive, arrows, boardOrientation, customSquareStyles, handlePieceDrop]);
 
     // Get destination square for icon placement
     const iconSquare = destinationSquare;
