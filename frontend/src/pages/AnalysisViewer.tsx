@@ -1,11 +1,20 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, RefreshCw } from 'lucide-react';
+import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, Sparkles, RefreshCw, Undo2, FlaskConical, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot } from 'recharts';
 import ChessBoardViewer from '../components/chess/ChessBoardViewer';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
+
+// Interface for exploration position analysis response
+interface ExplorationEvaluation {
+    evaluation: number | null;
+    mateIn: number | null;
+    bestMove: string | null;
+    bestMoveUci: string | null;
+    loading: boolean;
+}
 
 interface MoveAnalysis {
     moveNumber: number;
@@ -33,12 +42,12 @@ interface MoveAnalysis {
 // Note: For castling, this returns undefined - castling is handled separately
 const extractDestinationSquare = (san: string): string | undefined => {
     if (!san) return undefined;
-
+    
     // Castling doesn't have a simple destination square
     if (san === 'O-O' || san === 'O-O-O') {
         return undefined; // Will be handled separately
     }
-
+    
     // Remove check/checkmate symbols and promotion piece (but keep the destination)
     // e.g., "h8=Q+" -> "h8", "exd8=Q#" -> "d8"
     const cleaned = san.replace(/[+#]/g, '').replace(/=[QRBN]/, '');
@@ -52,7 +61,7 @@ const parseFenToSquares = (fen: string): Record<string, string> => {
     const pieces: Record<string, string> = {};
     const [position] = fen.split(' ');
     const rows = position.split('/');
-
+    
     for (let rowIdx = 0; rowIdx < 8; rowIdx++) {
         const row = rows[rowIdx];
         let colIdx = 0;
@@ -72,38 +81,38 @@ const parseFenToSquares = (fen: string): Record<string, string> => {
 // Find the source square by comparing two FENs (before and after a move)
 const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare: string | undefined, playedMove?: string): string | undefined => {
     if (!fenBefore || !fenAfter || !destinationSquare) return undefined;
-
+    
     const before = parseFenToSquares(fenBefore);
     const after = parseFenToSquares(fenAfter);
-
+    
     // Handle castling first (O-O or O-O-O notation)
     if (playedMove === 'O-O' || playedMove === 'O-O-O') {
         // Determine the row based on which side castled (check if white or black king moved)
         const row = after['g1']?.toLowerCase() === 'k' || after['c1']?.toLowerCase() === 'k' ? '1' : '8';
         return 'e' + row; // King always starts on e-file
     }
-
+    
     // The piece that moved TO the destination
     const movedPiece = after[destinationSquare];
     if (!movedPiece) return undefined;
-
+    
     // Handle promotion: pawn becomes queen/rook/bishop/knight
     // Look for a pawn that disappeared from an adjacent file on the previous rank
     const isPromotion = playedMove?.includes('=');
     if (isPromotion) {
         const destCol = destinationSquare.charCodeAt(0) - 97; // 0-7
         const destRow = parseInt(destinationSquare[1]);
-
+        
         // Pawn promotes on rank 8 (white) or rank 1 (black)
         // Source is one rank behind the destination
         const sourceRow = destRow === 8 ? 7 : 2; // If promoted to 8, came from 7; if to 1, came from 2
-
+        
         // Check same file first (non-capture promotion)
         const sameFileSource = String.fromCharCode(97 + destCol) + sourceRow;
         if (before[sameFileSource]?.toLowerCase() === 'p' && !after[sameFileSource]) {
             return sameFileSource;
         }
-
+        
         // Check adjacent files (capture promotion)
         for (const colOffset of [-1, 1]) {
             const srcCol = destCol + colOffset;
@@ -115,18 +124,18 @@ const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare
             }
         }
     }
-
+    
     // Standard move: find where this piece came FROM
     // Look for a square that had the same piece before but is now empty or different
     for (const square of Object.keys(before)) {
         if (square === destinationSquare) continue;
-
+        
         // Same piece type was here before, and now it's gone or different
         if (before[square] === movedPiece && after[square] !== movedPiece) {
             return square;
         }
     }
-
+    
     // Handle castling: if king moved 2 squares, source is the original king position
     if (movedPiece.toLowerCase() === 'k') {
         const destCol = destinationSquare.charCodeAt(0) - 97;
@@ -139,7 +148,7 @@ const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare
             }
         }
     }
-
+    
     // Fallback for any piece that disappeared and destination has a piece
     // Find any square where a piece vanished
     for (const square of Object.keys(before)) {
@@ -149,7 +158,7 @@ const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare
             return square;
         }
     }
-
+    
     return undefined;
 };
 
@@ -198,6 +207,20 @@ const AnalysisViewer = () => {
     const [error, setError] = useState('');
     const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
     const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white');
+    
+    // Exploration mode state
+    const [isExplorationMode, setIsExplorationMode] = useState(false);
+    const [explorationStartIndex, setExplorationStartIndex] = useState<number | null>(null);
+    const [explorationFen, setExplorationFen] = useState<string | null>(null);
+    const [explorationLastMove, setExplorationLastMove] = useState<string | null>(null);
+    const [explorationEval, setExplorationEval] = useState<ExplorationEvaluation>({
+        evaluation: null,
+        mateIn: null,
+        bestMove: null,
+        bestMoveUci: null,
+        loading: false,
+    });
+    const explorationAbortRef = useRef<AbortController | null>(null);
 
     // Determine which color the user played as
     const getUserColor = useCallback((gameData: FullAnalysis): 'white' | 'black' => {
@@ -224,6 +247,137 @@ const AnalysisViewer = () => {
     const flipBoard = useCallback(() => {
         setBoardOrientation(prev => prev === 'white' ? 'black' : 'white');
     }, []);
+
+    // Reset exploration mode and return to original game position
+    const resetExploration = useCallback(() => {
+        // Cancel any pending analysis request
+        if (explorationAbortRef.current) {
+            explorationAbortRef.current.abort();
+            explorationAbortRef.current = null;
+        }
+        
+        setIsExplorationMode(false);
+        setExplorationStartIndex(null);
+        setExplorationFen(null);
+        setExplorationLastMove(null);
+        setExplorationEval({
+            evaluation: null,
+            mateIn: null,
+            bestMove: null,
+            bestMoveUci: null,
+            loading: false,
+        });
+    }, []);
+
+    // Handle manual move in exploration mode
+    const handleExplorationMove = useCallback(async (move: { 
+        from: string; 
+        to: string; 
+        promotion?: string; 
+        fen: string; 
+        san: string 
+    }) => {
+        // If not already in exploration mode, start it
+        if (!isExplorationMode) {
+            setIsExplorationMode(true);
+            setExplorationStartIndex(currentMoveIndex);
+        }
+        
+        // Update exploration FEN and last move
+        setExplorationFen(move.fen);
+        setExplorationLastMove(move.from + move.to);
+        
+        // Cancel any pending analysis request
+        if (explorationAbortRef.current) {
+            explorationAbortRef.current.abort();
+        }
+        explorationAbortRef.current = new AbortController();
+        
+        // Set loading state
+        setExplorationEval(prev => ({
+            ...prev,
+            loading: true,
+            bestMove: null,
+            bestMoveUci: null,
+        }));
+        
+        try {
+            // Call the position analysis API
+            const response = await apiClient.post<{
+                fen: string;
+                depth: number;
+                evaluation: {
+                    centipawns?: number;
+                    mateIn?: number;
+                    isMate: boolean;
+                };
+                bestMove: string;
+                pv: string[];
+            }>('/analysis/position', {
+                fen: move.fen,
+                depth: 18, // Good balance of speed and accuracy
+                multiPv: 1,
+                timeoutMs: 10000,
+            });
+            
+            // Check if this request was aborted
+            if (explorationAbortRef.current?.signal.aborted) {
+                return;
+            }
+            
+            // Parse the best move UCI from PV if available
+            let bestMoveUci = null;
+            if (response.pv && response.pv.length > 0) {
+                // PV contains UCI moves like "e2e4"
+                bestMoveUci = response.pv[0];
+            }
+            
+            // Determine whose turn it is from the FEN
+            const fenParts = move.fen.split(' ');
+            const isWhiteTurn = fenParts[1] === 'w';
+            
+            // The evaluation from the API is from the perspective of the side to move
+            // We need to normalize it to White's perspective for consistent display
+            let evaluation = response.evaluation.centipawns ?? null;
+            let mateIn = response.evaluation.mateIn ?? null;
+            
+            // If it's Black's turn, the eval is from Black's perspective, so flip it
+            if (!isWhiteTurn && evaluation !== null) {
+                evaluation = -evaluation;
+            }
+            if (!isWhiteTurn && mateIn !== null) {
+                mateIn = -mateIn;
+            }
+            
+            setExplorationEval({
+                evaluation,
+                mateIn,
+                bestMove: response.bestMove,
+                bestMoveUci,
+                loading: false,
+            });
+        } catch (err) {
+            console.error('Failed to analyze exploration position:', err);
+            // Check if this was an abort
+            if (err instanceof Error && err.name === 'AbortError') {
+                return;
+            }
+            setExplorationEval(prev => ({
+                ...prev,
+                loading: false,
+            }));
+        }
+    }, [isExplorationMode, currentMoveIndex]);
+
+    // Reset exploration when navigating to different moves in the original game
+    const goToMoveWithReset = useCallback((index: number) => {
+        if (isExplorationMode) {
+            resetExploration();
+        }
+        if (!analysis) return;
+        const maxIndex = analysis.moves.length;
+        setCurrentMoveIndex(Math.max(0, Math.min(index, maxIndex)));
+    }, [analysis, isExplorationMode, resetExploration]);
 
     useEffect(() => {
         const fetchAnalysis = async () => {
@@ -267,23 +421,20 @@ const AnalysisViewer = () => {
         }
     }, [gameId, getUserColor]);
 
-    const goToMove = useCallback((index: number) => {
-        if (!analysis) return;
-        const maxIndex = analysis.moves.length;
-        setCurrentMoveIndex(Math.max(0, Math.min(index, maxIndex)));
-    }, [analysis]);
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         if (e.key === 'ArrowLeft') {
-            goToMove(currentMoveIndex - 1);
+            goToMoveWithReset(currentMoveIndex - 1);
         } else if (e.key === 'ArrowRight') {
-            goToMove(currentMoveIndex + 1);
+            goToMoveWithReset(currentMoveIndex + 1);
         } else if (e.key === 'Home') {
-            goToMove(0);
+            goToMoveWithReset(0);
         } else if (e.key === 'End' && analysis) {
-            goToMove(analysis.moves.length);
+            goToMoveWithReset(analysis.moves.length);
+        } else if (e.key === 'Escape' && isExplorationMode) {
+            resetExploration();
         }
-    }, [currentMoveIndex, goToMove, analysis]);
+    }, [currentMoveIndex, goToMoveWithReset, analysis, isExplorationMode, resetExploration]);
 
     useEffect(() => {
         window.addEventListener('keydown', handleKeyDown);
@@ -292,6 +443,12 @@ const AnalysisViewer = () => {
 
     const currentFen = useMemo(() => {
         const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+        
+        // If in exploration mode, use the exploration FEN
+        if (isExplorationMode && explorationFen) {
+            return explorationFen;
+        }
+        
         if (!analysis || currentMoveIndex === 0) return startingFen;
 
         const move = analysis.moves[currentMoveIndex - 1];
@@ -304,7 +461,7 @@ const AnalysisViewer = () => {
         // Fallback: if FEN is not available, keep the starting position
         console.warn('FEN not available for move', currentMoveIndex);
         return startingFen;
-    }, [analysis, currentMoveIndex]);
+    }, [analysis, currentMoveIndex, isExplorationMode, explorationFen]);
 
     // Valid classification types for the ChessBoardViewer
     type BoardClassification = 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'book' | 'normal' | 'inaccuracy' | 'mistake' | 'blunder' | null;
@@ -316,6 +473,16 @@ const AnalysisViewer = () => {
         classification: BoardClassification;
         destinationSquare: string | undefined;
     } => {
+        // If in exploration mode, show exploration-specific data
+        if (isExplorationMode) {
+            return {
+                bestMove: explorationEval.bestMoveUci || undefined,
+                lastMove: explorationLastMove || undefined,
+                classification: null, // No classification for manual moves
+                destinationSquare: explorationLastMove ? explorationLastMove.slice(2, 4) : undefined,
+            };
+        }
+        
         if (!analysis || currentMoveIndex === 0) {
             return {
                 bestMove: undefined,
@@ -353,16 +520,16 @@ const AnalysisViewer = () => {
         // Get last move UCI for highlighting the played move squares
         // This shows the source (darker) and destination (lighter) of the last move
         let lastMoveUci = move.playedMoveUci || undefined;
-
+        
         // If playedMoveUci is not available, derive it by comparing FENs
         if (!lastMoveUci) {
             // Get the FEN before this move (previous position)
             const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-            const previousFen = currentMoveIndex <= 1
-                ? startingFen
+            const previousFen = currentMoveIndex <= 1 
+                ? startingFen 
                 : analysis.moves[currentMoveIndex - 2]?.fen || startingFen;
-            const currentFen = move.fen;
-
+            const currentFenVal = move.fen;
+            
             // Handle castling destination square
             let castlingDestination = destinationSquare;
             if (move.playedMove === 'O-O') {
@@ -374,10 +541,10 @@ const AnalysisViewer = () => {
                 const row = currentMoveIndex % 2 === 1 ? '1' : '8';
                 castlingDestination = 'c' + row;
             }
-
+            
             // Find source square by comparing FENs
-            const sourceSquare = findSourceSquare(previousFen, currentFen, castlingDestination, move.playedMove);
-
+            const sourceSquare = findSourceSquare(previousFen, currentFenVal, castlingDestination, move.playedMove);
+            
             if (sourceSquare && castlingDestination) {
                 lastMoveUci = sourceSquare + castlingDestination;
             }
@@ -389,7 +556,7 @@ const AnalysisViewer = () => {
             classification,
             destinationSquare,
         };
-    }, [analysis, currentMoveIndex]);
+    }, [analysis, currentMoveIndex, isExplorationMode, explorationEval.bestMoveUci, explorationLastMove]);
 
     const getClassificationIcon = (classification: string) => {
         switch (classification) {
@@ -438,30 +605,37 @@ const AnalysisViewer = () => {
         return ((scaled + 500) / 1000) * 100;
     };
 
-    const getCurrentEval = () => {
-        if (!analysis || currentMoveIndex === 0) return { evaluation: 0, mateIn: null };
+    const getCurrentEval = useCallback(() => {
+        // If in exploration mode, return exploration evaluation
+        if (isExplorationMode) {
+            return { 
+                evaluation: explorationEval.evaluation ?? 0, 
+                mateIn: explorationEval.mateIn,
+                loading: explorationEval.loading,
+            };
+        }
+        
+        if (!analysis || currentMoveIndex === 0) return { evaluation: 0, mateIn: null, loading: false };
         const move = analysis.moves[currentMoveIndex - 1];
 
         // Normalize to White's perspective
-        // The backend stores evalAfter which is from the OPPONENT's perspective:
-        // - After White's move (even index 0, 2, 4...): eval is from Black's perspective → negate
-        // - After Black's move (odd index 1, 3, 5...): eval is from White's perspective → already correct
-        const isWhiteMove = (currentMoveIndex - 1) % 2 === 0;
+        // currentMoveIndex - 1 gives us the array index (0-based)
+        // Index 0, 2, 4... = White's moves (even), Index 1, 3, 5... = Black's moves (odd)
+        const isBlackMove = (currentMoveIndex - 1) % 2 === 1;
 
         let evaluation = move?.evaluation ?? 0;
         let mateIn = move?.mateIn ?? null;
 
-        // Flip values to White's perspective if it was White's move
-        // (because evalAfter is stored from opponent's perspective)
-        if (isWhiteMove) {
+        // Flip values to White's perspective if it was Black's move
+        if (isBlackMove) {
             evaluation = -evaluation;
             if (mateIn !== null) {
                 mateIn = -mateIn;
             }
         }
 
-        return { evaluation, mateIn };
-    };
+        return { evaluation, mateIn, loading: false };
+    }, [analysis, currentMoveIndex, isExplorationMode, explorationEval]);
 
     const formatTimeControl = (tc: string): string => {
         if (!tc || tc === '-') return '-';
@@ -510,11 +684,11 @@ const AnalysisViewer = () => {
 
             moves.forEach((move, index) => {
                 // Convert centipawns to pawns, handle mate
-                // IMPORTANT: Backend stores evalAfter which is from the OPPONENT's perspective:
-                // - After White's move (even index 0, 2, 4...): eval is from Black's perspective → negate
-                // - After Black's move (odd index 1, 3, 5...): eval is from White's perspective → already correct
+                // IMPORTANT: Stockfish gives eval from the perspective of the side that just moved
+                // - After White's move (even index 0, 2, 4...): eval is from White's perspective
+                // - After Black's move (odd index 1, 3, 5...): eval is from Black's perspective
                 // We need to normalize all to White's perspective for consistent graphing
-                const isWhiteMove = index % 2 === 0;
+                const isBlackMove = index % 2 === 1;
 
                 let evalValue = 0;
                 let displayEval = '0.0';
@@ -522,8 +696,8 @@ const AnalysisViewer = () => {
                 if (move.mateIn !== null) {
                     // Mate evaluation
                     let normalizedMate = move.mateIn;
-                    // Normalize to White's perspective (negate for White's moves)
-                    if (isWhiteMove) {
+                    // Normalize to White's perspective
+                    if (isBlackMove) {
                         normalizedMate = -normalizedMate;
                     }
                     evalValue = normalizedMate > 0 ? 10 : -10; // Cap mate at ±10
@@ -531,7 +705,7 @@ const AnalysisViewer = () => {
                 } else if (move.evaluation !== null) {
                     // Centipawn evaluation - normalize to White's perspective
                     let normalizedEval = move.evaluation;
-                    if (isWhiteMove) {
+                    if (isBlackMove) {
                         normalizedEval = -normalizedEval;
                     }
                     evalValue = Math.max(-10, Math.min(10, normalizedEval / 100)); // Clamp to ±10 pawns
@@ -571,7 +745,7 @@ const AnalysisViewer = () => {
         };
 
         // Custom tooltip
-        const CustomTooltip = ({ active, payload }: any) => {
+        const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: typeof chartData[number] }> }) => {
             if (!active || !payload || !payload[0]) return null;
 
             const data = payload[0].payload;
@@ -603,10 +777,11 @@ const AnalysisViewer = () => {
             );
         };
 
-        // Handle chart click
-        const handleChartClick = (data: any) => {
-            if (data && data.activePayload && data.activePayload[0]) {
-                const moveIndex = data.activePayload[0].payload.moveIndex;
+        // Handle chart click - using type assertion for recharts compatibility
+        const handleChartClick = (data: unknown) => {
+            const chartData = data as { activePayload?: Array<{ payload: { moveIndex: number } }> } | null;
+            if (chartData && chartData.activePayload && chartData.activePayload[0]) {
+                const moveIndex = chartData.activePayload[0].payload.moveIndex;
                 if (moveIndex > 0) {
                     onMoveClick(moveIndex);
                 }
@@ -950,7 +1125,7 @@ const AnalysisViewer = () => {
             <ReviewGraph
                 moves={analysis.moves}
                 currentIndex={currentMoveIndex}
-                onMoveClick={goToMove}
+                onMoveClick={goToMoveWithReset}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -959,37 +1134,80 @@ const AnalysisViewer = () => {
                     {/* Vertical Evaluation Bar + Board */}
                     <div className="flex gap-2">
                         {/* Vertical Eval Bar */}
-                        <div className="w-6 flex-shrink-0 relative rounded-lg overflow-hidden bg-zinc-800 shadow-inner">
+                        <div className={cn(
+                            "w-6 flex-shrink-0 relative rounded-lg overflow-hidden shadow-inner transition-all",
+                            isExplorationMode ? "bg-amber-900/50" : "bg-zinc-800"
+                        )}>
                             <div
-                                className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-zinc-100 to-white transition-all duration-300 ease-out"
+                                className={cn(
+                                    "absolute bottom-0 left-0 right-0 transition-all duration-300 ease-out",
+                                    isExplorationMode 
+                                        ? "bg-gradient-to-t from-amber-200 to-amber-100" 
+                                        : "bg-gradient-to-t from-zinc-100 to-white"
+                                )}
                                 style={{ height: `${getEvalBarWidth(currentEval.evaluation, currentEval.mateIn)}%` }}
                             />
                             <div className="absolute inset-0 flex items-center justify-center">
-                                <span
-                                    className={cn(
-                                        "text-[10px] font-bold px-0.5 py-0.5 rounded writing-mode-vertical transform rotate-180",
-                                        (currentEval.evaluation ?? 0) >= 0 ? "text-zinc-800" : "text-zinc-200"
-                                    )}
-                                    style={{ writingMode: 'vertical-rl' }}
-                                >
-                                    {formatEval(currentEval.evaluation, currentEval.mateIn)}
-                                </span>
+                                {currentEval.loading ? (
+                                    <Loader2 className="h-3 w-3 animate-spin text-amber-400" />
+                                ) : (
+                                    <span
+                                        className={cn(
+                                            "text-[10px] font-bold px-0.5 py-0.5 rounded writing-mode-vertical transform rotate-180",
+                                            (currentEval.evaluation ?? 0) >= 0 ? "text-zinc-800" : "text-zinc-200"
+                                        )}
+                                        style={{ writingMode: 'vertical-rl' }}
+                                    >
+                                        {formatEval(currentEval.evaluation, currentEval.mateIn)}
+                                    </span>
+                                )}
                             </div>
                         </div>
 
                         {/* Chessboard */}
-                        <div className="flex-1 rounded-xl overflow-hidden shadow-2xl border border-zinc-700/50">
+                        <div className={cn(
+                            "flex-1 rounded-xl overflow-hidden shadow-2xl border transition-all",
+                            isExplorationMode 
+                                ? "border-amber-500/50 ring-2 ring-amber-500/30" 
+                                : "border-zinc-700/50"
+                        )}>
                             <ChessBoardViewer
                                 fen={currentFen}
-                                interactive={false}
+                                interactive={true}
                                 bestMove={currentMoveData.bestMove}
                                 lastMove={currentMoveData.lastMove}
                                 destinationSquare={currentMoveData.destinationSquare}
                                 classification={currentMoveData.classification}
                                 boardOrientation={boardOrientation}
+                                onMove={handleExplorationMove}
                             />
                         </div>
                     </div>
+                    
+                    {/* Exploration Mode Indicator */}
+                    {isExplorationMode && (
+                        <div className="bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-amber-500/20 rounded-xl p-3 border border-amber-500/30">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <FlaskConical className="h-4 w-4 text-amber-400" />
+                                    <span className="text-sm font-medium text-amber-400">Exploration Mode</span>
+                                    <span className="text-xs text-amber-400/70">
+                                        (from move {explorationStartIndex})
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={resetExploration}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg text-sm font-medium transition-colors"
+                                >
+                                    <Undo2 className="h-3.5 w-3.5" />
+                                    Reset to Game
+                                </button>
+                            </div>
+                            <p className="text-xs text-amber-400/60 mt-2">
+                                Move any piece to analyze alternative lines. Press Esc or click Reset to return.
+                            </p>
+                        </div>
+                    )}
 
                     {/* Navigation Controls */}
                     <div className="flex items-center justify-center gap-2 bg-zinc-900/50 rounded-xl p-3 border border-zinc-700/30">
@@ -1005,123 +1223,95 @@ const AnalysisViewer = () => {
                         <div className="w-px h-6 bg-zinc-700 mx-1"></div>
 
                         <button
-                            onClick={() => goToMove(0)}
+                            onClick={() => goToMoveWithReset(0)}
                             className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            disabled={currentMoveIndex === 0}
+                            disabled={currentMoveIndex === 0 && !isExplorationMode}
                             title="Go to start (Home)"
                         >
                             <ChevronsLeft className="h-4 w-4" />
                         </button>
                         <button
-                            onClick={() => goToMove(currentMoveIndex - 1)}
+                            onClick={() => goToMoveWithReset(currentMoveIndex - 1)}
                             className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            disabled={currentMoveIndex === 0}
+                            disabled={currentMoveIndex === 0 && !isExplorationMode}
                             title="Previous move (←)"
                         >
                             <ChevronLeft className="h-4 w-4" />
                         </button>
-                        <div className="px-4 py-1.5 bg-zinc-800 rounded-lg min-w-[100px] text-center border border-zinc-700/50">
+                        <div className={cn(
+                            "px-4 py-1.5 rounded-lg min-w-[100px] text-center border",
+                            isExplorationMode 
+                                ? "bg-amber-500/10 border-amber-500/30" 
+                                : "bg-zinc-800 border-zinc-700/50"
+                        )}>
                             <span className="text-xs text-zinc-500">Move</span>
-                            <span className="ml-2 font-bold tabular-nums">{currentMoveIndex}/{analysis.moves.length}</span>
+                            <span className={cn(
+                                "ml-2 font-bold tabular-nums",
+                                isExplorationMode ? "text-amber-400" : ""
+                            )}>
+                                {isExplorationMode ? `${explorationStartIndex}*` : `${currentMoveIndex}/${analysis.moves.length}`}
+                            </span>
                         </div>
                         <button
-                            onClick={() => goToMove(currentMoveIndex + 1)}
+                            onClick={() => goToMoveWithReset(currentMoveIndex + 1)}
                             className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            disabled={currentMoveIndex >= analysis.moves.length}
+                            disabled={(currentMoveIndex >= analysis.moves.length && !isExplorationMode)}
                             title="Next move (→)"
                         >
                             <ChevronRight className="h-4 w-4" />
                         </button>
                         <button
-                            onClick={() => goToMove(analysis.moves.length)}
+                            onClick={() => goToMoveWithReset(analysis.moves.length)}
                             className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            disabled={currentMoveIndex >= analysis.moves.length}
+                            disabled={(currentMoveIndex >= analysis.moves.length && !isExplorationMode)}
                             title="Go to end (End)"
                         >
                             <ChevronsRight className="h-4 w-4" />
                         </button>
                     </div>
-                </div>
 
-                {/* Middle Panel: Move List */}
-                <div className="lg:col-span-4">
-                    <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl border border-zinc-700/50 backdrop-blur-sm h-full">
-                        <div className="flex items-center gap-2 p-4 border-b border-zinc-700/50">
-                            <BookOpen className="h-4 w-4 text-amber-400" />
-                            <h3 className="text-sm font-semibold text-zinc-300">Move List</h3>
-                            <span className="text-xs text-zinc-500 ml-auto">{analysis.moves.length} moves</span>
-                        </div>
-                        <div className="max-h-[500px] overflow-y-auto p-2 custom-scrollbar">
-                            <div className="space-y-0.5">
-                                {Array.from({ length: Math.ceil(analysis.moves.length / 2) }).map((_, rowIndex) => {
-                                    const whiteMove = analysis.moves[rowIndex * 2];
-                                    const blackMove = analysis.moves[rowIndex * 2 + 1];
-                                    const moveNum = rowIndex + 1;
-
-                                    return (
-                                        <div key={rowIndex} className="flex items-stretch gap-0.5">
-                                            {/* Move number */}
-                                            <div className="w-8 flex items-center justify-center text-xs text-zinc-600 font-medium">
-                                                {moveNum}.
-                                            </div>
-
-                                            {/* White's move */}
-                                            <button
-                                                onClick={() => goToMove(rowIndex * 2 + 1)}
-                                                className={cn(
-                                                    "flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded text-sm transition-all",
-                                                    currentMoveIndex === rowIndex * 2 + 1
-                                                        ? "bg-emerald-500/20 ring-1 ring-emerald-500/50"
-                                                        : "hover:bg-zinc-700/50"
-                                                )}
-                                            >
-                                                <span className="w-4 flex-shrink-0">
-                                                    {getClassificationIcon(whiteMove?.classification || 'normal')}
-                                                </span>
-                                                <span className={cn(
-                                                    "font-mono text-xs",
-                                                    currentMoveIndex === rowIndex * 2 + 1 ? "text-white font-bold" : "text-zinc-300"
-                                                )}>
-                                                    {whiteMove?.playedMove || '-'}
-                                                </span>
-                                            </button>
-
-                                            {/* Black's move */}
-                                            {blackMove ? (
-                                                <button
-                                                    onClick={() => goToMove(rowIndex * 2 + 2)}
-                                                    className={cn(
-                                                        "flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded text-sm transition-all",
-                                                        currentMoveIndex === rowIndex * 2 + 2
-                                                            ? "bg-emerald-500/20 ring-1 ring-emerald-500/50"
-                                                            : "hover:bg-zinc-700/50"
-                                                    )}
-                                                >
-                                                    <span className="w-4 flex-shrink-0">
-                                                        {getClassificationIcon(blackMove.classification)}
-                                                    </span>
-                                                    <span className={cn(
-                                                        "font-mono text-xs",
-                                                        currentMoveIndex === rowIndex * 2 + 2 ? "text-white font-bold" : "text-zinc-300"
-                                                    )}>
-                                                        {blackMove.playedMove}
-                                                    </span>
-                                                </button>
-                                            ) : (
-                                                <div className="flex-1" />
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Right Panel: Metrics */}
-                <div className="lg:col-span-3 space-y-4">
                     {/* Current Move Card */}
-                    {currentMoveIndex > 0 && analysis.moves[currentMoveIndex - 1] ? (
+                    {isExplorationMode ? (
+                        /* Exploration Mode Card */
+                        <div className="bg-gradient-to-br from-amber-900/30 to-amber-800/20 rounded-xl p-4 border border-amber-500/30 backdrop-blur-sm">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-sm font-semibold text-amber-300 flex items-center gap-2">
+                                    <FlaskConical className="h-4 w-4 text-amber-400" />
+                                    Exploring Position
+                                </h3>
+                                {explorationEval.loading && (
+                                    <span className="flex items-center gap-1.5 text-xs text-amber-400/70">
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        Analyzing...
+                                    </span>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+                                    <span className="text-xs text-amber-400/70 block mb-1">Position Eval</span>
+                                    <span className={cn(
+                                        "font-mono font-bold text-lg",
+                                        explorationEval.loading ? "text-amber-400/50" :
+                                            (currentEval.evaluation ?? 0) >= 0 ? "text-amber-200" : "text-amber-400"
+                                    )}>
+                                        {explorationEval.loading ? '...' : formatEval(currentEval.evaluation, currentEval.mateIn)}
+                                    </span>
+                                </div>
+                                <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+                                    <span className="text-xs text-amber-400/70 block mb-1">Best Move</span>
+                                    <span className="font-mono font-bold text-lg text-emerald-400">
+                                        {explorationEval.loading ? '...' : (explorationEval.bestMove || '-')}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <p className="text-xs text-amber-400/50 mt-3 pt-3 border-t border-amber-500/20">
+                                Continue moving pieces to explore deeper lines
+                            </p>
+                        </div>
+                    ) : currentMoveIndex > 0 && analysis.moves[currentMoveIndex - 1] && (
+                        /* Standard Move Card */
                         <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
                             <div className="flex items-center justify-between mb-3">
                                 <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
@@ -1174,17 +1364,133 @@ const AnalysisViewer = () => {
                                     )}
                             </div>
                         </div>
-                    ) : (
-                        <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
-                            <div className="flex items-center gap-2 mb-3">
-                                <Target className="h-4 w-4 text-blue-400" />
-                                <h3 className="text-sm font-semibold text-zinc-300">Current Move</h3>
-                            </div>
-                            <p className="text-xs text-zinc-500 text-center py-4">
-                                Use arrow keys or buttons to navigate through moves
-                            </p>
-                        </div>
                     )}
+                </div>
+
+                {/* Middle Panel: Move List */}
+                <div className="lg:col-span-4">
+                    <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl border border-zinc-700/50 backdrop-blur-sm h-full">
+                        <div className="flex items-center gap-2 p-4 border-b border-zinc-700/50">
+                            <BookOpen className="h-4 w-4 text-amber-400" />
+                            <h3 className="text-sm font-semibold text-zinc-300">Move List</h3>
+                            <span className="text-xs text-zinc-500 ml-auto">{analysis.moves.length} moves</span>
+                        </div>
+                        <div className="max-h-[500px] overflow-y-auto p-2 custom-scrollbar">
+                            <div className="space-y-0.5">
+                                {Array.from({ length: Math.ceil(analysis.moves.length / 2) }).map((_, rowIndex) => {
+                                    const whiteMove = analysis.moves[rowIndex * 2];
+                                    const blackMove = analysis.moves[rowIndex * 2 + 1];
+                                    const moveNum = rowIndex + 1;
+
+                                    return (
+                                        <div key={rowIndex} className="flex items-stretch gap-0.5">
+                                            {/* Move number */}
+                                            <div className="w-8 flex items-center justify-center text-xs text-zinc-600 font-medium">
+                                                {moveNum}.
+                                            </div>
+
+                                            {/* White's move */}
+                                            <button
+                                                onClick={() => goToMoveWithReset(rowIndex * 2 + 1)}
+                                                className={cn(
+                                                    "flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded text-sm transition-all",
+                                                    currentMoveIndex === rowIndex * 2 + 1 && !isExplorationMode
+                                                        ? "bg-emerald-500/20 ring-1 ring-emerald-500/50"
+                                                        : "hover:bg-zinc-700/50"
+                                                )}
+                                            >
+                                                <span className="w-4 flex-shrink-0">
+                                                    {getClassificationIcon(whiteMove?.classification || 'normal')}
+                                                </span>
+                                                <span className={cn(
+                                                    "font-mono text-xs",
+                                                    currentMoveIndex === rowIndex * 2 + 1 && !isExplorationMode ? "text-white font-bold" : "text-zinc-300"
+                                                )}>
+                                                    {whiteMove?.playedMove || '-'}
+                                                </span>
+                                            </button>
+
+                                            {/* Black's move */}
+                                            {blackMove ? (
+                                                <button
+                                                    onClick={() => goToMoveWithReset(rowIndex * 2 + 2)}
+                                                    className={cn(
+                                                        "flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded text-sm transition-all",
+                                                        currentMoveIndex === rowIndex * 2 + 2 && !isExplorationMode
+                                                            ? "bg-emerald-500/20 ring-1 ring-emerald-500/50"
+                                                            : "hover:bg-zinc-700/50"
+                                                    )}
+                                                >
+                                                    <span className="w-4 flex-shrink-0">
+                                                        {getClassificationIcon(blackMove.classification)}
+                                                    </span>
+                                                    <span className={cn(
+                                                        "font-mono text-xs",
+                                                        currentMoveIndex === rowIndex * 2 + 2 && !isExplorationMode ? "text-white font-bold" : "text-zinc-300"
+                                                    )}>
+                                                        {blackMove.playedMove}
+                                                    </span>
+                                                </button>
+                                            ) : (
+                                                <div className="flex-1" />
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right Panel: Metrics */}
+                <div className="lg:col-span-3 space-y-4">
+                    {/* Accuracy Cards */}
+                    <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Sparkles className="h-4 w-4 text-purple-400" />
+                            <h3 className="text-sm font-semibold text-zinc-300">Accuracy</h3>
+                        </div>
+
+                        <div className="space-y-3">
+                            {/* White accuracy */}
+                            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs text-zinc-400 flex items-center gap-1">
+                                        <span className="w-3 h-3 rounded bg-zinc-100"></span>
+                                        {analysis.game.whitePlayer}
+                                    </span>
+                                    <span className={cn("font-bold text-lg", getAccuracyColor(analysis.whiteMetrics.accuracy))}>
+                                        {analysis.whiteMetrics.accuracy.toFixed(1)}%
+                                    </span>
+                                </div>
+                                <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all"
+                                        style={{ width: `${analysis.whiteMetrics.accuracy}%` }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Black accuracy */}
+                            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs text-zinc-400 flex items-center gap-1">
+                                        <span className="w-3 h-3 rounded bg-zinc-700"></span>
+                                        {analysis.game.blackPlayer}
+                                    </span>
+                                    <span className={cn("font-bold text-lg", getAccuracyColor(analysis.blackMetrics.accuracy))}>
+                                        {analysis.blackMetrics.accuracy.toFixed(1)}%
+                                    </span>
+                                </div>
+                                <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all"
+                                        style={{ width: `${analysis.blackMetrics.accuracy}%` }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     {/* Move Quality Summary */}
                     <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 backdrop-blur-sm">

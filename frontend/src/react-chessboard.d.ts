@@ -5,9 +5,30 @@ declare module 'react-chessboard' {
         color: string;
     }
 
+    export interface PieceDataType {
+        pieceType: string;
+    }
+
+    export interface DraggingPieceDataType {
+        isSparePiece: boolean;
+        position: string;
+        pieceType: string;
+    }
+
+    export interface SquareHandlerArgs {
+        piece: PieceDataType | null;
+        square: string;
+    }
+
+    export interface PieceDropHandlerArgs {
+        piece: DraggingPieceDataType;
+        sourceSquare: string;
+        targetSquare: string | null;
+    }
+
     export interface ChessboardOptions {
         id?: string;
-        position?: string | Record<string, { pieceType: string }>;
+        position?: string | Record<string, PieceDataType>;
         boardOrientation?: 'white' | 'black';
         boardStyle?: React.CSSProperties;
         squareStyle?: React.CSSProperties;
@@ -24,8 +45,8 @@ declare module 'react-chessboard' {
         arrows?: Arrow[];
         clearArrowsOnClick?: boolean;
         clearArrowsOnPositionChange?: boolean;
-        onPieceDrop?: (args: { piece: unknown; sourceSquare: string; targetSquare: string | null }) => boolean;
-        onSquareClick?: (args: { piece: unknown; square: string }) => void;
+        onPieceDrop?: (args: PieceDropHandlerArgs) => boolean;
+        onSquareClick?: (args: SquareHandlerArgs) => void;
         [key: string]: unknown;
     }
 
