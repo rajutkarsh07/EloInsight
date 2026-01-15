@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, RefreshCw, Undo2, FlaskConical, Loader2, ChevronDown, TrendingUp, Copy, CheckCircle, Crosshair } from 'lucide-react';
+import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, RefreshCw, Undo2, FlaskConical, Loader2, ChevronDown, TrendingUp, Copy, CheckCircle, Crosshair, Clock } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceDot } from 'recharts';
 import ChessBoardViewer from '../components/chess/ChessBoardViewer';
 import { apiClient } from '../services/apiClient';
@@ -36,6 +36,9 @@ interface MoveAnalysis {
     isBest: boolean;
     pv: string[];
     depth: number | null;
+    // Time analysis fields (optional - may not be available for all games)
+    timeSpent?: number | null; // Time spent on move in milliseconds
+    clockAfter?: string | null; // Remaining clock time after move
 }
 
 // Extract destination square from SAN notation (e.g., "Nf3" -> "f3", "e4" -> "e4", "Qxd5" -> "d5")
@@ -579,6 +582,62 @@ const AnalysisViewer = () => {
             .sort((a, b) => b.evalSwing - a.evalSwing)
             .slice(0, 5);
     }, [analysis]);
+
+    // Time Analysis - calculate time stats for each player
+    const timeAnalysis = useMemo(() => {
+        if (!analysis) return null;
+        
+        const whiteTimes: number[] = [];
+        const blackTimes: number[] = [];
+        
+        analysis.moves.forEach((move, idx) => {
+            if (move.timeSpent && move.timeSpent > 0) {
+                if (idx % 2 === 0) {
+                    whiteTimes.push(move.timeSpent);
+                } else {
+                    blackTimes.push(move.timeSpent);
+                }
+            }
+        });
+        
+        // If no time data available, return null
+        if (whiteTimes.length === 0 && blackTimes.length === 0) {
+            return null;
+        }
+        
+        const calcStats = (times: number[]) => {
+            if (times.length === 0) return { avg: 0, max: 0, min: 0, total: 0 };
+            const total = times.reduce((a, b) => a + b, 0);
+            return {
+                avg: total / times.length,
+                max: Math.max(...times),
+                min: Math.min(...times),
+                total,
+            };
+        };
+        
+        return {
+            white: calcStats(whiteTimes),
+            black: calcStats(blackTimes),
+            hasData: whiteTimes.length > 0 || blackTimes.length > 0,
+            moveTimeData: analysis.moves.map((move, idx) => ({
+                moveIndex: idx + 1,
+                time: move.timeSpent || 0,
+                isWhite: idx % 2 === 0,
+                playedMove: move.playedMove,
+            })),
+        };
+    }, [analysis]);
+
+    // Format milliseconds to readable time
+    const formatTime = (ms: number): string => {
+        if (ms < 1000) return `${ms}ms`;
+        const seconds = ms / 1000;
+        if (seconds < 60) return `${seconds.toFixed(1)}s`;
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.floor(seconds % 60);
+        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    };
 
     // Valid classification types for the ChessBoardViewer
     type BoardClassification = 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'book' | 'normal' | 'inaccuracy' | 'mistake' | 'blunder' | null;
@@ -2191,6 +2250,83 @@ const AnalysisViewer = () => {
                             </div>
                         </div>
                     </div>
+
+                    {/* Time Analysis */}
+                    {timeAnalysis && timeAnalysis.hasData ? (
+                        <div className="bg-gradient-to-br from-blue-900/20 to-cyan-900/10 rounded-xl p-4 border border-blue-500/30 backdrop-blur-sm">
+                            <div className="flex items-center gap-2 mb-3">
+                                <Clock className="h-4 w-4 text-blue-400" />
+                                <h3 className="text-xs font-semibold text-blue-300">Time Analysis</h3>
+                            </div>
+                            
+                            <div className="space-y-3">
+                                {/* White Time Stats */}
+                                <div className="bg-zinc-800/50 rounded-lg p-2.5 border border-zinc-700/30">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-[10px] text-zinc-400 flex items-center gap-1">
+                                            <span className="w-2 h-2 rounded bg-zinc-200"></span>
+                                            {analysis.game.whitePlayer.split(' ')[0]}
+                                        </span>
+                                        <span className="text-xs font-mono text-blue-300">
+                                            Total: {formatTime(timeAnalysis.white.total)}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[10px]">
+                                        <span className="text-zinc-500">
+                                            Avg: <span className="text-zinc-300 font-mono">{formatTime(timeAnalysis.white.avg)}</span>
+                                        </span>
+                                        <span className="text-zinc-500">
+                                            Max: <span className="text-orange-400 font-mono">{formatTime(timeAnalysis.white.max)}</span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Black Time Stats */}
+                                <div className="bg-zinc-800/50 rounded-lg p-2.5 border border-zinc-700/30">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-[10px] text-zinc-400 flex items-center gap-1">
+                                            <span className="w-2 h-2 rounded bg-zinc-600"></span>
+                                            {analysis.game.blackPlayer.split(' ')[0]}
+                                        </span>
+                                        <span className="text-xs font-mono text-blue-300">
+                                            Total: {formatTime(timeAnalysis.black.total)}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[10px]">
+                                        <span className="text-zinc-500">
+                                            Avg: <span className="text-zinc-300 font-mono">{formatTime(timeAnalysis.black.avg)}</span>
+                                        </span>
+                                        <span className="text-zinc-500">
+                                            Max: <span className="text-orange-400 font-mono">{formatTime(timeAnalysis.black.max)}</span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Current Move Time */}
+                                {currentMoveIndex > 0 && analysis.moves[currentMoveIndex - 1]?.timeSpent && (
+                                    <div className="pt-2 border-t border-blue-500/20">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] text-zinc-500">Move {currentMoveIndex} time:</span>
+                                            <span className="text-sm font-mono font-bold text-blue-300">
+                                                {formatTime(analysis.moves[currentMoveIndex - 1].timeSpent!)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-gradient-to-br from-zinc-900/50 to-zinc-800/30 rounded-xl p-4 border border-zinc-700/30 backdrop-blur-sm">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Clock className="h-4 w-4 text-zinc-500" />
+                                <h3 className="text-xs font-semibold text-zinc-500">Time Analysis</h3>
+                            </div>
+                            <p className="text-[10px] text-zinc-600 text-center py-2">
+                                Time data not available for this game
+                            </p>
+                        </div>
+                    )}
+
                 </div>
             </div>
         </div>
