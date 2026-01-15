@@ -4,11 +4,55 @@ Complete guide to running EloInsight locally **without Docker** (native developm
 
 ---
 
+## 🚀 Quick Update (Existing Contributors)
+
+After pulling the latest changes, run these commands:
+
+```bash
+# Pull latest changes
+git pull origin main
+
+# Update all dependencies
+cd backend/api-gateway && npm install && npx prisma generate && cd ../..
+cd backend/game-sync-service && npm install && npx prisma generate && cd ../..
+cd frontend && npm install && cd ..
+
+# If there are new database changes (schema.prisma modified):
+cd backend/api-gateway
+npx prisma db push  # Safe - won't delete data
+# OR for new migrations:
+npx prisma migrate dev
+
+# Restart all services
+```
+
+### Common Prisma Commands
+
+```bash
+# Generate Prisma Client (after schema changes)
+npx prisma generate
+
+# Sync schema to database (safe, keeps data)
+npx prisma db push
+
+# Create migration (for new schema changes)
+npx prisma migrate dev --name your_migration_name
+
+# View database in browser
+npx prisma studio
+
+# Reset database (⚠️ DELETES ALL DATA)
+npx prisma migrate reset
+```
+
+---
+
 ## What You'll Get
 
 Once setup is complete, you'll have access to:
 
 - **Analysis Viewer** with Phase Breakdown, Evaluation Graph, Key Moments
+- **Social Login** with Lichess and Google OAuth
 - **Auto-play Mode** with adjustable speed (0.5s - 3s)
 - **Keyboard Shortcuts** for navigation (←, →, Space, F, C, M, ?)
 - **Move Sounds** for feedback on moves, captures, and blunders
@@ -45,60 +89,16 @@ protoc --version  # Should be libprotoc 3.21+
 
 ---
 
-## Quick Start (All Commands)
+## 🆕 First-Time Setup (New Contributors)
 
-Run these commands in order from the project root:
+### Step 1: Clone & Database Setup
 
 ```bash
-# 1. Clone the repository
+# Clone the repository
 git clone https://github.com/yourusername/EloInsight.git
 cd EloInsight
 
-# 2. Start PostgreSQL (if not running)
-brew services start postgresql@15
-
-# 3. Create database
-createdb eloinsight
-
-# 4. Setup API Gateway
-cd backend/api-gateway
-npm install
-cp .env.example .env   # Then edit .env with your values
-npx prisma generate
-npx prisma migrate dev
-cd ../..
-
-# 5. Setup Game Sync Service
-cd backend/game-sync-service
-npm install
-cp .env.example .env   # Then edit .env with your values
-npx prisma generate
-cd ../..
-
-# 6. Setup Analysis Service (Go)
-cd backend/analysis-service
-go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-export PATH="$PATH:$(go env GOPATH)/bin"
-make proto
-go mod tidy
-go build -o bin/analysis-service ./cmd/server
-cd ../..
-
-# 7. Setup Frontend
-cd frontend
-npm install
-cd ..
-```
-
----
-
-## Detailed Setup
-
-### Step 1: Database Setup
-
-```bash
-# Start PostgreSQL
+# Start PostgreSQL (if not running)
 brew services start postgresql@15
 
 # Create database
@@ -108,75 +108,84 @@ createdb eloinsight
 psql -d eloinsight -c "SELECT version();"
 ```
 
----
+### Step 2: Backend Services Setup
 
-### Step 2: API Gateway Setup
+Run these in order:
 
 ```bash
+# API Gateway
 cd backend/api-gateway
 npm install
+cp .env.example .env   # Edit .env with your values (see below)
+npx prisma generate
+npx prisma migrate dev --name init
+cd ../..
+
+# Game Sync Service
+cd backend/game-sync-service
+npm install
+cp .env.example .env   # Edit .env with your values
+npx prisma generate
+cd ../..
+
+# Analysis Service (Go)
+cd backend/analysis-service
+go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+export PATH="$PATH:$(go env GOPATH)/bin"
+make proto
+go mod tidy
+go build -o bin/analysis-service ./cmd/server
+cd ../..
+
+# Frontend
+cd frontend
+npm install
+cp .env.example .env   # Edit if needed
+cd ..
 ```
 
-Create `.env` file:
+---
+
+## Environment Variables
+
+### API Gateway (`backend/api-gateway/.env`)
 
 ```bash
-# backend/api-gateway/.env
-
 # Database
 DATABASE_URL="postgresql://localhost:5432/eloinsight?schema=public"
 
 # JWT Authentication
 JWT_SECRET="your-super-secret-jwt-key-change-in-production"
+JWT_REFRESH_SECRET="your-refresh-token-secret"
 JWT_EXPIRES_IN="1h"
+JWT_REFRESH_EXPIRES_IN="7d"
 
 # Server
 PORT=4000
 API_PREFIX="api/v1"
 CORS_ORIGIN="http://localhost:5173"
+FRONTEND_URL="http://localhost:5173"
 
 # Analysis Service (gRPC)
 ANALYSIS_SERVICE_URL="localhost:50051"
 
-# Lichess OAuth (optional - for account verification)
-# Get credentials at: https://lichess.org/account/oauth/app
-# Set redirect URI to: http://localhost:4000/api/v1/auth/lichess/callback
-LICHESS_CLIENT_ID="your-lichess-client-id"
-FRONTEND_URL="http://localhost:5173"
+# OAuth - Lichess (optional)
+# Just use any app name - no registration needed!
+LICHESS_CLIENT_ID="eloinsight"
+
+# OAuth - Google (optional)
+# Get from: https://console.cloud.google.com/apis/credentials
+GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
 
 # Node environment
 NODE_ENV="development"
 ```
 
-Run migrations:
+### Game Sync Service (`backend/game-sync-service/.env`)
 
 ```bash
-npx prisma generate
-npx prisma migrate dev --name init
-```
-
-Start the service:
-
-```bash
-npm run start:dev
-```
-
-The API Gateway will be available at: `http://localhost:4000/api/v1`  
-Swagger docs: `http://localhost:4000/api/docs`
-
----
-
-### Step 3: Game Sync Service Setup
-
-```bash
-cd backend/game-sync-service
-npm install
-```
-
-Create `.env` file:
-
-```bash
-# backend/game-sync-service/.env
-
 # Database (same as API Gateway)
 DATABASE_URL="postgresql://localhost:5432/eloinsight?schema=public"
 
@@ -191,69 +200,9 @@ SYNC_CRON="0 */6 * * *"
 NODE_ENV="development"
 ```
 
-Generate Prisma client:
+### Analysis Service (`backend/analysis-service/.env`)
 
 ```bash
-npx prisma generate
-```
-
-Start the service:
-
-```bash
-npm run start:dev
-```
-
-The Game Sync Service will be available at: `http://localhost:3002`
-
----
-
-### Step 4: Analysis Service Setup (Go)
-
-```bash
-cd backend/analysis-service
-```
-
-#### Install Go gRPC tools:
-
-```bash
-go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-```
-
-#### Add Go bin to PATH:
-
-For **zsh** (default on Mac):
-```bash
-echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc
-source ~/.zshrc
-```
-
-For **bash**:
-```bash
-echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-#### Verify tools installed:
-
-```bash
-which protoc-gen-go
-which protoc-gen-go-grpc
-```
-
-#### Generate proto files and build:
-
-```bash
-make proto
-go mod tidy
-go build -o bin/analysis-service ./cmd/server
-```
-
-Create `.env` file (optional - defaults work fine):
-
-```bash
-# backend/analysis-service/.env
-
 # gRPC Server
 GRPC_PORT=50051
 
@@ -271,44 +220,45 @@ WORKER_POOL_SIZE=4
 LOG_LEVEL="info"
 ```
 
-Start the service:
+### Frontend (`frontend/.env`)
 
 ```bash
-./bin/analysis-service
-```
-
-The Analysis Service will be available at: `grpc://localhost:50051`
-
----
-
-### Step 5: Frontend Setup
-
-```bash
-cd frontend
-npm install
-```
-
-Create `.env` file:
-
-```bash
-# frontend/.env
-
 VITE_API_URL="http://localhost:4000/api/v1"
 ```
 
-Start the frontend:
+---
+
+## OAuth Setup (Optional)
+
+### Lichess OAuth
+
+**No registration needed!** Just set any app name:
 
 ```bash
-npm run dev
+LICHESS_CLIENT_ID="eloinsight"
 ```
 
-The frontend will be available at: `http://localhost:5173`
+That's it! Lichess PKCE OAuth works without registering an app.
+
+### Google OAuth
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project (or select existing)
+3. Go to **APIs & Services** → **OAuth consent screen**
+   - Select "External"
+   - Fill in app name, emails
+   - Add yourself as test user
+4. Go to **APIs & Services** → **Credentials**
+   - Click **+ CREATE CREDENTIALS** → **OAuth client ID**
+   - Type: **Web application**
+   - Add redirect URI: `http://localhost:4000/api/v1/auth/google/callback`
+5. Copy Client ID and Client Secret to your `.env`
 
 ---
 
 ## Running All Services
 
-Open **5 terminal windows** and run:
+Open **4 terminal windows** and run:
 
 | Terminal | Directory | Command |
 |----------|-----------|---------|
@@ -316,7 +266,33 @@ Open **5 terminal windows** and run:
 | 2 | `backend/api-gateway` | `npm run start:dev` |
 | 3 | `backend/game-sync-service` | `npm run start:dev` |
 | 4 | `frontend` | `npm run dev` |
-| 5 | (optional) | Database tools / logs |
+
+### Quick Start Script (Optional)
+
+Create `start-all.sh` in project root:
+
+```bash
+#!/bin/bash
+# Start all EloInsight services
+
+echo "Starting Analysis Service..."
+cd backend/analysis-service && ./bin/analysis-service &
+
+sleep 2
+
+echo "Starting API Gateway..."
+cd backend/api-gateway && npm run start:dev &
+
+echo "Starting Game Sync Service..."
+cd backend/game-sync-service && npm run start:dev &
+
+echo "Starting Frontend..."
+cd frontend && npm run dev &
+
+echo "All services started!"
+echo "Frontend: http://localhost:5173"
+echo "API: http://localhost:4000/api/v1"
+```
 
 ---
 
@@ -329,14 +305,19 @@ Open **5 terminal windows** and run:
 | Swagger Docs | http://localhost:4000/api/docs | API documentation |
 | Game Sync | http://localhost:3002 | Game sync service |
 | Analysis | grpc://localhost:50051 | gRPC analysis |
+| Prisma Studio | http://localhost:5555 | Database GUI |
 | PostgreSQL | localhost:5432 | Database |
 
 ---
 
-## Create a Test User
+## Creating Test Users
 
-After all services are running:
+### Option 1: Sign up via UI
+1. Go to http://localhost:5173/signup
+2. Click "Continue with Lichess" (recommended)
+3. Or sign up with email
 
+### Option 2: Create via script
 ```bash
 cd backend/api-gateway
 npx ts-node -e "
@@ -362,17 +343,13 @@ main().finally(() => prisma.\$disconnect());
 "
 ```
 
-Then login at `http://localhost:5173` with:
+Then login with:
 - Email: `test@example.com`
 - Password: `password123`
 
 ---
 
-## Using the Analysis Viewer
-
-After analyzing a game, you'll have access to powerful features:
-
-### Keyboard Shortcuts
+## Keyboard Shortcuts (Analysis Viewer)
 
 | Key | Action |
 |-----|--------|
@@ -385,18 +362,25 @@ After analyzing a game, you'll have access to powerful features:
 | `?` or `H` | Show shortcuts panel |
 | `Esc` | Exit exploration mode |
 
-### Features Available
-
-- **Phase Breakdown**: See move quality by Opening/Middlegame/Endgame with visual icons
-- **Evaluation Graph**: Click any point to jump to that position
-- **Auto-play**: Automatically advance through moves (adjust speed with dropdown)
-- **Exploration Mode**: Click pieces to analyze alternative lines
-- **Key Moments**: Auto-detected blunders, turning points, and brilliant moves
-- **Suggested Focus Areas**: AI recommendations based on your mistakes
-
 ---
 
 ## Troubleshooting
+
+### Prisma Issues
+
+```bash
+# Schema out of sync - sync without losing data
+npx prisma db push
+
+# Generate client after schema changes
+npx prisma generate
+
+# View database
+npx prisma studio
+
+# Full reset (⚠️ deletes all data)
+npx prisma migrate reset
+```
 
 ### `protoc-gen-go: program not found`
 
@@ -406,7 +390,7 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 export PATH="$PATH:$(go env GOPATH)/bin"
 ```
 
-### `Port already in use`
+### Port already in use
 
 ```bash
 # Find process using port
@@ -414,9 +398,12 @@ lsof -i :4000
 
 # Kill it
 kill -9 <PID>
+
+# Or kill all node processes
+pkill -f node
 ```
 
-### `Database connection refused`
+### Database connection refused
 
 ```bash
 # Check PostgreSQL is running
@@ -426,7 +413,7 @@ brew services list
 brew services start postgresql@15
 ```
 
-### `Stockfish not found`
+### Stockfish not found
 
 ```bash
 # Install Stockfish
@@ -439,78 +426,48 @@ which stockfish
 STOCKFISH_PATH="/opt/homebrew/bin/stockfish"
 ```
 
-### Prisma migration errors
+### OAuth Errors
 
-```bash
-# Reset database (WARNING: deletes all data)
-npx prisma migrate reset
+**Lichess "site can't be reached":**
+- Make sure `LICHESS_CLIENT_ID` is just an app name like `"eloinsight"`, NOT a `lip_` token
 
-# Re-run migrations
-npx prisma migrate dev
-```
-
-### `EADDRINUSE: address already in use`
-
-```bash
-# Find and kill process on specific port
-lsof -i :4000
-kill -9 <PID>
-
-# Or kill all node processes
-pkill -f node
-```
-
-### Go module errors
-
-```bash
-cd backend/analysis-service
-go mod tidy
-go mod download
-```
+**Google "redirect_uri_mismatch":**
+- Add `http://localhost:4000/api/v1/auth/google/callback` to Google Console redirect URIs
 
 ---
 
 ## Environment Variables Summary
 
-### API Gateway (`backend/api-gateway/.env`)
+### API Gateway
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | ✅ | - | PostgreSQL connection string |
 | `JWT_SECRET` | ✅ | - | Secret for JWT tokens |
+| `JWT_REFRESH_SECRET` | ✅ | - | Secret for refresh tokens |
 | `JWT_EXPIRES_IN` | ❌ | 1h | JWT token expiration |
 | `PORT` | ❌ | 4000 | Server port |
-| `API_PREFIX` | ❌ | api/v1 | API route prefix |
-| `CORS_ORIGIN` | ❌ | http://localhost:5173 | Allowed CORS origins |
-| `ANALYSIS_SERVICE_URL` | ❌ | localhost:50051 | gRPC analysis service |
-| `LICHESS_CLIENT_ID` | ❌ | - | Lichess OAuth client ID |
-| `FRONTEND_URL` | ❌ | http://localhost:5173 | Frontend URL for OAuth redirect |
-| `NODE_ENV` | ❌ | development | Environment mode |
+| `FRONTEND_URL` | ❌ | http://localhost:5173 | Frontend URL |
+| `LICHESS_CLIENT_ID` | ❌ | - | Any app name for Lichess OAuth |
+| `GOOGLE_CLIENT_ID` | ❌ | - | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | ❌ | - | Google OAuth client secret |
 
-### Game Sync (`backend/game-sync-service/.env`)
+### Game Sync
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | ✅ | - | PostgreSQL connection string |
 | `PORT` | ❌ | 3002 | Server port |
-| `CORS_ORIGIN` | ❌ | * | Allowed CORS origins |
-| `SYNC_CRON` | ❌ | 0 */6 * * * | Cron schedule for auto-sync |
-| `NODE_ENV` | ❌ | development | Environment mode |
 
-### Analysis Service (`backend/analysis-service/.env`)
+### Analysis Service
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `GRPC_PORT` | ❌ | 50051 | gRPC server port |
-| `STOCKFISH_PATH` | ❌ | /usr/local/bin/stockfish | Path to Stockfish binary |
-| `STOCKFISH_THREADS` | ❌ | 4 | CPU threads for engine |
-| `STOCKFISH_HASH` | ❌ | 2048 | Hash table size (MB) |
-| `DEFAULT_DEPTH` | ❌ | 20 | Default analysis depth |
-| `MAX_DEPTH` | ❌ | 30 | Maximum analysis depth |
-| `WORKER_POOL_SIZE` | ❌ | 4 | Number of worker threads |
-| `LOG_LEVEL` | ❌ | info | Logging level |
+| `STOCKFISH_PATH` | ❌ | /usr/local/bin/stockfish | Path to Stockfish |
+| `STOCKFISH_THREADS` | ❌ | 4 | CPU threads |
 
-### Frontend (`frontend/.env`)
+### Frontend
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -518,51 +475,7 @@ go mod download
 
 ---
 
-## Development Tips
-
-### Hot Reloading
-
-- **Frontend**: Changes auto-reload (Vite HMR)
-- **API Gateway**: Changes auto-reload (`npm run start:dev` uses nodemon)
-- **Game Sync**: Changes auto-reload (`npm run start:dev` uses nodemon)
-- **Analysis Service**: Requires rebuild (`go build` and restart)
-
-### Database GUI
-
-```bash
-cd backend/api-gateway
-npx prisma studio
-# Opens at http://localhost:5555
-```
-
-### View Logs
-
-All services output logs to their terminal windows. For more verbose logging:
-
-```bash
-# API Gateway / Game Sync
-LOG_LEVEL=debug npm run start:dev
-
-# Analysis Service
-LOG_LEVEL=debug ./bin/analysis-service
-```
-
-### Testing gRPC Analysis Service
-
-```bash
-# Install grpcurl
-brew install grpcurl
-
-# List services
-grpcurl -plaintext localhost:50051 list
-
-# Test health
-grpcurl -plaintext localhost:50051 grpc.health.v1.Health/Check
-```
-
----
-
-## Architecture Overview
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -596,7 +509,9 @@ grpcurl -plaintext localhost:50051 grpc.health.v1.Health/Check
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Tech Stack Summary
+---
+
+## Tech Stack
 
 | Component | Technology |
 |-----------|------------|
@@ -607,6 +522,7 @@ grpcurl -plaintext localhost:50051 grpc.health.v1.Health/Check
 | **Database** | PostgreSQL 15+ |
 | **Charts** | Recharts |
 | **Chess Logic** | chess.js + react-chessboard |
+| **Auth** | JWT + Lichess OAuth + Google OAuth |
 
 ---
 
