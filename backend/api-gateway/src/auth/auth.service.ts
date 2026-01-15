@@ -284,12 +284,14 @@ export class AuthService {
     // ============ Lichess OAuth Methods ============
 
     // Store for PKCE code verifiers (in production, use Redis or database)
-    private codeVerifiers: Map<string, { verifier: string; userId: string; expiresAt: number }> = new Map();
+    // userId is optional - null means login/register flow, string means linking flow
+    private codeVerifiers: Map<string, { verifier: string; userId: string | null; expiresAt: number }> = new Map();
 
     /**
      * Generate Lichess OAuth URL with PKCE
+     * @param userId - If provided, links to existing account. If null, creates new account or logs in.
      */
-    getLichessAuthUrl(userId: string): { url: string; state: string } {
+    getLichessAuthUrl(userId: string | null): { url: string; state: string } {
         const clientId = this.configService.get<string>('LICHESS_CLIENT_ID');
         const port = this.configService.get<string>('PORT') || '4000';
         const apiPrefix = this.configService.get<string>('API_PREFIX') || 'api/v1';
@@ -332,8 +334,14 @@ export class AuthService {
 
     /**
      * Handle Lichess OAuth callback
+     * Supports both login/register (userId=null) and account linking (userId=string)
      */
-    async handleLichessCallback(code: string, state: string): Promise<{ username: string; userId: string }> {
+    async handleLichessCallback(code: string, state: string): Promise<{ 
+        username: string; 
+        userId: string; 
+        isNewUser: boolean;
+        tokens?: { accessToken: string; refreshToken: string; expiresIn: number };
+    }> {
         // Validate state and get stored data
         const storedData = this.codeVerifiers.get(state);
         if (!storedData) {
@@ -345,7 +353,7 @@ export class AuthService {
             throw new BadRequestException('OAuth session expired. Please try again.');
         }
 
-        const { verifier, userId } = storedData;
+        const { verifier, userId: existingUserId } = storedData;
         this.codeVerifiers.delete(state);
 
         const clientId = this.configService.get<string>('LICHESS_CLIENT_ID');
@@ -377,12 +385,12 @@ export class AuthService {
         }
 
         const tokenData = await tokenResponse.json();
-        const accessToken = tokenData.access_token;
+        const lichessAccessToken = tokenData.access_token;
 
         // Get user info from Lichess
         const userResponse = await fetch('https://lichess.org/api/account', {
             headers: {
-                'Authorization': `Bearer ${accessToken}`,
+                'Authorization': `Bearer ${lichessAccessToken}`,
             },
         });
 
@@ -393,30 +401,96 @@ export class AuthService {
         const lichessUser = await userResponse.json();
         const lichessUsername = lichessUser.username;
 
-        // Update user's linked account with verified Lichess username
-        // accessToken presence indicates OAuth verification
-        await this.prisma.linkedAccount.upsert({
-            where: {
-                userId_platform: {
-                    userId,
-                    platform: 'LICHESS',
+        // CASE 1: Linking to existing account
+        if (existingUserId) {
+            await this.prisma.linkedAccount.upsert({
+                where: {
+                    userId_platform: {
+                        userId: existingUserId,
+                        platform: 'LICHESS',
+                    },
                 },
-            },
-            update: {
-                platformUsername: lichessUsername,
-                accessToken: accessToken,
-            },
-            create: {
-                userId,
+                update: {
+                    platformUsername: lichessUsername,
+                    accessToken: lichessAccessToken,
+                },
+                create: {
+                    userId: existingUserId,
+                    platform: 'LICHESS',
+                    platformUsername: lichessUsername,
+                    accessToken: lichessAccessToken,
+                },
+            });
+
+            this.logger.log(`Lichess account ${lichessUsername} linked to user ${existingUserId}`);
+            return { username: lichessUsername, userId: existingUserId, isNewUser: false };
+        }
+
+        // CASE 2: Login or Register via Lichess OAuth
+        // Check if this Lichess account is already linked to a user
+        const existingLink = await this.prisma.linkedAccount.findFirst({
+            where: {
                 platform: 'LICHESS',
                 platformUsername: lichessUsername,
-                accessToken: accessToken,
             },
+            include: { user: true },
         });
 
-        this.logger.log(`Lichess account ${lichessUsername} verified for user ${userId}`);
+        if (existingLink) {
+            // User exists - log them in
+            const user = await this.prisma.user.findUnique({
+                where: { id: existingLink.userId },
+                include: { linkedAccounts: true },
+            });
 
-        return { username: lichessUsername, userId };
+            if (!user) {
+                throw new BadRequestException('User account not found');
+            }
+
+            // Update access token
+            await this.prisma.linkedAccount.update({
+                where: { id: existingLink.id },
+                data: { accessToken: lichessAccessToken },
+            });
+
+            const tokens = await this.generateTokens(user);
+            this.logger.log(`Lichess login successful for ${lichessUsername}`);
+            
+            return { 
+                username: lichessUsername, 
+                userId: user.id, 
+                isNewUser: false,
+                tokens: tokens.tokens,
+            };
+        }
+
+        // New user - create account
+        const newUser = await this.prisma.user.create({
+            data: {
+                email: `${lichessUsername.toLowerCase()}@lichess.oauth`, // Placeholder email
+                username: lichessUsername,
+                passwordHash: '', // No password for OAuth users
+                emailVerified: true, // OAuth users are auto-verified
+                linkedAccounts: {
+                    create: {
+                        platform: 'LICHESS',
+                        platformUsername: lichessUsername,
+                        accessToken: lichessAccessToken,
+                    },
+                },
+            },
+            include: { linkedAccounts: true },
+        });
+
+        const tokens = await this.generateTokens(newUser);
+        this.logger.log(`New user ${lichessUsername} created via Lichess OAuth`);
+
+        return { 
+            username: lichessUsername, 
+            userId: newUser.id, 
+            isNewUser: true,
+            tokens: tokens.tokens,
+        };
     }
 
     /**
