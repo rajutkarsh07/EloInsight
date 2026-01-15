@@ -212,13 +212,13 @@ const Dashboard = () => {
                         </h3>
                     </div>
 
-                    <div className="h-[300px] w-full">
+                    <div className="h-[300px] w-full" style={{ minWidth: 300, minHeight: 200 }}>
                         {loading ? (
                             <div className="h-full w-full flex items-center justify-center bg-muted/20 rounded-lg animate-pulse">
                                 <span className="text-muted-foreground">Loading chart...</span>
                             </div>
                         ) : ratings.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={200}>
                                 <LineChart data={ratings} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                                     <XAxis

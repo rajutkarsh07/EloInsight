@@ -42,12 +42,12 @@ interface MoveAnalysis {
 // Note: For castling, this returns undefined - castling is handled separately
 const extractDestinationSquare = (san: string): string | undefined => {
     if (!san) return undefined;
-    
+
     // Castling doesn't have a simple destination square
     if (san === 'O-O' || san === 'O-O-O') {
         return undefined; // Will be handled separately
     }
-    
+
     // Remove check/checkmate symbols and promotion piece (but keep the destination)
     // e.g., "h8=Q+" -> "h8", "exd8=Q#" -> "d8"
     const cleaned = san.replace(/[+#]/g, '').replace(/=[QRBN]/, '');
@@ -61,7 +61,7 @@ const parseFenToSquares = (fen: string): Record<string, string> => {
     const pieces: Record<string, string> = {};
     const [position] = fen.split(' ');
     const rows = position.split('/');
-    
+
     for (let rowIdx = 0; rowIdx < 8; rowIdx++) {
         const row = rows[rowIdx];
         let colIdx = 0;
@@ -81,38 +81,38 @@ const parseFenToSquares = (fen: string): Record<string, string> => {
 // Find the source square by comparing two FENs (before and after a move)
 const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare: string | undefined, playedMove?: string): string | undefined => {
     if (!fenBefore || !fenAfter || !destinationSquare) return undefined;
-    
+
     const before = parseFenToSquares(fenBefore);
     const after = parseFenToSquares(fenAfter);
-    
+
     // Handle castling first (O-O or O-O-O notation)
     if (playedMove === 'O-O' || playedMove === 'O-O-O') {
         // Determine the row based on which side castled (check if white or black king moved)
         const row = after['g1']?.toLowerCase() === 'k' || after['c1']?.toLowerCase() === 'k' ? '1' : '8';
         return 'e' + row; // King always starts on e-file
     }
-    
+
     // The piece that moved TO the destination
     const movedPiece = after[destinationSquare];
     if (!movedPiece) return undefined;
-    
+
     // Handle promotion: pawn becomes queen/rook/bishop/knight
     // Look for a pawn that disappeared from an adjacent file on the previous rank
     const isPromotion = playedMove?.includes('=');
     if (isPromotion) {
         const destCol = destinationSquare.charCodeAt(0) - 97; // 0-7
         const destRow = parseInt(destinationSquare[1]);
-        
+
         // Pawn promotes on rank 8 (white) or rank 1 (black)
         // Source is one rank behind the destination
         const sourceRow = destRow === 8 ? 7 : 2; // If promoted to 8, came from 7; if to 1, came from 2
-        
+
         // Check same file first (non-capture promotion)
         const sameFileSource = String.fromCharCode(97 + destCol) + sourceRow;
         if (before[sameFileSource]?.toLowerCase() === 'p' && !after[sameFileSource]) {
             return sameFileSource;
         }
-        
+
         // Check adjacent files (capture promotion)
         for (const colOffset of [-1, 1]) {
             const srcCol = destCol + colOffset;
@@ -124,18 +124,18 @@ const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare
             }
         }
     }
-    
+
     // Standard move: find where this piece came FROM
     // Look for a square that had the same piece before but is now empty or different
     for (const square of Object.keys(before)) {
         if (square === destinationSquare) continue;
-        
+
         // Same piece type was here before, and now it's gone or different
         if (before[square] === movedPiece && after[square] !== movedPiece) {
             return square;
         }
     }
-    
+
     // Handle castling: if king moved 2 squares, source is the original king position
     if (movedPiece.toLowerCase() === 'k') {
         const destCol = destinationSquare.charCodeAt(0) - 97;
@@ -148,7 +148,7 @@ const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare
             }
         }
     }
-    
+
     // Fallback for any piece that disappeared and destination has a piece
     // Find any square where a piece vanished
     for (const square of Object.keys(before)) {
@@ -158,7 +158,7 @@ const findSourceSquare = (fenBefore: string, fenAfter: string, destinationSquare
             return square;
         }
     }
-    
+
     return undefined;
 };
 
@@ -207,7 +207,7 @@ const AnalysisViewer = () => {
     const [error, setError] = useState('');
     const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
     const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white');
-    
+
     // Exploration mode state
     const [isExplorationMode, setIsExplorationMode] = useState(false);
     const [explorationStartIndex, setExplorationStartIndex] = useState<number | null>(null);
@@ -255,7 +255,7 @@ const AnalysisViewer = () => {
             explorationAbortRef.current.abort();
             explorationAbortRef.current = null;
         }
-        
+
         setIsExplorationMode(false);
         setExplorationStartIndex(null);
         setExplorationFen(null);
@@ -270,29 +270,29 @@ const AnalysisViewer = () => {
     }, []);
 
     // Handle manual move in exploration mode
-    const handleExplorationMove = useCallback(async (move: { 
-        from: string; 
-        to: string; 
-        promotion?: string; 
-        fen: string; 
-        san: string 
+    const handleExplorationMove = useCallback(async (move: {
+        from: string;
+        to: string;
+        promotion?: string;
+        fen: string;
+        san: string
     }) => {
         // If not already in exploration mode, start it
         if (!isExplorationMode) {
             setIsExplorationMode(true);
             setExplorationStartIndex(currentMoveIndex);
         }
-        
+
         // Update exploration FEN and last move
         setExplorationFen(move.fen);
         setExplorationLastMove(move.from + move.to);
-        
+
         // Cancel any pending analysis request
         if (explorationAbortRef.current) {
             explorationAbortRef.current.abort();
         }
         explorationAbortRef.current = new AbortController();
-        
+
         // Set loading state
         setExplorationEval(prev => ({
             ...prev,
@@ -300,7 +300,7 @@ const AnalysisViewer = () => {
             bestMove: null,
             bestMoveUci: null,
         }));
-        
+
         try {
             // Call the position analysis API
             const response = await apiClient.post<{
@@ -319,28 +319,28 @@ const AnalysisViewer = () => {
                 multiPv: 1,
                 timeoutMs: 10000,
             });
-            
+
             // Check if this request was aborted
             if (explorationAbortRef.current?.signal.aborted) {
                 return;
             }
-            
+
             // Parse the best move UCI from PV if available
             let bestMoveUci = null;
             if (response.pv && response.pv.length > 0) {
                 // PV contains UCI moves like "e2e4"
                 bestMoveUci = response.pv[0];
             }
-            
+
             // Determine whose turn it is from the FEN
             const fenParts = move.fen.split(' ');
             const isWhiteTurn = fenParts[1] === 'w';
-            
+
             // The evaluation from the API is from the perspective of the side to move
             // We need to normalize it to White's perspective for consistent display
             let evaluation = response.evaluation.centipawns ?? null;
             let mateIn = response.evaluation.mateIn ?? null;
-            
+
             // If it's Black's turn, the eval is from Black's perspective, so flip it
             if (!isWhiteTurn && evaluation !== null) {
                 evaluation = -evaluation;
@@ -348,7 +348,7 @@ const AnalysisViewer = () => {
             if (!isWhiteTurn && mateIn !== null) {
                 mateIn = -mateIn;
             }
-            
+
             setExplorationEval({
                 evaluation,
                 mateIn,
@@ -397,17 +397,17 @@ const AnalysisViewer = () => {
                 setBoardOrientation(userColor);
 
                 // Debug: Log data used for Review Graph
-                console.log('📊 Review Graph Data:', {
-                    totalMoves: data.moves.length,
-                    sampleMoves: data.moves.slice(0, 5).map(m => ({
-                        halfMove: m.halfMove,
-                        playedMove: m.playedMove,
-                        evaluation: m.evaluation,
-                        mateIn: m.mateIn,
-                        classification: m.classification,
-                    })),
-                    allEvaluations: data.moves.map(m => m.evaluation),
-                });
+                // console.log('📊 Review Graph Data:', {
+                //     totalMoves: data.moves.length,
+                //     sampleMoves: data.moves.slice(0, 5).map(m => ({
+                //         halfMove: m.halfMove,
+                //         playedMove: m.playedMove,
+                //         evaluation: m.evaluation,
+                //         mateIn: m.mateIn,
+                //         classification: m.classification,
+                //     })),
+                //     allEvaluations: data.moves.map(m => m.evaluation),
+                // });
             } catch (err) {
                 console.error('Error fetching analysis:', err);
                 setError('Failed to load analysis');
@@ -443,12 +443,12 @@ const AnalysisViewer = () => {
 
     const currentFen = useMemo(() => {
         const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-        
+
         // If in exploration mode, use the exploration FEN
         if (isExplorationMode && explorationFen) {
             return explorationFen;
         }
-        
+
         if (!analysis || currentMoveIndex === 0) return startingFen;
 
         const move = analysis.moves[currentMoveIndex - 1];
@@ -482,7 +482,7 @@ const AnalysisViewer = () => {
                 destinationSquare: explorationLastMove ? explorationLastMove.slice(2, 4) : undefined,
             };
         }
-        
+
         if (!analysis || currentMoveIndex === 0) {
             return {
                 bestMove: undefined,
@@ -520,16 +520,16 @@ const AnalysisViewer = () => {
         // Get last move UCI for highlighting the played move squares
         // This shows the source (darker) and destination (lighter) of the last move
         let lastMoveUci = move.playedMoveUci || undefined;
-        
+
         // If playedMoveUci is not available, derive it by comparing FENs
         if (!lastMoveUci) {
             // Get the FEN before this move (previous position)
             const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-            const previousFen = currentMoveIndex <= 1 
-                ? startingFen 
+            const previousFen = currentMoveIndex <= 1
+                ? startingFen
                 : analysis.moves[currentMoveIndex - 2]?.fen || startingFen;
             const currentFenVal = move.fen;
-            
+
             // Handle castling destination square
             let castlingDestination = destinationSquare;
             if (move.playedMove === 'O-O') {
@@ -541,10 +541,10 @@ const AnalysisViewer = () => {
                 const row = currentMoveIndex % 2 === 1 ? '1' : '8';
                 castlingDestination = 'c' + row;
             }
-            
+
             // Find source square by comparing FENs
             const sourceSquare = findSourceSquare(previousFen, currentFenVal, castlingDestination, move.playedMove);
-            
+
             if (sourceSquare && castlingDestination) {
                 lastMoveUci = sourceSquare + castlingDestination;
             }
@@ -608,13 +608,13 @@ const AnalysisViewer = () => {
     const getCurrentEval = useCallback(() => {
         // If in exploration mode, return exploration evaluation
         if (isExplorationMode) {
-            return { 
-                evaluation: explorationEval.evaluation ?? 0, 
+            return {
+                evaluation: explorationEval.evaluation ?? 0,
                 mateIn: explorationEval.mateIn,
                 loading: explorationEval.loading,
             };
         }
-        
+
         if (!analysis || currentMoveIndex === 0) return { evaluation: 0, mateIn: null, loading: false };
         const move = analysis.moves[currentMoveIndex - 1];
 
@@ -806,8 +806,8 @@ const AnalysisViewer = () => {
                 </div>
 
                 {/* Chart */}
-                <div className="h-32 w-full px-2">
-                    <ResponsiveContainer width="100%" height="100%">
+                <div className="h-32 w-full px-2" style={{ minWidth: 200, minHeight: 100 }}>
+                    <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={100}>
                         <AreaChart
                             data={chartData}
                             margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
@@ -1141,8 +1141,8 @@ const AnalysisViewer = () => {
                             <div
                                 className={cn(
                                     "absolute bottom-0 left-0 right-0 transition-all duration-300 ease-out",
-                                    isExplorationMode 
-                                        ? "bg-gradient-to-t from-amber-200 to-amber-100" 
+                                    isExplorationMode
+                                        ? "bg-gradient-to-t from-amber-200 to-amber-100"
                                         : "bg-gradient-to-t from-zinc-100 to-white"
                                 )}
                                 style={{ height: `${getEvalBarWidth(currentEval.evaluation, currentEval.mateIn)}%` }}
@@ -1167,8 +1167,8 @@ const AnalysisViewer = () => {
                         {/* Chessboard */}
                         <div className={cn(
                             "flex-1 rounded-xl overflow-hidden shadow-2xl border transition-all",
-                            isExplorationMode 
-                                ? "border-amber-500/50 ring-2 ring-amber-500/30" 
+                            isExplorationMode
+                                ? "border-amber-500/50 ring-2 ring-amber-500/30"
                                 : "border-zinc-700/50"
                         )}>
                             <ChessBoardViewer
@@ -1183,7 +1183,7 @@ const AnalysisViewer = () => {
                             />
                         </div>
                     </div>
-                    
+
                     {/* Exploration Mode Indicator */}
                     {isExplorationMode && (
                         <div className="bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-amber-500/20 rounded-xl p-3 border border-amber-500/30">
@@ -1240,8 +1240,8 @@ const AnalysisViewer = () => {
                         </button>
                         <div className={cn(
                             "px-4 py-1.5 rounded-lg min-w-[100px] text-center border",
-                            isExplorationMode 
-                                ? "bg-amber-500/10 border-amber-500/30" 
+                            isExplorationMode
+                                ? "bg-amber-500/10 border-amber-500/30"
                                 : "bg-zinc-800 border-zinc-700/50"
                         )}>
                             <span className="text-xs text-zinc-500">Move</span>

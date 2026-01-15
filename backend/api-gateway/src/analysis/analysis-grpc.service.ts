@@ -195,10 +195,19 @@ export class AnalysisGrpcService implements OnModuleInit {
     private readonly gameAnalysisSemaphore: Semaphore;
 
     constructor(private readonly configService: ConfigService) {
-        this.timeoutMs = this.configService.get<number>('ANALYSIS_TIMEOUT_MS', 60000);
-        this.maxConcurrentGameAnalyses = this.configService.get<number>('MAX_CONCURRENT_GAME_ANALYSES', 1);
+        // Ensure timeoutMs is always a valid number - ConfigService might return undefined or string
+        const configTimeout = this.configService.get<number>('ANALYSIS_TIMEOUT_MS');
+        this.timeoutMs = (typeof configTimeout === 'number' && !isNaN(configTimeout))
+            ? configTimeout
+            : 60000; // Default 60 seconds
+
+        const configConcurrency = this.configService.get<number>('MAX_CONCURRENT_GAME_ANALYSES');
+        this.maxConcurrentGameAnalyses = (typeof configConcurrency === 'number' && !isNaN(configConcurrency))
+            ? configConcurrency
+            : 1;
+
         this.gameAnalysisSemaphore = new Semaphore(this.maxConcurrentGameAnalyses);
-        this.logger.log(`Game analysis concurrency limit: ${this.maxConcurrentGameAnalyses}`);
+        this.logger.log(`Analysis timeout: ${this.timeoutMs}ms, Game analysis concurrency limit: ${this.maxConcurrentGameAnalyses}`);
     }
 
     async onModuleInit() {
