@@ -163,7 +163,12 @@ const AnalysisList = () => {
         let result = games.filter(game => {
             // Platform filter
             if (filters.platform !== 'all') {
-                if (game.platform !== filters.platform) return false;
+                // Handle 'imported' which maps to 'manual' or 'imported' from backend
+                if (filters.platform === 'imported') {
+                    if (game.platform !== 'imported' && game.platform !== 'manual') return false;
+                } else {
+                    if (game.platform !== filters.platform) return false;
+                }
             }
             
             // Time control filter
@@ -235,6 +240,9 @@ const AnalysisList = () => {
         const baseClass = "px-2.5 py-1 rounded text-xs font-medium";
         if (platform === 'chess.com') {
             return <span className={cn(baseClass, "bg-emerald-500/20 text-emerald-400")}>chess.com</span>;
+        }
+        if (platform === 'imported' || platform === 'manual') {
+            return <span className={cn(baseClass, "bg-amber-500/20 text-amber-400")}>imported</span>;
         }
         return <span className={cn(baseClass, "bg-violet-500/20 text-violet-400")}>lichess</span>;
     };
@@ -396,6 +404,7 @@ const AnalysisList = () => {
                             <option value="all">All</option>
                             <option value="chess.com">Chess.com</option>
                             <option value="lichess">Lichess</option>
+                            <option value="imported">Imported</option>
                         </select>
                     </div>
 
