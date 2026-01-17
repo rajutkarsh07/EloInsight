@@ -1,22 +1,24 @@
-import { Controller, Get, Post, Param, Body, UseGuards, Request, Query, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, UseGuards, Request, Query, Logger, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody, ApiProperty } from '@nestjs/swagger';
 import { HttpService } from '@nestjs/axios';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { firstValueFrom } from 'rxjs';
-import { IsString, IsOptional, IsNumber, IsIn } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsIn, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 // DTO for creating a game
 class CreateGameDto {
-    @ApiProperty({ enum: ['chess.com', 'lichess'] })
+    @ApiProperty({ enum: ['chess.com', 'lichess', 'manual'] })
     @IsString()
-    @IsIn(['chess.com', 'lichess'])
-    platform: 'chess.com' | 'lichess';
+    @IsIn(['chess.com', 'lichess', 'manual'])
+    platform: 'chess.com' | 'lichess' | 'manual';
 
-    @ApiProperty()
+    @ApiProperty({ required: false })
+    @IsOptional()
     @IsString()
-    externalId: string;
+    externalId?: string;
 
     @ApiProperty()
     @IsString()
@@ -59,6 +61,20 @@ class CreateGameDto {
     openingName?: string;
 }
 
+// DTO for importing PGN
+class ImportPgnDto {
+    @ApiProperty({ description: 'PGN text (can contain multiple games separated by blank lines)' })
+    @IsString()
+    pgn: string;
+}
+
+// Helper to parse PGN headers and moves
+interface ParsedPgnGame {
+    headers: Record<string, string>;
+    moves: string;
+    rawPgn: string;
+}
+
 @ApiTags('games')
 @Controller('games')
 @UseGuards(JwtAuthGuard)
@@ -76,7 +92,7 @@ export class GamesController {
     @ApiOperation({ summary: 'Get user games' })
     @ApiQuery({ name: 'page', required: false, type: Number })
     @ApiQuery({ name: 'limit', required: false, type: Number })
-    @ApiQuery({ name: 'platform', required: false, enum: ['chess.com', 'lichess'] })
+    @ApiQuery({ name: 'platform', required: false, enum: ['chess.com', 'lichess', 'imported'] })
     @ApiQuery({ name: 'analyzed', required: false, enum: ['yes', 'no'] })
     @ApiResponse({ status: 200, description: 'Games retrieved successfully' })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -99,6 +115,11 @@ export class GamesController {
         // Fetch Lichess games (only if OAuth verified - Lichess has OAuth)
         if (user?.lichessUsername && user?.lichessVerified && (!platform || platform === 'lichess')) {
             gamePromises.push(this.fetchLichessGames(user.lichessUsername, limit));
+        }
+
+        // Fetch manually imported games from database
+        if (!platform || platform === 'imported') {
+            gamePromises.push(this.fetchImportedGames(userId, limit));
         }
 
         const results = await Promise.all(gamePromises);
@@ -371,6 +392,39 @@ export class GamesController {
         return `${clock.limit / 60}+${clock.increment}`;
     }
 
+    private async fetchImportedGames(userId: string, limit: any): Promise<any[]> {
+        try {
+            const maxGames = Math.min(Number(limit) * 3, 300);
+            const games = await this.prisma.game.findMany({
+                where: {
+                    userId,
+                    platform: 'MANUAL',
+                },
+                orderBy: { playedAt: 'desc' },
+                take: maxGames,
+            });
+
+            return games.map(g => ({
+                id: g.id, // Use DB ID as the identifier
+                dbId: g.id,
+                platform: 'imported',
+                whitePlayer: g.whitePlayer,
+                blackPlayer: g.blackPlayer,
+                whiteRating: g.whiteRating,
+                blackRating: g.blackRating,
+                result: this.mapGameResultToString(g.result),
+                timeControl: g.timeControl || '-',
+                playedAt: g.playedAt.toISOString(),
+                analysisStatus: g.analysisStatus.toLowerCase(),
+                pgn: g.pgn,
+                openingName: g.openingName,
+            }));
+        } catch (error) {
+            this.logger.error(`Failed to fetch imported games for user ${userId}:`, error.message);
+            return [];
+        }
+    }
+
     @Get('analyzed')
     @ApiOperation({ summary: 'Get analyzed games' })
     @ApiQuery({ name: 'page', required: false, type: Number })
@@ -426,7 +480,7 @@ export class GamesController {
         return {
             data: games.map(game => ({
                 id: game.id,
-                platform: game.platform === 'CHESS_COM' ? 'chess.com' : 'lichess',
+                platform: this.mapPlatformToString(game.platform),
                 whitePlayer: game.whitePlayer,
                 blackPlayer: game.blackPlayer,
                 result: this.mapGameResultToString(game.result),
@@ -560,7 +614,7 @@ export class GamesController {
 
         return {
             id: game.id,
-            platform: game.platform === 'CHESS_COM' ? 'chess.com' : 'lichess',
+            platform: this.mapPlatformToString(game.platform),
             whitePlayer: game.whitePlayer,
             blackPlayer: game.blackPlayer,
             result: this.mapGameResultToString(game.result),
@@ -571,6 +625,16 @@ export class GamesController {
             analysisStatus: game.analysisStatus.toLowerCase(),
             analysis: game.analysis,
         };
+    }
+
+    private mapPlatformToString(platform: string): string {
+        const platformMap: Record<string, string> = {
+            'CHESS_COM': 'chess.com',
+            'LICHESS': 'lichess',
+            'MANUAL': 'imported',
+            'GOOGLE': 'google',
+        };
+        return platformMap[platform] || platform.toLowerCase();
     }
 
     private mapGameResultToString(result: string): string {
@@ -594,5 +658,169 @@ export class GamesController {
             status: 'queued',
             message: `Game sync from ${platform} initiated`,
         };
+    }
+
+    @Post('import')
+    @ApiOperation({ summary: 'Import games from PGN text' })
+    @ApiBody({ type: ImportPgnDto })
+    @ApiResponse({ status: 201, description: 'Games imported successfully' })
+    @ApiResponse({ status: 400, description: 'Invalid PGN format' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    async importPgn(
+        @Request() req,
+        @Body() dto: ImportPgnDto,
+    ) {
+        const userId = req.user.id;
+
+        // Parse PGN text to extract individual games
+        const games = this.parsePgnText(dto.pgn);
+
+        if (games.length === 0) {
+            throw new BadRequestException('No valid games found in PGN text');
+        }
+
+        const results: { success: number; failed: number; errors: string[]; gameIds: string[] } = {
+            success: 0,
+            failed: 0,
+            errors: [],
+            gameIds: [],
+        };
+
+        for (const parsedGame of games) {
+            try {
+                // Extract game info from PGN headers
+                const whitePlayer = parsedGame.headers['White'] || 'Unknown';
+                const blackPlayer = parsedGame.headers['Black'] || 'Unknown';
+                const result = parsedGame.headers['Result'] || '*';
+                const dateStr = parsedGame.headers['Date'] || parsedGame.headers['UTCDate'];
+                const timeControl = parsedGame.headers['TimeControl'] || '-';
+                const openingName = parsedGame.headers['Opening'] || parsedGame.headers['ECO'] || null;
+                const whiteElo = parsedGame.headers['WhiteElo'] ? parseInt(parsedGame.headers['WhiteElo'], 10) : null;
+                const blackElo = parsedGame.headers['BlackElo'] ? parseInt(parsedGame.headers['BlackElo'], 10) : null;
+
+                // Generate a unique external ID for imported games
+                const externalId = `import-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+                // Parse date - PGN format is YYYY.MM.DD
+                let playedAt = new Date();
+                if (dateStr) {
+                    const dateParts = dateStr.split('.');
+                    if (dateParts.length === 3) {
+                        const [year, month, day] = dateParts;
+                        playedAt = new Date(`${year}-${month}-${day}`);
+                        if (isNaN(playedAt.getTime())) {
+                            playedAt = new Date();
+                        }
+                    }
+                }
+
+                // Map result string to enum
+                const resultMap: Record<string, 'WHITE_WIN' | 'BLACK_WIN' | 'DRAW' | 'ONGOING'> = {
+                    '1-0': 'WHITE_WIN',
+                    '0-1': 'BLACK_WIN',
+                    '1/2-1/2': 'DRAW',
+                    '*': 'ONGOING',
+                };
+                const gameResult = resultMap[result] || 'ONGOING';
+
+                // Create the game
+                const game = await this.prisma.game.create({
+                    data: {
+                        userId,
+                        platform: 'MANUAL',
+                        externalId,
+                        pgn: parsedGame.rawPgn,
+                        whitePlayer,
+                        blackPlayer,
+                        whiteRating: whiteElo,
+                        blackRating: blackElo,
+                        result: gameResult,
+                        timeControl,
+                        openingName,
+                        playedAt,
+                        analysisStatus: 'PENDING',
+                    },
+                });
+
+                results.success++;
+                results.gameIds.push(game.id);
+                this.logger.log(`Imported game: ${game.id} - ${whitePlayer} vs ${blackPlayer}`);
+            } catch (err) {
+                results.failed++;
+                const errorMsg = `Failed to import game: ${parsedGame.headers['White'] || 'Unknown'} vs ${parsedGame.headers['Black'] || 'Unknown'} - ${err.message}`;
+                results.errors.push(errorMsg);
+                this.logger.error(errorMsg);
+            }
+        }
+
+        return {
+            message: `Imported ${results.success} game(s)${results.failed > 0 ? `, ${results.failed} failed` : ''}`,
+            success: results.success,
+            failed: results.failed,
+            errors: results.errors.slice(0, 5), // Return max 5 errors
+            gameIds: results.gameIds,
+        };
+    }
+
+    /**
+     * Parse PGN text containing one or more games
+     * PGN games are separated by blank lines
+     */
+    private parsePgnText(pgnText: string): ParsedPgnGame[] {
+        const games: ParsedPgnGame[] = [];
+
+        // Normalize line endings
+        const normalizedText = pgnText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+        // Split into individual games - games are separated by double newlines after the last move
+        // A game starts with headers [Tag "Value"] and ends with a result (1-0, 0-1, 1/2-1/2, or *)
+        const gameChunks = normalizedText.split(/\n\n(?=\[)/);
+
+        for (const chunk of gameChunks) {
+            const trimmedChunk = chunk.trim();
+            if (!trimmedChunk) continue;
+
+            // Check if this chunk has valid PGN structure (at least one header)
+            if (!trimmedChunk.startsWith('[')) continue;
+
+            const headers: Record<string, string> = {};
+            let moves = '';
+
+            // Split into lines
+            const lines = trimmedChunk.split('\n');
+            let inHeaders = true;
+
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+
+                if (inHeaders) {
+                    // Parse header line: [TagName "TagValue"]
+                    const headerMatch = trimmedLine.match(/^\[(\w+)\s+"(.*)"\]$/);
+                    if (headerMatch) {
+                        headers[headerMatch[1]] = headerMatch[2];
+                    } else if (trimmedLine && !trimmedLine.startsWith('[')) {
+                        // Non-header line, start of moves
+                        inHeaders = false;
+                        moves = trimmedLine;
+                    }
+                } else {
+                    // Accumulate move text
+                    if (trimmedLine) {
+                        moves += ' ' + trimmedLine;
+                    }
+                }
+            }
+
+            // Only add if we have minimum required info
+            if (Object.keys(headers).length > 0 || moves.trim()) {
+                games.push({
+                    headers,
+                    moves: moves.trim(),
+                    rawPgn: trimmedChunk,
+                });
+            }
+        }
+
+        return games;
     }
 }

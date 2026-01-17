@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, RotateCw, Filter, X, Play, Loader2, CheckCircle2 } from 'lucide-react';
+import { Eye, RotateCw, Filter, X, Play, Loader2, CheckCircle2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useGames } from '../contexts/GamesContext';
+import PgnImportModal from '../components/PgnImportModal';
 
 interface Game {
     id: string;
@@ -137,6 +138,7 @@ const GamesList = () => {
     });
     const [localError, setLocalError] = useState('');
     const [analyzingGames, setAnalyzingGames] = useState<Set<string>>(new Set());
+    const [showImportModal, setShowImportModal] = useState(false);
 
     const MAX_CONCURRENT_ANALYSES = 3;
 
@@ -467,21 +469,40 @@ const GamesList = () => {
         if (platform === 'chess.com') {
             return <span className={cn(baseClass, "bg-emerald-500/20 text-emerald-400")}>chess.com</span>;
         }
+        if (platform === 'imported' || platform === 'manual') {
+            return <span className={cn(baseClass, "bg-amber-500/20 text-amber-400")}>imported</span>;
+        }
         return <span className={cn(baseClass, "bg-violet-500/20 text-violet-400")}>lichess</span>;
+    };
+
+    const handleImportSuccess = (gameIds: string[]) => {
+        // Refresh games list after successful import
+        const platform = filters.platform !== 'all' ? filters.platform : undefined;
+        const analyzedFilter = filters.analyzed !== 'all' ? filters.analyzed : undefined;
+        fetchGames(1, pagination.limit, platform, true, analyzedFilter);
     };
 
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <h1 className="text-3xl font-bold tracking-tight">Games</h1>
-                <button
-                    onClick={handleSync}
-                    disabled={syncing}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 btn-glow"
-                >
-                    {syncing ? <RotateCw className="animate-spin h-4 w-4" /> : <RotateCw className="h-4 w-4" />}
-                    {syncing ? 'Syncing...' : 'Sync Games'}
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setShowImportModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-md hover:bg-amber-500/20 transition-colors"
+                    >
+                        <Upload className="h-4 w-4" />
+                        Import PGN
+                    </button>
+                    <button
+                        onClick={handleSync}
+                        disabled={syncing}
+                        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 btn-glow"
+                    >
+                        {syncing ? <RotateCw className="animate-spin h-4 w-4" /> : <RotateCw className="h-4 w-4" />}
+                        {syncing ? 'Syncing...' : 'Sync Games'}
+                    </button>
+                </div>
             </div>
 
             {error && (
@@ -524,6 +545,7 @@ const GamesList = () => {
                             <option value="all">All</option>
                             <option value="chess.com">Chess.com</option>
                             <option value="lichess">Lichess</option>
+                            <option value="imported">Imported</option>
                         </select>
                     </div>
 
@@ -838,6 +860,13 @@ const GamesList = () => {
                     </div>
                 )}
             </div>
+
+            {/* PGN Import Modal */}
+            <PgnImportModal
+                isOpen={showImportModal}
+                onClose={() => setShowImportModal(false)}
+                onSuccess={handleImportSuccess}
+            />
         </div>
     );
 };
