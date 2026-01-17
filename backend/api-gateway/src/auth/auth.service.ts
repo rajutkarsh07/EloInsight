@@ -198,13 +198,19 @@ export class AuthService {
     async getUserById(id: string) {
         const user = await this.prisma.user.findUnique({
             where: { id },
-            include: { linkedAccounts: true }
+            include: { linkedAccounts: true, profile: true }
         });
 
         if (!user) return null;
 
         const chessComAccount = user.linkedAccounts?.find((a: any) => a.platform === 'CHESS_COM');
         const lichessAccount = user.linkedAccounts?.find((a: any) => a.platform === 'LICHESS');
+        const googleAccount = user.linkedAccounts?.find((a: any) => a.platform === 'GOOGLE');
+
+        // Get avatar URL: prefer Google avatar (highest quality), then profile avatar
+        const avatarUrl = googleAccount?.avatarUrl || 
+                          (user as any).profile?.avatarUrl || 
+                          null;
 
         return {
             ...user,
@@ -213,6 +219,8 @@ export class AuthService {
             // OAuth verified if accessToken exists
             lichessVerified: !!lichessAccount?.accessToken,
             chessComVerified: !!chessComAccount?.accessToken,
+            // Avatar URL
+            avatarUrl,
         };
     }
 
@@ -440,9 +448,22 @@ export class AuthService {
 
         const lichessUser = await userResponse.json();
         const lichessUsername = lichessUser.username;
+        const lichessUserId = lichessUser.id;
 
         // CASE 1: Linking to existing account
         if (existingUserId) {
+            // Check if another user already has this Lichess account (case-insensitive)
+            const existingOtherUser = await this.prisma.linkedAccount.findFirst({
+                where: {
+                    platform: 'LICHESS',
+                    platformUsername: { equals: lichessUsername, mode: 'insensitive' },
+                    userId: { not: existingUserId },
+                },
+            });
+            if (existingOtherUser) {
+                throw new BadRequestException('This Lichess account is already linked to another user.');
+            }
+
             await this.prisma.linkedAccount.upsert({
                 where: {
                     userId_platform: {
@@ -452,12 +473,14 @@ export class AuthService {
                 },
                 update: {
                     platformUsername: lichessUsername,
+                    platformUserId: lichessUserId,
                     accessToken: lichessAccessToken,
                 },
                 create: {
                     userId: existingUserId,
                     platform: 'LICHESS',
                     platformUsername: lichessUsername,
+                    platformUserId: lichessUserId,
                     accessToken: lichessAccessToken,
                 },
             });
@@ -467,11 +490,11 @@ export class AuthService {
         }
 
         // CASE 2: Login or Register via Lichess OAuth
-        // Check if this Lichess account is already linked to a user
+        // Check if this Lichess account is already linked to a user (case-insensitive)
         const existingLink = await this.prisma.linkedAccount.findFirst({
             where: {
                 platform: 'LICHESS',
-                platformUsername: lichessUsername,
+                platformUsername: { equals: lichessUsername, mode: 'insensitive' },
             },
             include: { user: true },
         });
@@ -490,7 +513,10 @@ export class AuthService {
             // Update access token
             await this.prisma.linkedAccount.update({
                 where: { id: existingLink.id },
-                data: { accessToken: lichessAccessToken },
+                data: { 
+                    accessToken: lichessAccessToken,
+                    platformUserId: lichessUserId,
+                },
             });
 
             const tokens = await this.generateTokens(user);
@@ -504,7 +530,7 @@ export class AuthService {
             };
         }
 
-        // New user - create account
+        // New user - create account (no avatar - user can connect Google for avatar)
         const newUser = await this.prisma.user.create({
             data: {
                 email: `${lichessUsername.toLowerCase()}@lichess.oauth`, // Placeholder email
@@ -515,6 +541,7 @@ export class AuthService {
                     create: {
                         platform: 'LICHESS',
                         platformUsername: lichessUsername,
+                        platformUserId: lichessUserId,
                         accessToken: lichessAccessToken,
                     },
                 },
@@ -675,11 +702,12 @@ export class AuthService {
         const email = googleUser.email;
         const name = googleUser.name || email.split('@')[0];
         const googleId = googleUser.id;
+        const googleAvatarUrl = googleUser.picture || null; // Google profile picture URL
 
         // Check if user exists with this email
         let user = await this.prisma.user.findUnique({
             where: { email },
-            include: { linkedAccounts: true },
+            include: { linkedAccounts: true, profile: true },
         });
 
         let isNewUser = false;
@@ -694,6 +722,7 @@ export class AuthService {
                     data: { 
                         accessToken: googleAccessToken,
                         platformUserId: googleId,
+                        avatarUrl: googleAvatarUrl,
                     },
                 });
             } else {
@@ -703,15 +732,25 @@ export class AuthService {
                         platform: 'GOOGLE',
                         platformUsername: email,
                         platformUserId: googleId,
+                        avatarUrl: googleAvatarUrl,
                         accessToken: googleAccessToken,
                     },
+                });
+            }
+
+            // Update user profile avatar with Google avatar
+            if (googleAvatarUrl) {
+                await this.prisma.userProfile.upsert({
+                    where: { userId: user.id },
+                    update: { avatarUrl: googleAvatarUrl },
+                    create: { userId: user.id, avatarUrl: googleAvatarUrl },
                 });
             }
 
             // Refresh user with linked accounts
             user = await this.prisma.user.findUnique({
                 where: { id: user.id },
-                include: { linkedAccounts: true },
+                include: { linkedAccounts: true, profile: true },
             });
         } else {
             // Create new user
@@ -735,11 +774,17 @@ export class AuthService {
                             platform: 'GOOGLE',
                             platformUsername: email,
                             platformUserId: googleId,
+                            avatarUrl: googleAvatarUrl,
                             accessToken: googleAccessToken,
                         },
                     },
+                    profile: googleAvatarUrl ? {
+                        create: {
+                            avatarUrl: googleAvatarUrl,
+                        },
+                    } : undefined,
                 },
-                include: { linkedAccounts: true },
+                include: { linkedAccounts: true, profile: true },
             });
 
             isNewUser = true;

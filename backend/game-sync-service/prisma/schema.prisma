@@ -70,6 +70,7 @@ model LinkedAccount {
   platform         Platform
   platformUsername String    @map("platform_username") @db.VarChar(100)
   platformUserId   String?   @map("platform_user_id") @db.VarChar(100)
+  avatarUrl        String?   @map("avatar_url") @db.Text
   accessToken      String?   @map("access_token") @db.Text
   refreshToken     String?   @map("refresh_token") @db.Text
   tokenExpiresAt   DateTime? @map("token_expires_at") @db.Timestamptz

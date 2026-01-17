@@ -85,8 +85,25 @@ const MainLayout = () => {
 
                     <div className="p-4 border-t space-y-2">
                         <div className="flex items-center gap-3 px-4 py-3">
-                            <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
-                                <User size={16} />
+                            {user?.avatarUrl ? (
+                                <img 
+                                    src={user.avatarUrl} 
+                                    alt={user.username}
+                                    className="w-10 h-10 rounded-full object-cover ring-2 ring-primary/20"
+                                    onError={(e) => {
+                                        // Fallback to initials if image fails to load
+                                        e.currentTarget.style.display = 'none';
+                                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                    }}
+                                />
+                            ) : null}
+                            <div className={cn(
+                                "w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center ring-2 ring-primary/20",
+                                user?.avatarUrl ? "hidden" : ""
+                            )}>
+                                <span className="text-sm font-bold text-primary">
+                                    {user?.username?.charAt(0).toUpperCase() || 'U'}
+                                </span>
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium truncate">{user?.username || 'User'}</p>

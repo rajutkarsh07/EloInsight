@@ -194,8 +194,8 @@ const Settings = () => {
                                 onChange={handleChange}
                             />
                             <p className="text-xs text-muted-foreground">
-                                <Shield size={12} className="inline mr-1" />
-                                Chess.com OAuth coming soon. For now, enter your username manually.
+                                <CheckCircle size={12} className="inline mr-1 text-green-500" />
+                                Chess.com uses a public API - just enter your username to sync games.
                             </p>
                         </div>
 
@@ -303,13 +303,14 @@ const Settings = () => {
                 <div className="mt-4 bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
                     <h3 className="text-sm font-medium text-blue-400 mb-2 flex items-center gap-2">
                         <Shield size={16} />
-                        Why verify your account?
+                        Account Verification
                     </h3>
                     <ul className="text-xs text-muted-foreground space-y-1">
-                        <li>• Proves you own the chess account you're analyzing</li>
-                        <li>• Prevents others from claiming your account</li>
-                        <li>• Enables secure game syncing without password sharing</li>
-                        <li>• Your OAuth tokens are encrypted and securely stored</li>
+                        <li>• <strong className="text-green-400">Chess.com</strong> - Uses public API, just enter your username to sync games</li>
+                        <li>• <strong className="text-blue-400">Lichess</strong> - OAuth required to verify account ownership and sync games</li>
+                        <li>• Verification proves you own the chess account you're analyzing</li>
+                        <li>• Prevents others from claiming your verified accounts</li>
+                        <li>• OAuth tokens are encrypted and securely stored</li>
                     </ul>
                 </div>
             </div>

@@ -8,6 +8,8 @@ export interface User {
     // OAuth verified status
     lichessVerified?: boolean;
     chessComVerified?: boolean;
+    // Avatar URL from Lichess/Google
+    avatarUrl?: string;
     createdAt: string;
 }
 
