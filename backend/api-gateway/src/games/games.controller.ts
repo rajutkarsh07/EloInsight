@@ -487,7 +487,7 @@ export class GamesController {
         };
         const platform = platformMap[dto.platform] || 'MANUAL';
 
-        // Check if game already exists
+        // Check if game already exists for this user
         const existingGame = await this.prisma.game.findFirst({
             where: {
                 userId,

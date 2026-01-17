@@ -162,7 +162,7 @@ model Game {
   analysisJobs AnalysisJob[]
   moves        Move[]
 
-  @@unique([platform, externalId])
+  @@unique([userId, platform, externalId])
   @@index([userId], map: "idx_games_user_id")
   @@index([platform, externalId], map: "idx_games_platform_external")
   @@index([playedAt(sort: Desc)], map: "idx_games_played_at")
