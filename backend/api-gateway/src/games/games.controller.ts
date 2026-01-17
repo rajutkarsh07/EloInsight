@@ -91,13 +91,13 @@ export class GamesController {
         const userId = req.user.id;
         const gamePromises: Promise<any[]>[] = [];
 
-        // Fetch Chess.com games
+        // Fetch Chess.com games (Chess.com uses public API, no OAuth needed - just username)
         if (user?.chessComUsername && (!platform || platform === 'chess.com')) {
             gamePromises.push(this.fetchChessComGames(user.chessComUsername, limit));
         }
 
-        // Fetch Lichess games
-        if (user?.lichessUsername && (!platform || platform === 'lichess')) {
+        // Fetch Lichess games (only if OAuth verified - Lichess has OAuth)
+        if (user?.lichessUsername && user?.lichessVerified && (!platform || platform === 'lichess')) {
             gamePromises.push(this.fetchLichessGames(user.lichessUsername, limit));
         }
 
