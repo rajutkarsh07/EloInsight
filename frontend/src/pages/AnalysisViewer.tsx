@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, RefreshCw, Undo2, FlaskConical, Loader2, ChevronDown, TrendingUp, Copy, CheckCircle, Crosshair, Clock, Play, Pause, Volume2, VolumeX, Keyboard, X, Lightbulb } from 'lucide-react';
+import { RotateCw, AlertTriangle, XCircle, MinusCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Star, Zap, Check, ArrowLeft, Target, BookOpen, RefreshCw, Undo2, FlaskConical, Loader2, ChevronDown, TrendingUp, Copy, CheckCircle, Crosshair, Clock, Play, Pause, Volume2, VolumeX, Keyboard, X, Lightbulb, PlayCircle } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceDot } from 'recharts';
 import ChessBoardViewer from '../components/chess/ChessBoardViewer';
+import { Chess } from 'chess.js';
 import { apiClient } from '../services/apiClient';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
@@ -398,6 +399,46 @@ const AnalysisViewer = () => {
         const maxIndex = analysis.moves.length;
         setCurrentMoveIndex(Math.max(0, Math.min(index, maxIndex)));
     }, [analysis, isExplorationMode, resetExploration]);
+
+    // Play the best move instead of the played move (enters exploration mode)
+    const playBestMove = useCallback(() => {
+        if (!analysis || currentMoveIndex === 0) return;
+
+        const currentMove = analysis.moves[currentMoveIndex - 1];
+        const bestMoveUci = currentMove.bestMoveUci;
+        
+        if (!bestMoveUci || bestMoveUci.length < 4) return;
+
+        // Get the FEN before this move was played
+        const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+        const fenBeforeMove = currentMoveIndex === 1 
+            ? startingFen 
+            : analysis.moves[currentMoveIndex - 2]?.fen || startingFen;
+
+        try {
+            const chess = new Chess(fenBeforeMove);
+            
+            // Parse the UCI move
+            const from = bestMoveUci.slice(0, 2);
+            const to = bestMoveUci.slice(2, 4);
+            const promotion = bestMoveUci.length > 4 ? bestMoveUci[4] : undefined;
+
+            // Make the move
+            const move = chess.move({ from, to, promotion });
+            
+            if (move) {
+                handleExplorationMove({
+                    from,
+                    to,
+                    promotion,
+                    fen: chess.fen(),
+                    san: move.san,
+                });
+            }
+        } catch (error) {
+            console.error('Failed to play best move:', error);
+        }
+    }, [analysis, currentMoveIndex, handleExplorationMove]);
 
     useEffect(() => {
         const fetchAnalysis = async () => {
@@ -2581,7 +2622,25 @@ const AnalysisViewer = () => {
                             {/* Engine Line (PV) */}
                             {analysis.moves[currentMoveIndex - 1].pv && analysis.moves[currentMoveIndex - 1].pv.length > 0 && (
                                 <div className="mt-3 pt-3 border-t border-zinc-700/30">
-                                    <span className="text-xs text-zinc-500 block mb-1.5">Best Line:</span>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-xs text-zinc-500">Best Line:</span>
+                                        {/* Play Best Move button - shown when move was not optimal */}
+                                        {(analysis.moves[currentMoveIndex - 1].isInaccuracy ||
+                                          analysis.moves[currentMoveIndex - 1].isMistake ||
+                                          analysis.moves[currentMoveIndex - 1].isBlunder) &&
+                                          analysis.moves[currentMoveIndex - 1].bestMoveUci && (
+                                            <button
+                                                onClick={playBestMove}
+                                                className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium
+                                                         bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 
+                                                         border border-emerald-500/30 transition-all"
+                                                title="Play the best move instead and explore the line"
+                                            >
+                                                <PlayCircle className="h-3 w-3" />
+                                                Play this
+                                            </button>
+                                        )}
+                                    </div>
                                     <div className="flex flex-wrap gap-1">
                                         {analysis.moves[currentMoveIndex - 1].pv.slice(0, 6).map((move, idx) => (
                                             <span 
