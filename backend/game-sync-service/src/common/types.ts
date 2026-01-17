@@ -4,6 +4,7 @@
 export enum Platform {
     CHESS_COM = 'chess.com',
     LICHESS = 'lichess',
+    GOOGLE = 'google',
     MANUAL = 'manual',
 }
 
