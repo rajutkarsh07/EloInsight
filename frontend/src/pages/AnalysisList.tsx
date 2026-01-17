@@ -332,9 +332,17 @@ const AnalysisList = () => {
                                 <p className="text-sm text-muted-foreground">Avg. Accuracy</p>
                                 <p className="text-2xl font-bold">
                                     {(games.reduce((sum, g) => {
-                                        const acc = g.analysis?.accuracyWhite || g.analysis?.accuracyBlack || 0;
-                                        return sum + acc;
-                                    }, 0) / games.length).toFixed(1)}%
+                                        if (!g.analysis) return sum;
+                                        // Determine which color the user played
+                                        const usernames = [
+                                            user?.username?.toLowerCase(),
+                                            user?.chessComUsername?.toLowerCase(),
+                                            user?.lichessUsername?.toLowerCase()
+                                        ].filter(Boolean);
+                                        const isUserWhite = usernames.some(u => g.whitePlayer.toLowerCase() === u);
+                                        const acc = isUserWhite ? g.analysis.accuracyWhite : g.analysis.accuracyBlack;
+                                        return sum + (acc || 0);
+                                    }, 0) / games.filter(g => g.analysis).length || 0).toFixed(1)}%
                                 </p>
                             </div>
                         </div>
