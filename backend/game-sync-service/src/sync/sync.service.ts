@@ -331,10 +331,11 @@ export class SyncService {
     }
 
     // Helper methods to map between local enums and Prisma enums
-    private mapPlatformToDbEnum(platform: Platform): 'CHESS_COM' | 'LICHESS' | 'MANUAL' {
-        const map: Record<Platform, 'CHESS_COM' | 'LICHESS' | 'MANUAL'> = {
+    private mapPlatformToDbEnum(platform: Platform): 'CHESS_COM' | 'LICHESS' | 'GOOGLE' | 'MANUAL' {
+        const map: Record<Platform, 'CHESS_COM' | 'LICHESS' | 'GOOGLE' | 'MANUAL'> = {
             [Platform.CHESS_COM]: 'CHESS_COM',
             [Platform.LICHESS]: 'LICHESS',
+            [Platform.GOOGLE]: 'GOOGLE',
             [Platform.MANUAL]: 'MANUAL',
         };
         return map[platform];
