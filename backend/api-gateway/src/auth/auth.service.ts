@@ -217,9 +217,32 @@ export class AuthService {
     }
 
     async updateProfile(userId: string, data: { chessComUsername?: string; lichessUsername?: string }) {
+        // Helper to check if username is already claimed by another user
+        const checkUsernameAvailable = async (platform: 'CHESS_COM' | 'LICHESS', username: string) => {
+            const existing = await this.prisma.linkedAccount.findFirst({
+                where: {
+                    platform,
+                    platformUsername: { equals: username, mode: 'insensitive' },
+                    userId: { not: userId }, // Exclude current user
+                },
+            });
+            if (existing) {
+                const platformName = platform === 'LICHESS' ? 'Lichess' : 'Chess.com';
+                if (existing.accessToken) {
+                    throw new BadRequestException(
+                        `This ${platformName} account is already verified by another user. Please use OAuth to verify your ownership.`
+                    );
+                }
+                throw new BadRequestException(
+                    `This ${platformName} username is already claimed by another user.`
+                );
+            }
+        };
+
         // Update or create Chess.com linked account
         if (data.chessComUsername !== undefined) {
             if (data.chessComUsername) {
+                await checkUsernameAvailable('CHESS_COM', data.chessComUsername);
                 await this.prisma.linkedAccount.upsert({
                     where: {
                         userId_platform: {
@@ -237,7 +260,15 @@ export class AuthService {
                     },
                 });
             } else {
-                // If empty string, delete the linked account
+                // If empty string, delete the linked account (but not if OAuth-verified)
+                const existing = await this.prisma.linkedAccount.findFirst({
+                    where: { userId, platform: 'CHESS_COM' },
+                });
+                if (existing?.accessToken) {
+                    throw new BadRequestException(
+                        'Cannot remove OAuth-verified Chess.com account. Disconnect via Chess.com settings instead.'
+                    );
+                }
                 await this.prisma.linkedAccount.deleteMany({
                     where: {
                         userId,
@@ -250,6 +281,7 @@ export class AuthService {
         // Update or create Lichess linked account
         if (data.lichessUsername !== undefined) {
             if (data.lichessUsername) {
+                await checkUsernameAvailable('LICHESS', data.lichessUsername);
                 await this.prisma.linkedAccount.upsert({
                     where: {
                         userId_platform: {
@@ -267,7 +299,15 @@ export class AuthService {
                     },
                 });
             } else {
-                // If empty string, delete the linked account
+                // If empty string, delete the linked account (but not if OAuth-verified)
+                const existing = await this.prisma.linkedAccount.findFirst({
+                    where: { userId, platform: 'LICHESS' },
+                });
+                if (existing?.accessToken) {
+                    throw new BadRequestException(
+                        'Cannot remove OAuth-verified Lichess account. Disconnect via Lichess settings instead.'
+                    );
+                }
                 await this.prisma.linkedAccount.deleteMany({
                     where: {
                         userId,

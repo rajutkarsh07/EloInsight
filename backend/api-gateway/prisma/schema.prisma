@@ -83,6 +83,7 @@ model LinkedAccount {
   syncJobs SyncJob[]
 
   @@unique([userId, platform])
+  @@unique([platform, platformUsername]) // One platform username can only be linked to one user
   @@index([userId], map: "idx_linked_accounts_user_id")
   @@index([platform, platformUsername], map: "idx_linked_accounts_platform")
   @@map("linked_accounts")
