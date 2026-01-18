@@ -38,8 +38,8 @@ export class EmailService {
                     pass: testAccount.pass,
                 },
             });
-            console.log('📧 Using Ethereal email for development');
-            console.log(`   User: ${testAccount.user}`);
+            // console.log('📧 Using Ethereal email for development');
+            // console.log(`   User: ${testAccount.user}`);
         }
     }
 
