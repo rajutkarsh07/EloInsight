@@ -11,6 +11,13 @@ import { analysisApi } from '../services/api';
 import type { Analysis as AnalysisType } from '../types';
 import { formatDate } from '../lib/utils';
 
+// Helper to safely format decimal values (Prisma returns Decimal as string)
+const formatDecimal = (value: number | string | null | undefined, decimals: number = 1): string => {
+  if (value === null || value === undefined) return '-';
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  return isNaN(num) ? '-' : num.toFixed(decimals);
+};
+
 export function Analysis() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
@@ -37,10 +44,12 @@ export function Analysis() {
     },
   });
 
-  const getAccuracyColor = (accuracy: number | null) => {
-    if (accuracy === null) return 'text-noir-500';
-    if (accuracy >= 90) return 'text-success';
-    if (accuracy >= 70) return 'text-warning';
+  const getAccuracyColor = (accuracy: number | string | null | undefined) => {
+    if (accuracy === null || accuracy === undefined) return 'text-noir-500';
+    const num = typeof accuracy === 'string' ? parseFloat(accuracy) : accuracy;
+    if (isNaN(num)) return 'text-noir-500';
+    if (num >= 90) return 'text-success';
+    if (num >= 70) return 'text-warning';
     return 'text-danger';
   };
 
@@ -69,11 +78,11 @@ export function Analysis() {
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <span className={`font-mono ${getAccuracyColor(row.original.accuracyWhite)}`}>
-            {row.original.accuracyWhite?.toFixed(1) || '-'}%
+            {formatDecimal(row.original.accuracyWhite)}%
           </span>
           <span className="text-noir-600">/</span>
           <span className={`font-mono ${getAccuracyColor(row.original.accuracyBlack)}`}>
-            {row.original.accuracyBlack?.toFixed(1) || '-'}%
+            {formatDecimal(row.original.accuracyBlack)}%
           </span>
         </div>
       ),
@@ -193,7 +202,7 @@ export function Analysis() {
               <div className="bg-white/5 rounded-xl p-6 text-center">
                 <p className="text-sm text-noir-500 mb-2">White Accuracy</p>
                 <p className={`text-4xl font-bold ${getAccuracyColor(selectedAnalysis.accuracyWhite)}`}>
-                  {selectedAnalysis.accuracyWhite?.toFixed(1) || '-'}%
+                  {formatDecimal(selectedAnalysis.accuracyWhite)}%
                 </p>
                 {selectedAnalysis.performanceRatingWhite && (
                   <p className="text-sm text-noir-400 mt-2">
@@ -204,7 +213,7 @@ export function Analysis() {
               <div className="bg-noir-700/30 rounded-xl p-6 text-center">
                 <p className="text-sm text-noir-500 mb-2">Black Accuracy</p>
                 <p className={`text-4xl font-bold ${getAccuracyColor(selectedAnalysis.accuracyBlack)}`}>
-                  {selectedAnalysis.accuracyBlack?.toFixed(1) || '-'}%
+                  {formatDecimal(selectedAnalysis.accuracyBlack)}%
                 </p>
                 {selectedAnalysis.performanceRatingBlack && (
                   <p className="text-sm text-noir-400 mt-2">
@@ -286,13 +295,13 @@ export function Analysis() {
               <div className="bg-noir-800/50 rounded-lg p-4">
                 <p className="text-xs text-noir-500 mb-1">White ACPL</p>
                 <p className="text-xl font-bold text-white">
-                  {selectedAnalysis.acplWhite?.toFixed(2) || '-'}
+                  {formatDecimal(selectedAnalysis.acplWhite, 2)}
                 </p>
               </div>
               <div className="bg-noir-800/50 rounded-lg p-4">
                 <p className="text-xs text-noir-500 mb-1">Black ACPL</p>
                 <p className="text-xl font-bold text-noir-200">
-                  {selectedAnalysis.acplBlack?.toFixed(2) || '-'}
+                  {formatDecimal(selectedAnalysis.acplBlack, 2)}
                 </p>
               </div>
             </div>

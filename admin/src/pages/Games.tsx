@@ -12,6 +12,13 @@ import { gamesApi } from '../services/api';
 import type { Game } from '../types';
 import { formatDate, truncate } from '../lib/utils';
 
+// Helper to safely format decimal values (Prisma returns Decimal as string)
+const formatDecimal = (value: number | string | null | undefined, decimals: number = 1): string => {
+  if (value === null || value === undefined) return '-';
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  return isNaN(num) ? '-' : num.toFixed(decimals);
+};
+
 export function Games() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
@@ -312,13 +319,13 @@ export function Games() {
                 <div className="bg-white/5 rounded-lg p-4">
                   <p className="text-xs text-noir-500 mb-1">White Accuracy</p>
                   <p className="text-2xl font-bold text-white">
-                    {selectedGame.analysis.accuracyWhite?.toFixed(1) || '-'}%
+                    {formatDecimal(selectedGame.analysis.accuracyWhite)}%
                   </p>
                 </div>
                 <div className="bg-noir-700/30 rounded-lg p-4">
                   <p className="text-xs text-noir-500 mb-1">Black Accuracy</p>
                   <p className="text-2xl font-bold text-noir-100">
-                    {selectedGame.analysis.accuracyBlack?.toFixed(1) || '-'}%
+                    {formatDecimal(selectedGame.analysis.accuracyBlack)}%
                   </p>
                 </div>
               </div>
