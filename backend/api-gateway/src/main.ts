@@ -10,14 +10,26 @@ async function bootstrap() {
     const apiPrefix = process.env.API_PREFIX || 'api/v1';
     app.setGlobalPrefix(apiPrefix);
 
-    // CORS - Handle single or multiple origins
-    const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
-    const allowedOrigins = corsOrigin.includes(',')
-        ? corsOrigin.split(',').map(origin => origin.trim())
-        : corsOrigin;
+    // CORS - Handle multiple origins with callback for proper validation
+    const corsOriginEnv = process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:3001,http://localhost:3000';
+    const allowedOrigins = corsOriginEnv.split(',').map(origin => origin.trim());
 
     app.enableCors({
-        origin: allowedOrigins,
+        origin: (origin, callback) => {
+            // Allow requests with no origin (like mobile apps, curl, Postman)
+            if (!origin) {
+                return callback(null, true);
+            }
+            // Check if origin is in allowed list
+            if (allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+            // Also allow any localhost port for development
+            if (origin.startsWith('http://localhost:')) {
+                return callback(null, true);
+            }
+            callback(new Error('Not allowed by CORS'));
+        },
         credentials: true,
     });
 

@@ -1,0 +1,150 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 9 9 11;
+    --foreground: 250 250 250;
+    --muted: 39 39 42;
+    --muted-foreground: 161 161 170;
+    --border: 63 63 70;
+    --accent: 249 115 22;
+  }
+
+  * {
+    @apply border-noir-700;
+  }
+
+  body {
+    @apply bg-noir-950 text-noir-50 antialiased;
+    font-feature-settings: "liga" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-noir-900/80 backdrop-blur-xl border border-noir-700/50;
+  }
+
+  .glass-card {
+    @apply glass rounded-xl p-6 shadow-2xl shadow-black/20;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-white hover:bg-accent-light active:bg-accent-dark;
+  }
+
+  .btn-secondary {
+    @apply btn bg-noir-800 text-noir-100 hover:bg-noir-700 border border-noir-600;
+  }
+
+  .btn-ghost {
+    @apply btn text-noir-300 hover:text-noir-100 hover:bg-noir-800/50;
+  }
+
+  .btn-danger {
+    @apply btn bg-danger/10 text-danger hover:bg-danger/20;
+  }
+
+  .input {
+    @apply w-full px-4 py-2.5 bg-noir-900 border border-noir-700 rounded-lg text-noir-100 placeholder-noir-500 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all duration-200;
+  }
+
+  .label {
+    @apply text-sm font-medium text-noir-300 mb-1.5 block;
+  }
+
+  .table-header {
+    @apply text-xs font-semibold text-noir-400 uppercase tracking-wider;
+  }
+
+  .table-cell {
+    @apply px-4 py-3 text-sm text-noir-200;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-success/10 text-success;
+  }
+
+  .badge-warning {
+    @apply badge bg-warning/10 text-warning;
+  }
+
+  .badge-danger {
+    @apply badge bg-danger/10 text-danger;
+  }
+
+  .badge-info {
+    @apply badge bg-info/10 text-info;
+  }
+
+  .badge-neutral {
+    @apply badge bg-noir-700 text-noir-300;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-accent to-orange-400 bg-clip-text text-transparent;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(63 63 70) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(63 63 70);
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(82 82 91);
+  }
+}
+
+/* Custom animations for page transitions */
+.page-enter {
+  animation: fadeIn 0.2s ease-out, slideIn 0.3s ease-out;
+}
+
+/* Data table styles */
+.data-table {
+  @apply w-full border-collapse;
+}
+
+.data-table thead {
+  @apply bg-noir-900/50 sticky top-0 z-10;
+}
+
+.data-table th {
+  @apply table-header text-left px-4 py-3 border-b border-noir-700;
+}
+
+.data-table tbody tr {
+  @apply border-b border-noir-800/50 hover:bg-noir-800/30 transition-colors;
+}
+
+.data-table td {
+  @apply table-cell;
+}
