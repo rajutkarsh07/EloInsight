@@ -73,6 +73,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: "4000"
+      API_PREFIX: api/v1
       # JWT Configuration
       JWT_SECRET: dev-jwt-secret-change-in-production
       JWT_EXPIRES_IN: "15m"
@@ -85,6 +86,11 @@ services:
       # CORS
       CORS_ORIGIN: http://localhost:3000
       FRONTEND_URL: http://localhost:3000
+      # OAuth - Lichess (set in .env file)
+      LICHESS_CLIENT_ID: ${LICHESS_CLIENT_ID}
+      # OAuth - Google (set in .env file)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       # Service Discovery
       ANALYSIS_SERVICE_HOST: analysis-service
       ANALYSIS_SERVICE_PORT: "50051"
