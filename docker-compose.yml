@@ -198,7 +198,7 @@ services:
           cpus: '1'
           memory: 512M
     healthcheck:
-      test: [ "/bin/grpc_health_probe", "-addr=:50051" ]
+      test: [ "CMD", "/bin/grpc_health_probe", "-addr=:50051" ]
       interval: 30s
       timeout: 10s
       retries: 3
