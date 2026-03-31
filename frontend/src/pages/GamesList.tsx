@@ -475,7 +475,7 @@ const GamesList = () => {
         return <span className={cn(baseClass, "bg-violet-500/20 text-violet-400")}>lichess</span>;
     };
 
-    const handleImportSuccess = (gameIds: string[]) => {
+    const handleImportSuccess = () => {
         // Refresh games list after successful import
         const platform = filters.platform !== 'all' ? filters.platform : undefined;
         const analyzedFilter = filters.analyzed !== 'all' ? filters.analyzed : undefined;

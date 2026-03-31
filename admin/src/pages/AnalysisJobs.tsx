@@ -9,7 +9,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { StatusBadge } from '../components/ui/Badge';
 import { analysisJobsApi } from '../services/api';
 import type { AnalysisJob } from '../types';
-import { formatDate, formatRelativeTime } from '../lib/utils';
+import { formatRelativeTime } from '../lib/utils';
 
 export function AnalysisJobs() {
   const queryClient = useQueryClient();

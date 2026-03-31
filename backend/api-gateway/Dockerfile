@@ -32,7 +32,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Install runtime dependencies for bcrypt
-RUN apk add --no-cache libstdc++
+RUN apk add --no-cache libstdc++ openssl
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
@@ -62,7 +62,7 @@ EXPOSE 4000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:4000/api/v1/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:4000/api/v1/analysis/health || exit 1
 
 # Start the application
 CMD ["node", "dist/main.js"]

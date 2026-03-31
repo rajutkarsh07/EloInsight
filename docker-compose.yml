@@ -31,7 +31,6 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/database/prisma/migrations/00000000000000_init/migration.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-eloinsight} -d ${POSTGRES_DB:-eloinsight}" ]
       interval: 10s
@@ -68,6 +67,7 @@ services:
       context: ./backend/database
       dockerfile: Dockerfile
     container_name: eloinsight-db-migrate
+    command: sh -c "npx prisma db push --accept-data-loss && npm run db:seed"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-eloinsight}:${POSTGRES_PASSWORD:-eloinsight_dev}@postgres:5432/${POSTGRES_DB:-eloinsight}
     depends_on:
@@ -76,8 +76,6 @@ services:
     networks:
       - eloinsight-network
     restart: "no"
-    profiles:
-      - migrate
 
   # ============================================================================
   # Backend Services
@@ -104,6 +102,11 @@ services:
       # CORS
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://frontend:3000}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      # OAuth - Lichess
+      LICHESS_CLIENT_ID: ${LICHESS_CLIENT_ID}
+      # OAuth - Google
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       # Service Discovery
       ANALYSIS_SERVICE_HOST: analysis-service
       ANALYSIS_SERVICE_PORT: 50051
@@ -117,8 +120,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4000/api/v1/health" ]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:4000/api/v1/analysis/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -156,8 +161,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/health" ]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3002/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -229,7 +236,32 @@ services:
       api-gateway:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health" ]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - eloinsight-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    container_name: eloinsight-admin
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_PORT:-3001}:3001"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/health" ]
       interval: 30s
       timeout: 10s
       retries: 3

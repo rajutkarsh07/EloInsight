@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, Eye, Edit, Trash2, RotateCcw, Plus, Mail, ShieldCheck, ShieldX } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, RotateCcw, Plus, ShieldCheck, ShieldX } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from '../components/Layout/Header';
 import { DataTable } from '../components/ui/DataTable';
@@ -10,7 +10,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { StatusBadge } from '../components/ui/Badge';
 import { usersApi } from '../services/api';
 import type { User } from '../types';
-import { formatDate, cn } from '../lib/utils';
+import { formatDate } from '../lib/utils';
 
 export function Users() {
   const queryClient = useQueryClient();

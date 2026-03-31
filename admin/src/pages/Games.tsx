@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, Eye, Trash2, RefreshCw, ExternalLink } from 'lucide-react';
+import { MoreHorizontal, Eye, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Header } from '../components/Layout/Header';
 import { DataTable } from '../components/ui/DataTable';

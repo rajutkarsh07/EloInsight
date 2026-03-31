@@ -2,8 +2,9 @@
 // Learn more at: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
-  output   = "../node_modules/.prisma/client"
+  provider      = "prisma-client-js"
+  output        = "../node_modules/.prisma/client"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
 }
 
 datasource db {
@@ -267,8 +268,10 @@ model PositionAnalysis {
   mateIn     Int? @map("mate_in") // Positive: white mates, Negative: black mates
 
   // Moves
-  bestMove   String @map("best_move") @db.VarChar(10)
-  playedMove String @map("played_move") @db.VarChar(10)
+  bestMove      String  @map("best_move") @db.VarChar(10)
+  bestMoveUci   String? @map("best_move_uci") @db.VarChar(10) // UCI format for arrows
+  playedMove    String  @map("played_move") @db.VarChar(10)
+  playedMoveUci String? @map("played_move_uci") @db.VarChar(10) // UCI format for last move highlight
 
   // Classification flags
   isBlunder      Boolean            @default(false) @map("is_blunder")

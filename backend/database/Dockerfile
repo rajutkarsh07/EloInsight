@@ -8,12 +8,13 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies
-COPY package*.json ./
-RUN npm ci
+# Install system dependencies required by Prisma
+RUN apk add --no-cache openssl
 
-# Copy Prisma schema and migrations
+# Copy package and prisma schema before install so postinstall generation works
+COPY package*.json ./
 COPY prisma ./prisma
+RUN npm ci
 COPY src ./src
 COPY tsconfig.json ./
 

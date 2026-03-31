@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, LayoutDashboard, Gamepad2, LogOut, User, X, Settings as SettingsIcon, BarChart3 } from 'lucide-react';
+import { Menu, LayoutDashboard, Gamepad2, LogOut, X, Settings as SettingsIcon, BarChart3 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 

@@ -33,7 +33,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
-      - ./backend/database/prisma/migrations/00000000000000_init/migration.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U eloinsight -d eloinsight" ]
       interval: 10s
@@ -60,6 +59,25 @@ services:
       start_period: 5s
     networks:
       - eloinsight-dev
+
+  # ============================================================================
+  # Database Migration Service (Run once on startup)
+  # ============================================================================
+
+  db-migrate:
+    build:
+      context: ./backend/database
+      dockerfile: Dockerfile
+    container_name: eloinsight-db-migrate-dev
+    command: sh -c "npx prisma db push --accept-data-loss && npm run db:seed"
+    environment:
+      DATABASE_URL: postgresql://eloinsight:eloinsight_dev@postgres:5432/eloinsight
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - eloinsight-dev
+    restart: "no"
 
   # ============================================================================
   # Backend Services (Development Mode with Hot Reload)
@@ -107,6 +125,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     networks:
       - eloinsight-dev
 
@@ -137,6 +157,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     networks:
       - eloinsight-dev
 
@@ -188,6 +210,21 @@ services:
     networks:
       - eloinsight-dev
 
+  admin:
+    image: node:20-alpine
+    container_name: eloinsight-admin-dev
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3001"
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./admin:/app
+      - admin_node_modules:/app/node_modules
+    depends_on:
+      - api-gateway
+    networks:
+      - eloinsight-dev
+
 # ==============================================================================
 # Networks & Volumes
 # ==============================================================================
@@ -208,3 +245,5 @@ volumes:
     name: eloinsight-game-sync-node-modules
   frontend_node_modules:
     name: eloinsight-frontend-node-modules
+  admin_node_modules:
+    name: eloinsight-admin-node-modules
