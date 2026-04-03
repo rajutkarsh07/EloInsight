@@ -100,13 +100,15 @@ services:
       # Redis
       REDIS_URL: redis://redis:6379
       # CORS
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:13000,http://frontend:13000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:13000,http://localhost:13001,http://localhost:5173}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:13000}
       # OAuth - Lichess
       LICHESS_CLIENT_ID: ${LICHESS_CLIENT_ID}
+      LICHESS_REDIRECT_URI: ${LICHESS_REDIRECT_URI:-http://localhost:14000/api/v1/auth/lichess/callback}
       # OAuth - Google
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:14000/api/v1/auth/google/callback}
       # Service Discovery
       ANALYSIS_SERVICE_HOST: analysis-service
       ANALYSIS_SERVICE_PORT: 50051
