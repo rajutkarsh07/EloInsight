@@ -1,0 +1,1015 @@
+{
+	"info": {
+		"_postman_id": "elo-insight-collection",
+		"name": "EloInsight API Collection",
+		"description": "Comprehensive API collection for the EloInsight Chess Analysis Platform. Includes REST endpoints for the API Gateway and Game Sync Service, and gRPC methods for the Analysis Service.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "API Gateway",
+			"item": [
+				{
+					"name": "Auth",
+					"item": [
+						{
+							"name": "Register",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"username\": \"testuser\",\n  \"email\": \"user@example.com\",\n  \"password\": \"StrongPass123!\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/auth/register",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"auth",
+										"register"
+									]
+								}
+							}
+						},
+						{
+							"name": "Login",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"StrongPass123!\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/auth/login",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"auth",
+										"login"
+									]
+								}
+							}
+						},
+						{
+							"name": "Verify Email (GET)",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/auth/verify-email?token={{verificationToken}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"auth",
+										"verify-email"
+									],
+									"query": [
+										{
+											"key": "token",
+											"value": "{{verificationToken}}"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Verify Email (POST)",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"token\": \"{{verificationToken}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/auth/verify-email",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"auth",
+										"verify-email"
+									]
+								}
+							}
+						},
+						{
+							"name": "Resend Verification",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"email\": \"user@example.com\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/auth/resend-verification",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"auth",
+										"resend-verification"
+									]
+								}
+							}
+						},
+						{
+							"name": "Refresh Token",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/auth/refresh",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"auth",
+										"refresh"
+									]
+								}
+							}
+						},
+						{
+							"name": "Lichess OAuth",
+							"item": [
+								{
+									"name": "Lichess Login URL",
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/auth/lichess/login/url",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"auth",
+												"lichess",
+												"login",
+												"url"
+											]
+										}
+									}
+								},
+								{
+									"name": "Lichess Link URL (Auth Required)",
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{jwtToken}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/auth/lichess/url",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"auth",
+												"lichess",
+												"url"
+											]
+										}
+									}
+								},
+								{
+									"name": "Disconnect Lichess (Auth Required)",
+									"request": {
+										"auth": {
+											"type": "bearer",
+											"bearer": [
+												{
+													"key": "token",
+													"value": "{{jwtToken}}",
+													"type": "string"
+												}
+											]
+										},
+										"method": "POST",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/auth/lichess/disconnect",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"auth",
+												"lichess",
+												"disconnect"
+											]
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Google OAuth",
+							"item": [
+								{
+									"name": "Google Login URL",
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/auth/google/url",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"auth",
+												"google",
+												"url"
+											]
+										}
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "Users",
+					"item": [
+						{
+							"name": "Dashboard Data",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/users/dashboard",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"dashboard"
+									]
+								}
+							}
+						},
+						{
+							"name": "Current Profile",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/users/me",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"me"
+									]
+								}
+							}
+						},
+						{
+							"name": "Update Profile",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"chessComUsername\": \"mychesscom\",\n  \"lichessUsername\": \"mylichess\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/profile",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"profile"
+									]
+								}
+							}
+						},
+						{
+							"name": "Get Stats",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/users/stats",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"stats"
+									]
+								}
+							}
+						},
+						{
+							"name": "Rating History",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/users/ratings",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"ratings"
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Games",
+					"item": [
+						{
+							"name": "List Games",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/games?page=1&limit=20&platform=chess.com",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"games"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										},
+										{
+											"key": "platform",
+											"value": "chess.com"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "List Analyzed Games",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/games/analyzed?page=1&limit=20",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"games",
+										"analyzed"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Get Game by ID",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/games/{{gameId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"games",
+										"{{gameId}}"
+									]
+								}
+							}
+						},
+						{
+							"name": "Store/Sync Game",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"platform\": \"manual\",\n  \"pgn\": \"1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Nb8 10. d4 Nbd7\",\n  \"whitePlayer\": \"Player1\",\n  \"blackPlayer\": \"Player2\",\n  \"result\": \"1-0\",\n  \"playedAt\": \"2024-04-04T12:00:00Z\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/games",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"games"
+									]
+								}
+							}
+						},
+						{
+							"name": "Import PGN",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"pgn\": \"[Event \\\"Casual Game\\\"]\\n[Site \\\"Chess.com\\\"]\\n[Date \\\"2024.04.04\\\"]\\n[White \\\"Player1\\\"]\\n[Black \\\"Player2\\\"]\\n[Result \\\"1-0\\\"]\\n\\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 1-0\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/games/import",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"games",
+										"import"
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Analysis",
+					"item": [
+						{
+							"name": "Analyze Position",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"fen\": \"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\",\n  \"depth\": 20,\n  \"multiPv\": 3\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/analysis/position",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"analysis",
+										"position"
+									]
+								}
+							}
+						},
+						{
+							"name": "Analyze Game (Async)",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"pgn\": \"1. e4 e5 2. Nf3 Nc6 3. Bb5 a6\",\n  \"depth\": 20\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/analysis/game/{{gameId}}?async=true",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"analysis",
+										"game",
+										"{{gameId}}"
+									],
+									"query": [
+										{
+											"key": "async",
+											"value": "true"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Get Analysis Status",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/analysis/game/{{gameId}}/status",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"analysis",
+										"game",
+										"{{gameId}}",
+										"status"
+									]
+								}
+							}
+						},
+						{
+							"name": "Get Full Analysis Result",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/analysis/game/{{gameId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"analysis",
+										"game",
+										"{{gameId}}"
+									]
+								}
+							}
+						},
+						{
+							"name": "Get Best Moves",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{jwtToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"fen\": \"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\",\n  \"count\": 5,\n  \"depth\": 18\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/analysis/best-moves",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"analysis",
+										"best-moves"
+									]
+								}
+							}
+						},
+						{
+							"name": "Health Check",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/analysis/health",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"analysis",
+										"health"
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Admin",
+					"item": [
+						{
+							"name": "Admin Login",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"email\": \"admin@eloinsight.com\",\n  \"password\": \"admin123\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/admin/auth/login",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"admin",
+										"auth",
+										"login"
+									]
+								}
+							}
+						},
+						{
+							"name": "Dashboard Stats",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/admin/dashboard/stats",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"admin",
+										"dashboard",
+										"stats"
+									]
+								}
+							}
+						},
+						{
+							"name": "List Users",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/admin/users?page=1&limit=50",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"admin",
+										"users"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "List Games (Admin)",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/admin/games?page=1&limit=50",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"admin",
+										"games"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										}
+									]
+								}
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Game Sync Service",
+			"item": [
+				{
+					"name": "Sync User Games",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{syncServiceUrl}}/sync/user/{{userId}}",
+							"host": [
+								"{{syncServiceUrl}}"
+							],
+							"path": [
+								"sync",
+								"user",
+								"{{userId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Sync Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{syncServiceUrl}}/sync/status/{{userId}}",
+							"host": [
+								"{{syncServiceUrl}}"
+							],
+							"path": [
+								"sync",
+								"status",
+								"{{userId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Trigger Scheduled Sync (Admin)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{syncServiceUrl}}/sync/scheduled",
+							"host": [
+								"{{syncServiceUrl}}"
+							],
+							"path": [
+								"sync",
+								"scheduled"
+							]
+						}
+					}
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{syncServiceUrl}}/health",
+							"host": [
+								"{{syncServiceUrl}}"
+							],
+							"path": [
+								"health"
+							]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:14000/api/v1",
+			"type": "string"
+		},
+		{
+			"key": "syncServiceUrl",
+			"value": "http://localhost:14002",
+			"type": "string"
+		},
+		{
+			"key": "jwtToken",
+			"value": "your_access_token_here",
+			"type": "string"
+		},
+		{
+			"key": "refreshToken",
+			"value": "your_refresh_token_here",
+			"type": "string"
+		},
+		{
+			"key": "verificationToken",
+			"value": "token_from_email",
+			"type": "string"
+		},
+		{
+			"key": "userId",
+			"value": "uuid-here",
+			"type": "string"
+		},
+		{
+			"key": "gameId",
+			"value": "uuid-here",
+			"type": "string"
+		}
+	]
+}
+
