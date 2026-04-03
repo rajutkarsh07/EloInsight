@@ -29,7 +29,7 @@ A comprehensive admin dashboard for managing the EloInsight chess analysis platf
 ### Prerequisites
 
 - Node.js 18+
-- API Gateway running on port 4000
+- API Gateway running on port 14000
 
 ### Installation
 
@@ -44,13 +44,13 @@ cp .env.example .env
 npm run dev
 ```
 
-The admin panel will be available at `http://localhost:3001`
+The admin panel will be available at `http://localhost:13001`
 
 ### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `VITE_API_URL` | API Gateway URL | `http://localhost:4000/api/v1` |
+| `VITE_API_URL` | API Gateway URL | `http://localhost:14000/api/v1` |
 
 ## Development
 

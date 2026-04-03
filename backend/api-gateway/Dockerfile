@@ -58,11 +58,11 @@ COPY --from=builder --chown=nestjs:nodejs /app/proto ./proto
 USER nestjs
 
 # Expose port
-EXPOSE 4000
+EXPOSE 14000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:4000/api/v1/analysis/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:14000/api/v1/analysis/health || exit 1
 
 # Start the application
 CMD ["node", "dist/main.js"]

@@ -136,10 +136,10 @@ That's it! 🎉 All services will start with hot reloading enabled.
 
 | Service | URL |
 |---------|-----|
-| Frontend | http://localhost:3000 |
-| API Gateway | http://localhost:4000/api/v1 |
-| Swagger Docs | http://localhost:4000/api/docs |
-| Game Sync | http://localhost:3002 |
+| Frontend | http://localhost:13000 |
+| API Gateway | http://localhost:14000/api/v1 |
+| Swagger Docs | http://localhost:14000/api/docs |
+| Game Sync | http://localhost:14002 |
 
 ### Common Commands
 

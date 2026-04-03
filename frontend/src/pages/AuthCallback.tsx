@@ -23,7 +23,7 @@ const AuthCallback = () => {
                 setStatus('error');
                 setMessage(error);
                 toast.error(`❌ ${error}`);
-                setTimeout(() => navigate('/login'), 3000);
+                setTimeout(() => navigate('/login'), 13000);
                 return;
             }
 
@@ -52,7 +52,7 @@ const AuthCallback = () => {
             } else {
                 setStatus('error');
                 setMessage('Invalid callback parameters');
-                setTimeout(() => navigate('/login'), 3000);
+                setTimeout(() => navigate('/login'), 13000);
             }
         };
 

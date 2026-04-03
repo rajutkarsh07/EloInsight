@@ -868,7 +868,7 @@ grpcurl -plaintext localhost:50051 list
 grpcurl -plaintext localhost:50051 analysis.AnalysisService/HealthCheck
 
 # Test with curl through API Gateway
-curl -X GET http://localhost:4000/api/v1/analysis/health
+curl -X GET http://localhost:14000/api/v1/analysis/health
 ```
 
 ### Service Communication Flow

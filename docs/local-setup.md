@@ -162,7 +162,7 @@ JWT_EXPIRES_IN="1h"
 JWT_REFRESH_EXPIRES_IN="7d"
 
 # Server
-PORT=4000
+PORT=14000
 API_PREFIX="api/v1"
 CORS_ORIGIN="http://localhost:5173"
 FRONTEND_URL="http://localhost:5173"
@@ -190,8 +190,8 @@ NODE_ENV="development"
 DATABASE_URL="postgresql://localhost:5432/eloinsight?schema=public"
 
 # Server
-PORT=3002
-CORS_ORIGIN="http://localhost:5173,http://localhost:4000"
+PORT=14002
+CORS_ORIGIN="http://localhost:5173,http://localhost:14000"
 
 # Sync settings
 SYNC_CRON="0 */6 * * *"
@@ -223,7 +223,7 @@ LOG_LEVEL="info"
 ### Frontend (`frontend/.env`)
 
 ```bash
-VITE_API_URL="http://localhost:4000/api/v1"
+VITE_API_URL="http://localhost:14000/api/v1"
 ```
 
 ---
@@ -251,7 +251,7 @@ That's it! Lichess PKCE OAuth works without registering an app.
 4. Go to **APIs & Services** → **Credentials**
    - Click **+ CREATE CREDENTIALS** → **OAuth client ID**
    - Type: **Web application**
-   - Add redirect URI: `http://localhost:4000/api/v1/auth/google/callback`
+   - Add redirect URI: `http://localhost:14000/api/v1/auth/google/callback`
 5. Copy Client ID and Client Secret to your `.env`
 
 ---
@@ -291,7 +291,7 @@ cd frontend && npm run dev &
 
 echo "All services started!"
 echo "Frontend: http://localhost:5173"
-echo "API: http://localhost:4000/api/v1"
+echo "API: http://localhost:14000/api/v1"
 ```
 
 ---
@@ -301,9 +301,9 @@ echo "API: http://localhost:4000/api/v1"
 | Service | URL | Description |
 |---------|-----|-------------|
 | Frontend | http://localhost:5173 | React web app |
-| API Gateway | http://localhost:4000/api/v1 | REST API |
-| Swagger Docs | http://localhost:4000/api/docs | API documentation |
-| Game Sync | http://localhost:3002 | Game sync service |
+| API Gateway | http://localhost:14000/api/v1 | REST API |
+| Swagger Docs | http://localhost:14000/api/docs | API documentation |
+| Game Sync | http://localhost:14002 | Game sync service |
 | Analysis | grpc://localhost:50051 | gRPC analysis |
 | Prisma Studio | http://localhost:5555 | Database GUI |
 | PostgreSQL | localhost:5432 | Database |
@@ -394,7 +394,7 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 
 ```bash
 # Find process using port
-lsof -i :4000
+lsof -i :14000
 
 # Kill it
 kill -9 <PID>
@@ -432,7 +432,7 @@ STOCKFISH_PATH="/opt/homebrew/bin/stockfish"
 - Make sure `LICHESS_CLIENT_ID` is just an app name like `"eloinsight"`, NOT a `lip_` token
 
 **Google "redirect_uri_mismatch":**
-- Add `http://localhost:4000/api/v1/auth/google/callback` to Google Console redirect URIs
+- Add `http://localhost:14000/api/v1/auth/google/callback` to Google Console redirect URIs
 
 ---
 
@@ -446,7 +446,7 @@ STOCKFISH_PATH="/opt/homebrew/bin/stockfish"
 | `JWT_SECRET` | ✅ | - | Secret for JWT tokens |
 | `JWT_REFRESH_SECRET` | ✅ | - | Secret for refresh tokens |
 | `JWT_EXPIRES_IN` | ❌ | 1h | JWT token expiration |
-| `PORT` | ❌ | 4000 | Server port |
+| `PORT` | ❌ | 14000 | Server port |
 | `FRONTEND_URL` | ❌ | http://localhost:5173 | Frontend URL |
 | `LICHESS_CLIENT_ID` | ❌ | - | Any app name for Lichess OAuth |
 | `GOOGLE_CLIENT_ID` | ❌ | - | Google OAuth client ID |
@@ -457,7 +457,7 @@ STOCKFISH_PATH="/opt/homebrew/bin/stockfish"
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | ✅ | - | PostgreSQL connection string |
-| `PORT` | ❌ | 3002 | Server port |
+| `PORT` | ❌ | 14002 | Server port |
 
 ### Analysis Service
 
@@ -490,7 +490,7 @@ STOCKFISH_PATH="/opt/homebrew/bin/stockfish"
 │          ▼                                                       │
 │   ┌─────────────┐      gRPC      ┌─────────────┐               │
 │   │ API Gateway │ ◄────────────► │  Analysis   │               │
-│   │  :4000      │                │  :50051     │               │
+│   │  :14000      │                │  :50051     │               │
 │   │  (NestJS)   │                │  (Go+SF)    │               │
 │   └──────┬──────┘                └─────────────┘               │
 │          │                                                       │
@@ -498,7 +498,7 @@ STOCKFISH_PATH="/opt/homebrew/bin/stockfish"
 │          ▼                                                       │
 │   ┌─────────────┐      ┌─────────────┐                         │
 │   │ PostgreSQL  │      │  Game Sync  │                         │
-│   │  :5432      │ ◄────│  :3002      │                         │
+│   │  :5432      │ ◄────│  :14002      │                         │
 │   │  Database   │      │  (NestJS)   │                         │
 │   └─────────────┘      └─────────────┘                         │
 │                              │                                   │

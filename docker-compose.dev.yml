@@ -30,7 +30,7 @@ services:
       POSTGRES_DB: eloinsight
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5432:5432"
+      - "15432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     healthcheck:
@@ -48,7 +48,7 @@ services:
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
     ports:
-      - "6379:6379"
+      - "16379:6379"
     volumes:
       - redis_dev_data:/data
     healthcheck:
@@ -90,7 +90,7 @@ services:
     command: sh -c "apk add --no-cache python3 make g++ openssl && npm install && npx prisma generate && npm run start:dev"
     environment:
       NODE_ENV: development
-      PORT: "4000"
+      PORT: "14000"
       API_PREFIX: api/v1
       # JWT Configuration
       JWT_SECRET: dev-jwt-secret-change-in-production
@@ -102,8 +102,8 @@ services:
       # Redis
       REDIS_URL: redis://redis:6379
       # CORS
-      CORS_ORIGIN: http://localhost:3000
-      FRONTEND_URL: http://localhost:3000
+      CORS_ORIGIN: http://localhost:13000
+      FRONTEND_URL: http://localhost:13000
       # OAuth - Lichess (set in .env file)
       LICHESS_CLIENT_ID: ${LICHESS_CLIENT_ID}
       # OAuth - Google (set in .env file)
@@ -114,9 +114,9 @@ services:
       ANALYSIS_SERVICE_PORT: "50051"
       ANALYSIS_TIMEOUT_MS: "60000"
       GAME_SYNC_SERVICE_HOST: game-sync
-      GAME_SYNC_SERVICE_PORT: "3002"
+      GAME_SYNC_SERVICE_PORT: "14002"
     ports:
-      - "4000:4000"
+      - "14000:14000"
     volumes:
       - ./backend/api-gateway:/app
       - api_gateway_node_modules:/app/node_modules
@@ -137,7 +137,7 @@ services:
     command: sh -c "npm install && npx prisma generate && npm run start:dev"
     environment:
       NODE_ENV: development
-      PORT: "3002"
+      PORT: "14002"
       # Database
       DATABASE_URL: postgresql://eloinsight:eloinsight_dev@postgres:5432/eloinsight
       # Redis
@@ -148,7 +148,7 @@ services:
       LICHESS_RATE_LIMIT: "15"
       SYNC_BATCH_SIZE: "50"
     ports:
-      - "3002:3002"
+      - "14002:14002"
     volumes:
       - ./backend/game-sync-service:/app
       - game_sync_node_modules:/app/node_modules
@@ -199,9 +199,9 @@ services:
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     environment:
       NODE_ENV: development
-      VITE_API_URL: http://localhost:4000/api/v1
+      VITE_API_URL: http://localhost:14000/api/v1
     ports:
-      - "3000:5173"
+      - "13000:5173"
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
@@ -214,9 +214,9 @@ services:
     image: node:20-alpine
     container_name: eloinsight-admin-dev
     working_dir: /app
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3001"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 13001"
     ports:
-      - "3001:3001"
+      - "13001:13001"
     volumes:
       - ./admin:/app
       - admin_node_modules:/app/node_modules

@@ -2156,7 +2156,7 @@ const AnalysisViewer = () => {
                                     <option value={1000}>1s</option>
                                     <option value={1500}>1.5s</option>
                                     <option value={2000}>2s</option>
-                                    <option value={3000}>3s</option>
+                                    <option value={13000}>3s</option>
                                 </select>
                             )}
 

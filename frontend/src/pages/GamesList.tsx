@@ -384,7 +384,7 @@ const GamesList = () => {
             // Use fetch directly to avoid axios cancelation on component unmount
             const externalIdForCallback = game.id; // Use current id for cache lookup
 
-            fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api/v1'}/analysis/game/${gameId}`, {
+            fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:14000/api/v1'}/analysis/game/${gameId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -402,14 +402,14 @@ const GamesList = () => {
                     updateGame(externalIdForCallback, { analysisStatus: 'completed', dbId: gameId } as any);
                     toast.success('✅ Analysis complete!', {
                         description: `${game.whitePlayer} vs ${game.blackPlayer}`,
-                        duration: 4000,
+                        duration: 14000,
                     });
                 } else {
                     console.error('Analysis failed with status:', response.status);
                     updateGame(externalIdForCallback, { analysisStatus: 'failed' });
                     toast.error('❌ Analysis failed', {
                         description: 'Please try again later.',
-                        duration: 4000,
+                        duration: 14000,
                     });
                 }
             }).catch(err => {
@@ -417,7 +417,7 @@ const GamesList = () => {
                 updateGame(externalIdForCallback, { analysisStatus: 'failed' });
                 toast.error('❌ Analysis failed', {
                     description: err.message || 'An error occurred.',
-                    duration: 4000,
+                    duration: 14000,
                 });
             });
 
@@ -427,7 +427,7 @@ const GamesList = () => {
             // Show toast that analysis started
             toast.info('🔄 Analysis started', {
                 description: `${game.whitePlayer} vs ${game.blackPlayer} - You can navigate away.`,
-                duration: 3000,
+                duration: 13000,
             });
 
             // Remove from local analyzing set (the status will show from game.analysisStatus)

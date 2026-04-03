@@ -31,7 +31,7 @@ npm run build && npm run start:prod
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3002` | Service port |
+| `PORT` | `14002` | Service port |
 | `SYNC_CRON` | `0 */6 * * *` | Sync schedule |
 | `CHESS_COM_RATE_LIMIT` | `300` | Req/min |
 | `LICHESS_RATE_LIMIT` | `15` | Req/sec |

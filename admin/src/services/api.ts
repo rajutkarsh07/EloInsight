@@ -12,7 +12,7 @@ import type {
   DashboardStats,
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:14000/api/v1';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

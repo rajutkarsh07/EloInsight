@@ -12,15 +12,15 @@ npm run start:dev
 ```
 
 Server will be available at:
-- **API Base**: http://localhost:4000/api/v1
-- **Swagger Docs**: http://localhost:4000/api/docs
+- **API Base**: http://localhost:14000/api/v1
+- **Swagger Docs**: http://localhost:14000/api/docs
 
 ## 🧪 Test the API
 
 ### 1. Login with Demo User
 
 ```bash
-curl -X POST http://localhost:4000/api/v1/auth/login \
+curl -X POST http://localhost:14000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "demo@eloinsight.dev",
@@ -47,7 +47,7 @@ curl -X POST http://localhost:4000/api/v1/auth/login \
 ### 2. Register New User
 
 ```bash
-curl -X POST http://localhost:4000/api/v1/auth/register \
+curl -X POST http://localhost:14000/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "newuser@example.com",
@@ -62,28 +62,28 @@ curl -X POST http://localhost:4000/api/v1/auth/register \
 # Save the access token from login response
 TOKEN="your_access_token_here"
 
-curl -X GET http://localhost:4000/api/v1/users/me \
+curl -X GET http://localhost:14000/api/v1/users/me \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ### 4. Get User Statistics
 
 ```bash
-curl -X GET http://localhost:4000/api/v1/users/stats \
+curl -X GET http://localhost:14000/api/v1/users/stats \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ### 5. Get Games List
 
 ```bash
-curl -X GET "http://localhost:4000/api/v1/games?page=1&limit=20" \
+curl -X GET "http://localhost:14000/api/v1/games?page=1&limit=20" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ### 6. Request Game Analysis
 
 ```bash
-curl -X POST http://localhost:4000/api/v1/analysis/game-123 \
+curl -X POST http://localhost:14000/api/v1/analysis/game-123 \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -96,7 +96,7 @@ curl -X POST http://localhost:4000/api/v1/analysis/game-123 \
 
 Open your browser and navigate to:
 ```
-http://localhost:4000/api/docs
+http://localhost:14000/api/docs
 ```
 
 You can:
@@ -133,7 +133,7 @@ backend/api-gateway/
 ### Connect Frontend
 Update frontend `.env`:
 ```
-VITE_API_URL=http://localhost:4000/api/v1
+VITE_API_URL=http://localhost:14000/api/v1
 ```
 
 ### Add Database
@@ -150,14 +150,14 @@ VITE_API_URL=http://localhost:4000/api/v1
 
 ## 🐛 Troubleshooting
 
-**Port 4000 already in use?**
+**Port 14000 already in use?**
 ```bash
-lsof -ti:4000 | xargs kill -9
+lsof -ti:14000 | xargs kill -9
 ```
 
 **Can't connect from frontend?**
 - Check `CORS_ORIGIN` in `.env` matches frontend URL
-- Ensure API is running on port 4000
+- Ensure API is running on port 14000
 
 **JWT errors?**
 - Verify `JWT_SECRET` is set in `.env`

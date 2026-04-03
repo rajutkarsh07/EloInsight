@@ -28,7 +28,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-eloinsight}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-15432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -46,7 +46,7 @@ services:
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:-16379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -89,7 +89,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: 4000
+      PORT: 14000
       # JWT Configuration
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
@@ -100,8 +100,8 @@ services:
       # Redis
       REDIS_URL: redis://redis:6379
       # CORS
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://frontend:3000}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:13000,http://frontend:13000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:13000}
       # OAuth - Lichess
       LICHESS_CLIENT_ID: ${LICHESS_CLIENT_ID}
       # OAuth - Google
@@ -112,9 +112,9 @@ services:
       ANALYSIS_SERVICE_PORT: 50051
       ANALYSIS_TIMEOUT_MS: ${ANALYSIS_TIMEOUT_MS:-60000}
       GAME_SYNC_SERVICE_HOST: game-sync
-      GAME_SYNC_SERVICE_PORT: 3002
+      GAME_SYNC_SERVICE_PORT: 14002
     ports:
-      - "${API_PORT:-4000}:4000"
+      - "${API_PORT:-14000}:14000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,7 +123,7 @@ services:
       db-migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:4000/api/v1/analysis/health" ]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:14000/api/v1/analysis/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -144,7 +144,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: 3002
+      PORT: 14002
       # Database
       DATABASE_URL: postgresql://${POSTGRES_USER:-eloinsight}:${POSTGRES_PASSWORD:-eloinsight_dev}@postgres:5432/${POSTGRES_DB:-eloinsight}
       # Redis
@@ -155,7 +155,7 @@ services:
       LICHESS_RATE_LIMIT: ${LICHESS_RATE_LIMIT:-15}
       SYNC_BATCH_SIZE: ${SYNC_BATCH_SIZE:-50}
     ports:
-      - "${GAME_SYNC_PORT:-3002}:3002"
+      - "${GAME_SYNC_PORT:-14002}:14002"
     depends_on:
       postgres:
         condition: service_healthy
@@ -164,7 +164,7 @@ services:
       db-migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3002/health" ]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:14002/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -227,16 +227,16 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000/api/v1}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:14000/api/v1}
     container_name: eloinsight-frontend
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_PORT:-13000}:13000"
     depends_on:
       api-gateway:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health" ]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:13000/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -256,12 +256,12 @@ services:
     container_name: eloinsight-admin
     restart: unless-stopped
     ports:
-      - "${ADMIN_PORT:-3001}:3001"
+      - "${ADMIN_PORT:-13001}:13001"
     depends_on:
       api-gateway:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/health" ]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:13001/health" ]
       interval: 30s
       timeout: 10s
       retries: 3

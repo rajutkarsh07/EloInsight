@@ -51,7 +51,7 @@ npm run migration:run
 cd frontend
 npm install
 npm run dev
-# http://localhost:3000
+# http://localhost:13000
 ```
 
 **API Gateway**:
@@ -59,7 +59,7 @@ npm run dev
 cd services/api-gateway
 npm install
 npm run start:dev
-# http://localhost:4000
+# http://localhost:14000
 ```
 
 **Analysis Engine**:
@@ -138,7 +138,7 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
     ports:
-      - "4000:4000"
+      - "14000:14000"
     depends_on:
       - postgres
       - redis
@@ -175,7 +175,7 @@ services:
     environment:
       VITE_API_URL: ${API_URL}
     ports:
-      - "3000:80"
+      - "13000:80"
     depends_on:
       - api-gateway
     restart: unless-stopped
@@ -279,7 +279,7 @@ spec:
       - name: api-gateway
         image: eloinsight/api-gateway:latest
         ports:
-        - containerPort: 4000
+        - containerPort: 14000
         env:
         - name: NODE_ENV
           value: production
@@ -298,13 +298,13 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 4000
+            port: 14000
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health
-            port: 4000
+            port: 14000
           initialDelaySeconds: 10
           periodSeconds: 5
 ---
@@ -317,8 +317,8 @@ spec:
   selector:
     app: api-gateway
   ports:
-  - port: 4000
-    targetPort: 4000
+  - port: 14000
+    targetPort: 14000
   type: ClusterIP
 ```
 
@@ -349,7 +349,7 @@ spec:
           service:
             name: api-gateway
             port:
-              number: 4000
+              number: 14000
   - host: eloinsight.dev
     http:
       paths:
@@ -397,7 +397,7 @@ global:
 scrape_configs:
   - job_name: 'api-gateway'
     static_configs:
-      - targets: ['api-gateway:4000']
+      - targets: ['api-gateway:14000']
   
   - job_name: 'analysis-engine'
     static_configs:

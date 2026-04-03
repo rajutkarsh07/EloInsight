@@ -341,7 +341,7 @@ export class AuthService {
      */
     getLichessAuthUrl(userId: string | null): { url: string; state: string } {
         const clientId = this.configService.get<string>('LICHESS_CLIENT_ID');
-        const port = this.configService.get<string>('PORT') || '4000';
+        const port = this.configService.get<string>('PORT') || '14000';
         const apiPrefix = this.configService.get<string>('API_PREFIX') || 'api/v1';
         // Redirect to backend API endpoint, not frontend
         const redirectUri = this.configService.get<string>('LICHESS_REDIRECT_URI') || 
@@ -405,7 +405,7 @@ export class AuthService {
         this.codeVerifiers.delete(state);
 
         const clientId = this.configService.get<string>('LICHESS_CLIENT_ID');
-        const port = this.configService.get<string>('PORT') || '4000';
+        const port = this.configService.get<string>('PORT') || '14000';
         const apiPrefix = this.configService.get<string>('API_PREFIX') || 'api/v1';
         // Must match the redirect URI used in getLichessAuthUrl
         const redirectUri = this.configService.get<string>('LICHESS_REDIRECT_URI') || 
@@ -600,7 +600,7 @@ export class AuthService {
      */
     getGoogleAuthUrl(): { url: string; state: string } {
         const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
-        const port = this.configService.get<string>('PORT') || '4000';
+        const port = this.configService.get<string>('PORT') || '14000';
         const apiPrefix = this.configService.get<string>('API_PREFIX') || 'api/v1';
         const redirectUri = this.configService.get<string>('GOOGLE_REDIRECT_URI') || 
             `http://localhost:${port}/${apiPrefix}/auth/google/callback`;
@@ -658,7 +658,7 @@ export class AuthService {
 
         const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
         const clientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
-        const port = this.configService.get<string>('PORT') || '4000';
+        const port = this.configService.get<string>('PORT') || '14000';
         const apiPrefix = this.configService.get<string>('API_PREFIX') || 'api/v1';
         const redirectUri = this.configService.get<string>('GOOGLE_REDIRECT_URI') || 
             `http://localhost:${port}/${apiPrefix}/auth/google/callback`;

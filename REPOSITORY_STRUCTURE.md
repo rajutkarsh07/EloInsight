@@ -181,13 +181,13 @@ EloInsight/
 
 ### Backend Services (`/backend`)
 
-**API Gateway** (NestJS - Port 4000):
+**API Gateway** (NestJS - Port 14000):
 - JWT authentication
 - REST API endpoints
 - gRPC client for analysis
 - Swagger documentation
 
-**Game Sync Service** (NestJS - Port 3002):
+**Game Sync Service** (NestJS - Port 14002):
 - Chess.com API integration
 - Lichess API integration
 - PGN parsing
@@ -204,9 +204,9 @@ EloInsight/
 | Service | Port | URL |
 |---------|------|-----|
 | Frontend (Vite) | 5173 | http://localhost:5173 |
-| API Gateway | 4000 | http://localhost:4000/api/v1 |
-| Swagger Docs | 4000 | http://localhost:4000/api/docs |
-| Game Sync | 3002 | http://localhost:3002 |
+| API Gateway | 14000 | http://localhost:14000/api/v1 |
+| Swagger Docs | 14000 | http://localhost:14000/api/docs |
+| Game Sync | 14002 | http://localhost:14002 |
 | Analysis (gRPC) | 50051 | grpc://localhost:50051 |
 | PostgreSQL | 5432 | localhost:5432 |
 

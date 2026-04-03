@@ -106,7 +106,7 @@ Services are designed to fail gracefully and recover automatically.
 ## Service Architecture
 
 ### API Gateway (NestJS)
-**Port**: 4000  
+**Port**: 14000  
 **Responsibilities**:
 - Route incoming requests to appropriate services
 - JWT authentication and authorization

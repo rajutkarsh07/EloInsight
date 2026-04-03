@@ -11,9 +11,9 @@ EloInsight uses a microservices architecture with the following services:
 
 | Service | Path | Language | Port | Description |
 |---------|------|----------|------|-------------|
-| **API Gateway** | `backend/api-gateway` | NestJS | 4000 | Authentication, routing |
+| **API Gateway** | `backend/api-gateway` | NestJS | 14000 | Authentication, routing |
 | **Database** | `backend/database` | Prisma | - | PostgreSQL ORM layer |
-| **Game Sync** | `backend/game-sync-service` | NestJS | 3002 | Chess.com/Lichess sync |
+| **Game Sync** | `backend/game-sync-service` | NestJS | 14002 | Chess.com/Lichess sync |
 | **Analysis** | `backend/analysis-service` | Go | 50051 | Stockfish gRPC service |
 
 ## Backend Services
@@ -89,13 +89,13 @@ make build
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                        FRONTEND                              │
-│                    (Next.js :3000)                           │
+│                    (Next.js :13000)                           │
 └─────────────────────┬───────────────────────────────────────┘
                       │ HTTP/REST
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                     API GATEWAY                              │
-│                    (NestJS :4000)                            │
+│                    (NestJS :14000)                            │
 │                                                              │
 │  • JWT Authentication    • Rate Limiting                     │
 │  • Request Validation    • Response Transformation           │
@@ -105,7 +105,7 @@ make build
         ▼                             ▼
 ┌───────────────────┐     ┌───────────────────────────────────┐
 │   GAME SYNC       │     │        ANALYSIS SERVICE           │
-│  (NestJS :3002)   │     │          (Go :50051)              │
+│  (NestJS :14002)   │     │          (Go :50051)              │
 │                   │     │                                    │
 │  • Chess.com API  │     │  • Stockfish Pool                 │
 │  • Lichess API    │     │  • Position Analysis              │

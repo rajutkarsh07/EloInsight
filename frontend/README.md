@@ -68,7 +68,7 @@ src/
    
    Edit `.env`:
    ```env
-   VITE_API_URL=http://localhost:4000/api/v1
+   VITE_API_URL=http://localhost:14000/api/v1
    ```
 
 3. **Start development server**
@@ -284,7 +284,7 @@ Planned testing setup:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `VITE_API_URL` | Backend API URL | `http://localhost:4000/api/v1` |
+| `VITE_API_URL` | Backend API URL | `http://localhost:14000/api/v1` |
 
 ### Docker
 

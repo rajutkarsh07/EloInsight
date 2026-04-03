@@ -15,7 +15,7 @@ RUN npm ci
 COPY . .
 
 # Build arguments for environment variables
-ARG VITE_API_URL=http://localhost:4000/api/v1
+ARG VITE_API_URL=http://localhost:14000/api/v1
 ENV VITE_API_URL=$VITE_API_URL
 
 # Build the application
@@ -46,11 +46,11 @@ RUN chown -R nginx:nginx /usr/share/nginx/html && \
 USER nginx
 
 # Expose port
-EXPOSE 3000
+EXPOSE 13000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:13000/ || exit 1
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]

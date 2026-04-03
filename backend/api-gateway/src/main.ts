@@ -11,7 +11,7 @@ async function bootstrap() {
     app.setGlobalPrefix(apiPrefix);
 
     // CORS - Handle multiple origins with callback for proper validation
-    const corsOriginEnv = process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:3001,http://localhost:3000';
+    const corsOriginEnv = process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:13001,http://localhost:13000';
     const allowedOrigins = corsOriginEnv.split(',').map(origin => origin.trim());
 
     app.enableCors({
@@ -67,7 +67,7 @@ async function bootstrap() {
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api/docs', app, document);
 
-    const port = process.env.PORT || 4000;
+    const port = process.env.PORT || 14000;
     await app.listen(port, '0.0.0.0');
 
     console.log(`

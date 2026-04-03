@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --port 3001",
+    "dev": "vite --port 13001",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview --port 3001"
+    "preview": "vite preview --port 13001"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.19",

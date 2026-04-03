@@ -4,7 +4,7 @@ import { Eye, EyeOff, CheckCircle, AlertCircle, Mail, ExternalLink, ChevronDown,
 import { authService } from '../services/authService';
 import { cn } from '../lib/utils';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api/v1';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:14000/api/v1';
 
 const Signup = () => {
     const navigate = useNavigate();
