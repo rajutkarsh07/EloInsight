@@ -10,6 +10,8 @@ import {
 import {
     parseLichessResult,
     lichessSpeedToTimeClass,
+    parseTimeControlFromPgn,
+    lichessSpeedToTimeControl,
 } from '../common/utils';
 import { RateLimiterService } from '../common/rate-limiter.service';
 import { RetryService } from '../common/retry.service';
@@ -86,7 +88,7 @@ export class LichessService {
                                 since: since.getTime(),
                                 max: maxGames,
                                 pgnInJson: true,
-                                clocks: false,
+                                clocks: true,
                                 evals: false,
                                 opening: true,
                             },
@@ -145,6 +147,22 @@ export class LichessService {
             // Generate PGN if not present
             const pgn = game.pgn || this.generatePgn(game);
 
+            // Get time control with fallbacks: clock data -> PGN -> speed estimate
+            let timeControl = this.formatTimeControl(game.clock);
+            if (timeControl === '-') {
+                // Try to get from PGN
+                const pgnTimeControl = parseTimeControlFromPgn(pgn);
+                if (pgnTimeControl && pgnTimeControl !== '-') {
+                    timeControl = pgnTimeControl;
+                } else {
+                    // Fall back to speed-based estimate
+                    timeControl = lichessSpeedToTimeControl(game.speed);
+                }
+            }
+
+            // Get termination - use status with proper mapping
+            const termination = this.mapTermination(game.status);
+
             return {
                 externalId: game.id,
                 platform: Platform.LICHESS,
@@ -154,8 +172,8 @@ export class LichessService {
                 whiteRating: game.players.white.rating,
                 blackRating: game.players.black.rating,
                 result: parseLichessResult(game.status, game.winner),
-                termination: this.mapTermination(game.status),
-                timeControl: this.formatTimeControl(game.clock),
+                termination,
+                timeControl,
                 timeClass: lichessSpeedToTimeClass(game.speed),
                 openingEco: game.opening?.eco,
                 openingName: game.opening?.name,
@@ -173,6 +191,9 @@ export class LichessService {
      * Generate basic PGN from Lichess game data
      */
     private generatePgn(game: LichessGame): string {
+        const termination = this.mapTermination(game.status);
+        const timeControl = this.formatTimeControl(game.clock);
+        
         const headers = [
             `[Event "${game.rated ? 'Rated' : 'Casual'} ${game.perf} game"]`,
             `[Site "https://lichess.org/${game.id}"]`,
@@ -184,7 +205,8 @@ export class LichessService {
             game.players.black.rating ? `[BlackElo "${game.players.black.rating}"]` : '',
             game.opening?.eco ? `[ECO "${game.opening.eco}"]` : '',
             game.opening?.name ? `[Opening "${game.opening.name}"]` : '',
-            `[TimeControl "${this.formatTimeControl(game.clock)}"]`,
+            timeControl !== '-' ? `[TimeControl "${timeControl}"]` : '',
+            termination ? `[Termination "${termination}"]` : '',
         ].filter(Boolean).join('\n');
 
         const moves = game.moves || '';
@@ -208,18 +230,28 @@ export class LichessService {
     }
 
     private mapTermination(status: string): string {
+        if (!status) return 'unknown';
+        
         const terminationMap: Record<string, string> = {
-            mate: 'checkmate',
-            resign: 'resignation',
-            timeout: 'time forfeit',
-            outoftime: 'time forfeit',
-            stalemate: 'stalemate',
-            draw: 'draw',
-            cheat: 'rules infraction',
-            noStart: 'abandoned',
-            unknownFinish: 'unknown',
-            variantEnd: 'variant end',
+            mate: 'Checkmate',
+            resign: 'Resignation',
+            timeout: 'Time forfeit',
+            outoftime: 'Time forfeit',
+            stalemate: 'Stalemate',
+            draw: 'Draw agreed',
+            cheat: 'Rules infraction',
+            noStart: 'Abandoned',
+            unknownFinish: 'Unknown',
+            variantEnd: 'Variant end',
+            aborted: 'Aborted',
+            started: 'In progress',
+            created: 'Not started',
         };
-        return terminationMap[status] || status;
+        
+        const mapped = terminationMap[status.toLowerCase()];
+        if (mapped) return mapped;
+        
+        // Capitalize first letter for unmapped statuses
+        return status.charAt(0).toUpperCase() + status.slice(1);
     }
 }

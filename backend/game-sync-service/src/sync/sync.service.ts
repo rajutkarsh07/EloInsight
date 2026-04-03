@@ -209,7 +209,24 @@ export class SyncService {
         });
 
         if (existing) {
-            this.logger.debug(`Skipping duplicate game: ${game.externalId}`);
+            // Update missing fields for existing games (termination, timeControl, etc.)
+            const needsUpdate = 
+                (!existing.termination && game.termination) ||
+                (!existing.timeControl && game.timeControl && game.timeControl !== '-');
+            
+            if (needsUpdate) {
+                await this.prisma.game.update({
+                    where: { id: existing.id },
+                    data: {
+                        termination: existing.termination || game.termination,
+                        timeControl: existing.timeControl || game.timeControl,
+                        pgn: game.pgn || existing.pgn, // Update PGN if we have better data
+                    },
+                });
+                this.logger.debug(`Updated missing fields for game: ${game.externalId}`);
+            } else {
+                this.logger.debug(`Skipping duplicate game: ${game.externalId}`);
+            }
             return false;
         }
 

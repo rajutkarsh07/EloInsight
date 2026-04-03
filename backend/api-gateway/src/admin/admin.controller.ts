@@ -139,6 +139,11 @@ export class AdminController {
     return this.adminService.requeueGameAnalysis(id);
   }
 
+  @Post('games/fix-lichess')
+  fixLichessGames() {
+    return this.adminService.fixLichessGames();
+  }
+
   // ==================== ANALYSIS ====================
 
   @Get('analysis')

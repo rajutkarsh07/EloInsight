@@ -154,6 +154,31 @@ export function parseTerminationFromPgn(pgn: string): string | undefined {
 }
 
 /**
+ * Parse time control from PGN
+ * Returns format like "180+0" (seconds+increment) or "3+0" (minutes+increment)
+ */
+export function parseTimeControlFromPgn(pgn: string): string | undefined {
+    const match = pgn.match(/\[TimeControl\s+"([^"]+)"\]/);
+    return match ? match[1] : undefined;
+}
+
+/**
+ * Format Lichess speed to display time control
+ * Provides a fallback when clock data is not available
+ */
+export function lichessSpeedToTimeControl(speed: string): string {
+    const speedTimeMap: Record<string, string> = {
+        ultraBullet: '0.5+0',
+        bullet: '1+0',
+        blitz: '3+0',
+        rapid: '10+0',
+        classical: '30+0',
+        correspondence: '-',
+    };
+    return speedTimeMap[speed] || '-';
+}
+
+/**
  * Convert Lichess speed to TimeClass
  */
 export function lichessSpeedToTimeClass(speed: string): TimeClass {

@@ -313,6 +313,7 @@ export class GamesController {
                     whiteRating: g.white.rating,
                     blackRating: g.black.rating,
                     result: this.mapChessComResult(g.white.result, g.black.result),
+                    termination: this.mapChessComTermination(g.white.result, g.black.result),
                     timeControl: g.time_control,
                     playedAt: new Date(g.end_time * 1000).toISOString(),
                     analysisStatus: 'pending',
@@ -363,6 +364,7 @@ export class GamesController {
                 whiteRating: g.players.white?.rating,
                 blackRating: g.players.black?.rating,
                 result: this.mapLichessResult(g.winner),
+                termination: this.mapLichessTermination(g.status),
                 timeControl: this.formatLichessTimeControl(g.clock),
                 playedAt: new Date(g.createdAt).toISOString(),
                 analysisStatus: 'pending',
@@ -387,9 +389,56 @@ export class GamesController {
         return '1/2-1/2';
     }
 
+    private mapLichessTermination(status: string): string {
+        if (!status) return '-';
+        const terminationMap: Record<string, string> = {
+            'mate': 'Checkmate',
+            'resign': 'Resignation',
+            'timeout': 'Time forfeit',
+            'outoftime': 'Time forfeit',
+            'stalemate': 'Stalemate',
+            'draw': 'Draw agreed',
+            'cheat': 'Rules infraction',
+            'noStart': 'Abandoned',
+            'unknownFinish': 'Unknown',
+            'variantEnd': 'Variant end',
+            'aborted': 'Aborted',
+        };
+        return terminationMap[status] || status.charAt(0).toUpperCase() + status.slice(1);
+    }
+
+    private mapChessComTermination(whiteResult: string, blackResult: string): string {
+        // Chess.com result values: win, checkmated, agreed, repetition, timeout, 
+        // resigned, stalemate, insufficient, 50move, abandoned, timevsinsufficient
+        const resultToTermination: Record<string, string> = {
+            'checkmated': 'Checkmate',
+            'resigned': 'Resignation',
+            'timeout': 'Time forfeit',
+            'stalemate': 'Stalemate',
+            'agreed': 'Draw agreed',
+            'repetition': 'Repetition',
+            'insufficient': 'Insufficient material',
+            '50move': '50-move rule',
+            'abandoned': 'Abandoned',
+            'timevsinsufficient': 'Time vs insufficient',
+        };
+
+        // Check the losing side's result to determine termination
+        if (whiteResult === 'win') {
+            return resultToTermination[blackResult] || blackResult;
+        } else if (blackResult === 'win') {
+            return resultToTermination[whiteResult] || whiteResult;
+        } else {
+            // Draw - check either result
+            return resultToTermination[whiteResult] || resultToTermination[blackResult] || 'Draw';
+        }
+    }
+
     private formatLichessTimeControl(clock: any): string {
-        if (!clock) return '-';
-        return `${clock.limit / 60}+${clock.increment}`;
+        if (!clock || !clock.limit) return '-';
+        const minutes = Math.floor(clock.limit / 60);
+        const increment = clock.increment || 0;
+        return `${minutes}+${increment}`;
     }
 
     private async fetchImportedGames(userId: string, limit: any): Promise<any[]> {

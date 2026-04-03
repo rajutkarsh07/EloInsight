@@ -745,5 +745,104 @@ export class AdminService {
     // For now, just return success
     return { success: true, message: 'Statistics recalculation queued' };
   }
+
+  // ==================== FIX LICHESS GAMES ====================
+
+  async fixLichessGames() {
+    // Find all Lichess games with missing termination or timeControl
+    const lichessGames = await this.prisma.game.findMany({
+      where: {
+        platform: 'LICHESS',
+        OR: [
+          { termination: null },
+          { termination: '' },
+          { timeControl: null },
+          { timeControl: '' },
+          { timeControl: '-' },
+        ],
+      },
+      select: {
+        id: true,
+        pgn: true,
+        termination: true,
+        timeControl: true,
+      },
+    });
+
+    let updated = 0;
+    let errors = 0;
+
+    for (const game of lichessGames) {
+      try {
+        const pgn = game.pgn || '';
+        
+        // Extract TimeControl from PGN
+        let timeControl = game.timeControl;
+        if (!timeControl || timeControl === '-' || timeControl === '') {
+          const tcMatch = pgn.match(/\[TimeControl\s+"([^"]+)"\]/);
+          if (tcMatch && tcMatch[1] && tcMatch[1] !== '-') {
+            timeControl = tcMatch[1];
+          } else {
+            // Derive from Event header (e.g., "Rated blitz game")
+            const eventMatch = pgn.match(/\[Event\s+"([^"]+)"\]/i);
+            if (eventMatch) {
+              const event = eventMatch[1].toLowerCase();
+              if (event.includes('ultrabullet')) timeControl = '0.5+0';
+              else if (event.includes('bullet')) timeControl = '1+0';
+              else if (event.includes('blitz')) timeControl = '3+0';
+              else if (event.includes('rapid')) timeControl = '10+0';
+              else if (event.includes('classical')) timeControl = '30+0';
+              else if (event.includes('correspondence')) timeControl = 'Correspondence';
+            }
+          }
+        }
+
+        // Extract Termination from PGN
+        let termination = game.termination;
+        if (!termination || termination === '') {
+          const termMatch = pgn.match(/\[Termination\s+"([^"]+)"\]/);
+          if (termMatch) {
+            termination = termMatch[1];
+          } else {
+            // Try to derive from Result
+            const resultMatch = pgn.match(/\[Result\s+"([^"]+)"\]/);
+            if (resultMatch) {
+              const result = resultMatch[1];
+              if (result === '1-0' || result === '0-1') {
+                // Check last move for pattern hints
+                if (pgn.includes('#')) termination = 'Checkmate';
+                else termination = 'Normal';
+              } else if (result === '1/2-1/2') {
+                termination = 'Draw';
+              }
+            }
+          }
+        }
+
+        // Update if we found values
+        if ((timeControl && timeControl !== game.timeControl) || 
+            (termination && termination !== game.termination)) {
+          await this.prisma.game.update({
+            where: { id: game.id },
+            data: {
+              ...(timeControl && timeControl !== game.timeControl ? { timeControl } : {}),
+              ...(termination && termination !== game.termination ? { termination } : {}),
+            },
+          });
+          updated++;
+        }
+      } catch (error) {
+        errors++;
+      }
+    }
+
+    return {
+      success: true,
+      totalFound: lichessGames.length,
+      updated,
+      errors,
+      message: `Fixed ${updated} Lichess games out of ${lichessGames.length} found with missing data`,
+    };
+  }
 }
 
