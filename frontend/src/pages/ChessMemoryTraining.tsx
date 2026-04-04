@@ -401,6 +401,11 @@ const ChessMemoryTraining = () => {
         setPhase('memorize');
     }, [originalPieces, timeSeconds]);
 
+    const handleReady = useCallback(() => {
+        if (phase !== 'memorize') return;
+        setTimeLeft(0);
+    }, [phase]);
+
     const handleBackToSettings = useCallback(() => {
         setPhase('idle');
         setOriginalPieces([]);
@@ -502,6 +507,10 @@ const ChessMemoryTraining = () => {
             if (e.key === 'Escape') {
                 setSelectedPiece(null);
             }
+            if ((e.key === 'Enter' || e.key === ' ') && phase === 'memorize') {
+                e.preventDefault();
+                handleReady();
+            }
             if (e.key === 'Enter' && phase === 'idle') {
                 e.preventDefault();
                 startGame();
@@ -514,7 +523,7 @@ const ChessMemoryTraining = () => {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [phase, handleSubmit, startGame, handleNextRound]);
+    }, [phase, handleSubmit, handleReady, startGame, handleNextRound]);
 
     // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -569,12 +578,18 @@ const ChessMemoryTraining = () => {
 
                         {/* Memorize overlay badge */}
                         {phase === 'memorize' && (
-                            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-                                <div className="px-4 py-2 bg-black/75 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2 shadow-xl">
+                            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
+                                <div className="px-4 py-2 bg-black/75 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2 shadow-xl pointer-events-none">
                                     <Eye className="w-4 h-4 text-primary animate-pulse" />
                                     <span className="text-sm font-semibold text-white">Memorize!</span>
                                     <span className="text-lg font-bold font-mono tabular-nums text-primary ml-1">{timeLeft}s</span>
                                 </div>
+                                <button
+                                    onClick={handleReady}
+                                    className="px-4 py-1.5 bg-primary/90 hover:bg-primary text-primary-foreground text-sm font-semibold rounded-full border border-white/10 shadow-xl backdrop-blur-md transition-all hover:scale-105"
+                                >
+                                    I'm Ready
+                                </button>
                             </div>
                         )}
 
@@ -798,6 +813,14 @@ const ChessMemoryTraining = () => {
                                 <p><strong className="text-foreground">{pieceCount}</strong> piece{pieceCount > 1 ? 's' : ''} to remember</p>
                                 <p className="capitalize text-xs">{colorFilter} pieces · {mode} mode</p>
                             </div>
+
+                            <button
+                                onClick={handleReady}
+                                className="w-full py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:shadow-primary/30"
+                            >
+                                <Brain className="w-5 h-5" />
+                                I'm Ready
+                            </button>
                         </div>
                     )}
 
