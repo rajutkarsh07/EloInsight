@@ -1,23 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useSearchParams } from 'react-router-dom';
 import { cn } from '../lib/utils';
-import { AlertCircle, Mail, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertCircle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:14000/api/v1';
 
 const Login = () => {
-    const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { login } = useAuth();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
     const [lichessLoading, setLichessLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
-    const [showEmailLogin, setShowEmailLogin] = useState(false);
 
     // Check for error from OAuth callback
     useEffect(() => {
@@ -28,36 +21,15 @@ const Login = () => {
         }
     }, [searchParams]);
 
-    const handleSubmit = async () => {
-        setError('');
-        setLoading(true);
-        try {
-            await login({ email, password });
-            toast.success('✅ Logged in successfully!');
-            navigate('/dashboard', { replace: true });
-        } catch (err: unknown) {
-            let msg = 'Invalid credentials';
-            if (err instanceof Error) {
-                msg = err.message || msg;
-            }
-            toast.error(`❌ ${msg}`);
-            setError(msg);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const handleLichessLogin = () => {
         setLichessLoading(true);
         setError('');
-        // Redirect to Lichess OAuth
         window.location.href = `${API_URL}/auth/lichess/login`;
     };
 
     const handleGoogleLogin = () => {
         setGoogleLoading(true);
         setError('');
-        // Redirect to Google OAuth
         window.location.href = `${API_URL}/auth/google/login`;
     };
 
@@ -82,13 +54,13 @@ const Login = () => {
                     </div>
                 )}
 
-                {/* Social Login Buttons */}
+                {/* OAuth Login Buttons */}
                 <div className="space-y-3">
                     {/* Lichess Login - Primary */}
                     <button
                         type="button"
                         onClick={handleLichessLogin}
-                        disabled={lichessLoading}
+                        disabled={lichessLoading || googleLoading}
                         className={cn(
                             "w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
                             "bg-zinc-800 text-white hover:bg-zinc-700 h-11 px-4 py-2 border border-zinc-600"
@@ -116,7 +88,7 @@ const Login = () => {
                     <button
                         type="button"
                         onClick={handleGoogleLogin}
-                        disabled={googleLoading}
+                        disabled={lichessLoading || googleLoading}
                         className={cn(
                             "w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
                             "bg-white text-gray-700 hover:bg-gray-50 h-11 px-4 py-2 border border-gray-300"
@@ -139,86 +111,6 @@ const Login = () => {
                             </span>
                         )}
                     </button>
-                </div>
-
-                {/* Divider */}
-                <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t border-zinc-700" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-card px-2 text-muted-foreground">or</span>
-                    </div>
-                </div>
-
-                {/* Email Login Toggle */}
-                <button
-                    type="button"
-                    onClick={() => setShowEmailLogin(!showEmailLogin)}
-                    className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-2"
-                >
-                    <Mail size={16} />
-                    Continue with Email
-                    {showEmailLogin ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </button>
-
-                {/* Email Login Form */}
-                {showEmailLogin && (
-                    <form onSubmit={(e) => e.preventDefault()} className="space-y-4 mt-4 animate-fade-in-up">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email">
-                                Email
-                            </label>
-                            <input
-                                id="email"
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                                autoComplete="email"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="password">
-                                Password
-                            </label>
-                            <input
-                                id="password"
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                autoComplete="current-password"
-                            />
-                        </div>
-
-                        <button
-                            type="button"
-                            disabled={loading}
-                            onClick={handleSubmit}
-                            className={cn(
-                                "w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-                                "bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 btn-glow"
-                            )}
-                        >
-                            {loading ? (
-                                <div className="flex items-center gap-2">
-                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                    Signing in...
-                                </div>
-                            ) : 'Sign In'}
-                        </button>
-                    </form>
-                )}
-
-                <div className="mt-6 text-center text-sm">
-                    <span className="text-muted-foreground">Don't have an account? </span>
-                    <Link to="/signup" className="font-medium text-primary hover:underline underline-offset-4 link-hover">
-                        Sign up
-                    </Link>
                 </div>
 
                 {/* Info box */}
