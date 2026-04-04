@@ -6,6 +6,7 @@ import {
     Upload, Filter, ChevronDown, ChevronUp, Timer, Target,
     CheckCircle2, XCircle, Zap, Shield, X, Info, TrendingUp,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '../lib/utils';
 import samplePuzzlesData, { type PuzzleData } from '../data/samplePuzzles';
 
@@ -113,13 +114,17 @@ function loadImportedPuzzles(): PuzzleData[] {
     return [];
 }
 
-function saveImportedPuzzles(puzzles: PuzzleData[]) {
+function saveImportedPuzzles(puzzles: PuzzleData[]): { saved: boolean; reason?: string } {
     try {
         const json = JSON.stringify(puzzles);
-        if (json.length < 4_500_000) {
-            localStorage.setItem(PUZZLES_KEY, json);
+        if (json.length >= 4_500_000) {
+            return { saved: false, reason: `Data too large for localStorage (${(json.length / 1_000_000).toFixed(1)}MB). Puzzles are loaded for this session only.` };
         }
-    } catch { /* ignore */ }
+        localStorage.setItem(PUZZLES_KEY, json);
+        return { saved: true };
+    } catch (err) {
+        return { saved: false, reason: 'localStorage quota exceeded. Puzzles are loaded for this session only.' };
+    }
 }
 
 function parseLichessCSVLine(line: string): PuzzleData | null {
@@ -502,46 +507,132 @@ const ChessPuzzles = () => {
         loadPuzzle(currentPuzzle);
     }, [currentPuzzle, loadPuzzle]);
 
-    // ─── CSV Import ──────────────────────────────────────────────────────
+    // ─── CSV Import (Streaming) ─────────────────────────────────────────
 
     const handleCSVImport = useCallback(
         async (file: File) => {
-            setImportProgress('Reading file...');
-            const text = await file.text();
-            const lines = text.split('\n');
-            const puzzles: PuzzleData[] = [];
-            let processed = 0;
-            const maxPuzzles = 50000;
+            const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+            setImportProgress(`Opening file (${fileSizeMB} MB)...`);
 
-            const startLine = lines[0]?.includes('PuzzleId') ? 1 : 0;
+            try {
+                const puzzles: PuzzleData[] = [];
+                let linesProcessed = 0;
+                let parseErrors = 0;
+                let isFirstLine = true;
+                const maxPuzzles = 50000;
 
-            setImportProgress(`Parsing ${lines.length - startLine} lines...`);
+                // Stream the file in chunks to avoid loading the entire file into memory
+                const stream = file.stream();
+                const reader = stream.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let leftover = '';
+                let done = false;
+                let bytesRead = 0;
 
-            for (let i = startLine; i < lines.length && puzzles.length < maxPuzzles; i++) {
-                const line = lines[i]?.trim();
-                if (!line) continue;
+                while (!done && puzzles.length < maxPuzzles) {
+                    const { value, done: streamDone } = await reader.read();
+                    done = streamDone;
 
-                const puzzle = parseLichessCSVLine(line);
-                if (puzzle) puzzles.push(puzzle);
+                    if (value) {
+                        bytesRead += value.length;
+                        leftover += decoder.decode(value, { stream: !done });
+                    } else if (done && leftover.length === 0) {
+                        break;
+                    }
 
-                processed++;
-                if (processed % 5000 === 0) {
-                    setImportProgress(`Parsed ${processed} lines, ${puzzles.length} puzzles loaded...`);
+                    // Split into lines, keeping the last incomplete line for the next chunk
+                    const lines = leftover.split('\n');
+                    // Keep the last element as leftover (may be incomplete)
+                    leftover = done ? '' : (lines.pop() || '');
+
+                    for (const rawLine of lines) {
+                        const line = rawLine.trim();
+                        if (!line) continue;
+
+                        // Skip header row
+                        if (isFirstLine) {
+                            isFirstLine = false;
+                            if (line.includes('PuzzleId')) continue;
+                        }
+
+                        const puzzle = parseLichessCSVLine(line);
+                        if (puzzle) {
+                            puzzles.push(puzzle);
+                        } else {
+                            parseErrors++;
+                        }
+
+                        linesProcessed++;
+
+                        if (puzzles.length >= maxPuzzles) break;
+                    }
+
+                    // Update progress periodically
+                    const pctRead = Math.min(100, Math.round((bytesRead / file.size) * 100));
+                    setImportProgress(
+                        `${puzzles.length.toLocaleString()} puzzles found from ${linesProcessed.toLocaleString()} lines (${pctRead}% of file read)...`
+                    );
+
+                    // Yield to the UI thread so the progress message actually renders
                     await new Promise((r) => setTimeout(r, 0));
                 }
+
+                // Cancel remaining stream if we hit the puzzle limit early
+                if (!done) {
+                    reader.cancel();
+                }
+
+                // Handle leftover line (last line without trailing newline)
+                if (leftover.trim() && puzzles.length < maxPuzzles) {
+                    const line = leftover.trim();
+                    if (!(isFirstLine && line.includes('PuzzleId'))) {
+                        const puzzle = parseLichessCSVLine(line);
+                        if (puzzle) puzzles.push(puzzle);
+                        else parseErrors++;
+                        linesProcessed++;
+                    }
+                }
+
+                if (puzzles.length === 0) {
+                    setImportProgress(null);
+                    toast.error('No valid puzzles found', {
+                        description: `Processed ${linesProcessed.toLocaleString()} lines from a ${fileSizeMB} MB file. Make sure you are importing a Lichess puzzle CSV file (not compressed .zst or .bz2).`,
+                        duration: 8000,
+                    });
+                    return;
+                }
+
+                setImportProgress(`Saving ${puzzles.length.toLocaleString()} puzzles...`);
+                const saveResult = saveImportedPuzzles(puzzles);
+
+                setAllPuzzles(() => {
+                    const existingIds = new Set(samplePuzzlesData.map((p) => p.id));
+                    const newPuzzles = puzzles.filter((p) => !existingIds.has(p.id));
+                    return [...samplePuzzlesData, ...newPuzzles];
+                });
+
+                setImportProgress(null);
+                setShowImportModal(false);
+
+                toast.success(`${puzzles.length.toLocaleString()} puzzles imported!`, {
+                    description: saveResult.saved
+                        ? `Loaded from ${linesProcessed.toLocaleString()} lines. Puzzles saved and will persist across sessions.`
+                        : `⚠️ ${saveResult.reason}`,
+                    duration: saveResult.saved ? 4000 : 8000,
+                });
+
+                if (parseErrors > 0) {
+                    toast.info(`${parseErrors.toLocaleString()} lines skipped`, {
+                        description: 'Some lines could not be parsed (invalid format or incomplete data).',
+                        duration: 5000,
+                    });
+                }
+            } catch (err) {
+                setImportProgress(null);
+                toast.error('Import failed', {
+                    description: err instanceof Error ? err.message : 'An unexpected error occurred while reading the file.',
+                });
             }
-
-            setImportProgress(`Saving ${puzzles.length} puzzles...`);
-            saveImportedPuzzles(puzzles);
-
-            setAllPuzzles(() => {
-                const existingIds = new Set(samplePuzzlesData.map((p) => p.id));
-                const newPuzzles = puzzles.filter((p) => !existingIds.has(p.id));
-                return [...samplePuzzlesData, ...newPuzzles];
-            });
-
-            setImportProgress(null);
-            setShowImportModal(false);
         },
         [],
     );
@@ -1237,11 +1328,13 @@ const ImportModal = ({
                         >
                             database.lichess.org
                         </a>
-                        , then import it here.
+                        , then import the <code className="text-xs bg-zinc-800 px-1 py-0.5 rounded">.csv</code> file here.
                     </p>
                     <p className="text-xs">
-                        The full database has ~4M puzzles. For best performance, use a subset (first 50K
-                        lines). Up to 50,000 puzzles will be loaded.
+                        The full database (~1 GB, ~4M puzzles) is supported — the first 50,000 puzzles will
+                        be streamed and loaded. If you downloaded a <code className="text-xs bg-zinc-800 px-1 py-0.5 rounded">.csv.zst</code> or{' '}
+                        <code className="text-xs bg-zinc-800 px-1 py-0.5 rounded">.csv.bz2</code> file,
+                        decompress it first to get the <code className="text-xs bg-zinc-800 px-1 py-0.5 rounded">.csv</code>.
                     </p>
                 </div>
 
