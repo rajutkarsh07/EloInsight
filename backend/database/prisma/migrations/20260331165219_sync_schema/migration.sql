@@ -8,8 +8,8 @@
 -- AlterEnum
 ALTER TYPE "Platform" ADD VALUE 'google';
 
--- DropIndex
-DROP INDEX "games_platform_external_id_key";
+-- DropConstraint
+ALTER TABLE "games" DROP CONSTRAINT "games_platform_external_id_key";
 
 -- AlterTable
 ALTER TABLE "linked_accounts" ADD COLUMN     "avatar_url" TEXT;
