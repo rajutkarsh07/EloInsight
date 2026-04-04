@@ -10,6 +10,7 @@ import AnalysisList from '../pages/AnalysisList';
 import AnalysisViewer from '../pages/AnalysisViewer';
 import Settings from '../pages/Settings';
 import ChessMemoryTraining from '../pages/ChessMemoryTraining';
+import ChessPuzzles from '../pages/ChessPuzzles';
 import { useAuth } from '../contexts/AuthContext';
 import { RotateCw } from 'lucide-react';
 
@@ -103,6 +104,10 @@ const routeConfig = [
                     {
                         path: 'training',
                         element: <ChessMemoryTraining />,
+                    },
+                    {
+                        path: 'puzzles',
+                        element: <ChessPuzzles />,
                     },
                     {
                         path: 'settings',
