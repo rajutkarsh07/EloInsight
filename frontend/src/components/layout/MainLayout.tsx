@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, LayoutDashboard, Gamepad2, LogOut, X, Settings as SettingsIcon, BarChart3 } from 'lucide-react';
+import { Menu, LayoutDashboard, Gamepad2, LogOut, X, Settings as SettingsIcon, BarChart3, Brain } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -19,6 +19,7 @@ const MainLayout = () => {
         { text: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard' },
         { text: 'Games', icon: <Gamepad2 size={20} />, path: '/games' },
         { text: 'Analysis', icon: <BarChart3 size={20} />, path: '/analysis' },
+        { text: 'Training', icon: <Brain size={20} />, path: '/training' },
         { text: 'Settings', icon: <SettingsIcon size={20} />, path: '/settings' },
     ];
 

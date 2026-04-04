@@ -55,4 +55,7 @@ declare module 'react-chessboard' {
     }
 
     export const Chessboard: React.FC<ChessboardProps>;
+
+    export type PieceRenderObject = Record<string, (props?: { fill?: string; svgStyle?: React.CSSProperties }) => React.JSX.Element>;
+    export const defaultPieces: PieceRenderObject;
 }
