@@ -1,6 +1,6 @@
 # EloInsight Documentation
 
-Welcome to the EloInsight documentation. This folder contains all technical documentation for the chess analysis platform.
+Welcome to the EloInsight documentation. This folder contains all technical documentation for the chess analysis, training, and improvement platform.
 
 ## 📚 Documentation Index
 
@@ -67,7 +67,8 @@ cd backend/analysis-service && make build && ./bin/analysis-service
 ### Service Ports
 | Service | Port | URL |
 |---------|------|-----|
-| Frontend (Vite) | 5173 | http://localhost:5173 |
+| Frontend (Vite) | 13000 | http://localhost:13000 |
+| Admin Panel | 13001 | http://localhost:13001 |
 | API Gateway | 14000 | http://localhost:14000/api/v1 |
 | Swagger Docs | 14000 | http://localhost:14000/api/docs |
 | Game Sync | 14002 | http://localhost:14002 |
@@ -94,6 +95,22 @@ cd backend/analysis-service && make build && ./bin/analysis-service
 - **Advanced Filtering**: Platform, result, time control, analysis status, date
 - **Pagination**: Efficient browsing of large game collections
 - **Concurrent Analysis**: Up to 3 simultaneous analyses
+
+### Training & Improvement
+- **Chess Puzzles**: Interactive tactical puzzle trainer with Lichess database import (streaming 1 GB+ CSV files)
+  - Practice mode (unlimited retries, hints) and Challenge mode (one mistake = fail, timer)
+  - Filter by rating, themes (fork, pin, skewer, mate-in-N, etc.), and difficulty
+  - Streak tracking and session statistics
+- **Memory Training**: Board visualization training — memorize and recreate random piece positions
+  - Configurable piece count, timer, color filter, and difficulty mode (Normal / Hard)
+  - Drag-and-drop or click-to-place recall with per-square accuracy feedback
+
+### Admin Panel
+- **Dashboard**: Real-time stats and activity overview
+- **User Management**: CRUD, soft-delete, restore
+- **Game & Analysis Management**: View, edit, requeue analysis, fix data
+- **Sync & Analysis Jobs**: Monitor, cancel, retry
+- **Statistics**: Per-user and opening statistics with recalculation
 
 ## 📁 Documentation Structure
 

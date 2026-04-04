@@ -1,6 +1,6 @@
 # EloInsight ♟️
 
-> **Free, open-source chess game analysis platform powered by Stockfish**
+> **Free, open-source chess analysis, training, and improvement platform powered by Stockfish**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
@@ -46,12 +46,34 @@ EloInsight democratizes chess game analysis by providing a completely free, open
 - 🔍 **Advanced Filtering**: Filter games by platform, result, time control, analysis status, and date
 - 📄 **Pagination**: Efficient browsing of large game collections
 
+### Training & Improvement
+- 🧩 **Chess Puzzles**: Solve tactical puzzles with a built-in interactive board
+  - Practice and Challenge modes (unlimited retries vs. one-strike-out)
+  - Import the full Lichess puzzle database (~4M puzzles, 1 GB CSV streamed efficiently)
+  - Filter by rating range (400–2800), themes (fork, pin, mate-in-1, etc.), and depth
+  - Hints system, streak tracking, and per-session statistics
+  - Keyboard shortcuts (N = next, H = hint, R = retry, Enter = start/next)
+- 🧠 **Memory Training**: Memorize and recreate random piece positions on the board
+  - Configurable piece count (1–16), memorization time (3–30s), and piece colors
+  - Normal mode (exact pieces provided) and Hard mode (full piece palette)
+  - Drag-and-drop or click-to-place recall interface
+  - Accuracy scoring with per-square feedback (correct / missed / wrong piece)
+  - Streak and best-streak tracking
+
+### Admin Panel
+- 📊 **Dashboard**: Overview stats, user management, and activity monitoring
+- 👥 **User Management**: Create, update, soft-delete, and restore users
+- ♟️ **Game Management**: View, edit, delete games; requeue analysis; fix Lichess data
+- 🔗 **Linked Accounts**: Manage platform connections
+- 🔄 **Sync & Analysis Jobs**: Monitor, cancel, retry sync and analysis jobs
+- 📈 **Statistics**: Per-user statistics and opening statistics; trigger recalculation
+
 ### Future Enhancements
 - Opening repertoire analysis
-- Tactical pattern recognition (pins, forks, skewers)
 - Tournament preparation tools
 - Social features and game sharing
 - Board themes and piece styles
+- Mobile app
 
 ## 🛠️ Tech Stack
 
@@ -137,6 +159,7 @@ That's it! 🎉 All services will start with hot reloading enabled.
 | Service | URL |
 |---------|-----|
 | Frontend | http://localhost:13000 |
+| Admin Panel | http://localhost:13001 |
 | API Gateway | http://localhost:14000/api/v1 |
 | Swagger Docs | http://localhost:14000/api/docs |
 | Game Sync | http://localhost:14002 |

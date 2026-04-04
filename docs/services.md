@@ -11,6 +11,8 @@ EloInsight uses a microservices architecture with the following services:
 
 | Service | Path | Language | Port | Description |
 |---------|------|----------|------|-------------|
+| **Frontend** | `frontend` | React/Vite | 13000 | Main user interface |
+| **Admin Panel** | `admin` | React/Vite | 13001 | Admin dashboard |
 | **API Gateway** | `backend/api-gateway` | NestJS | 14000 | Authentication, routing |
 | **Database** | `backend/database` | Prisma | - | PostgreSQL ORM layer |
 | **Game Sync** | `backend/game-sync-service` | NestJS | 14002 | Chess.com/Lichess sync |
@@ -89,13 +91,19 @@ make build
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                        FRONTEND                              │
-│                    (Next.js :13000)                           │
+│                    (React/Vite :13000)                         │
 └─────────────────────┬───────────────────────────────────────┘
                       │ HTTP/REST
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     API GATEWAY                              │
-│                    (NestJS :14000)                            │
+│                     ADMIN PANEL                               │
+│                   (React/Vite :13001)  ──────────────────────┐│
+└─────────────────────────────────────────────────────────────┘│
+                      │ HTTP/REST                              │
+                      ▼                                        │
+┌─────────────────────────────────────────────────────────────┐│
+│                     API GATEWAY                              ││
+│                    (NestJS :14000)                            │◄
 │                                                              │
 │  • JWT Authentication    • Rate Limiting                     │
 │  • Request Validation    • Response Transformation           │
@@ -146,6 +154,10 @@ cd backend/analysis-service
 
 # Terminal 5: Frontend
 cd frontend
+npm run dev
+
+# Terminal 6: Admin Panel
+cd admin
 npm run dev
 ```
 

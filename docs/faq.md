@@ -3,7 +3,7 @@
 ## General Questions
 
 ### What is EloInsight?
-EloInsight is a free, open-source chess game analysis platform that uses Stockfish to analyze your games from Chess.com and Lichess. It provides detailed metrics like accuracy, average centipawn loss, blunders, mistakes, and performance ratings.
+EloInsight is a free, open-source chess analysis, training, and improvement platform. It uses Stockfish to analyze your games from Chess.com and Lichess, provides tactical puzzle training (with Lichess database import), board memory exercises, and detailed metrics like accuracy, average centipawn loss, blunders, mistakes, and performance ratings.
 
 ### Is EloInsight really free?
 Yes! EloInsight is completely free and open-source under the MIT license. There are no hidden costs, premium tiers, or paywalls for core features.
@@ -150,12 +150,14 @@ Currently, we support Chess.com and Lichess. Support for other platforms may be 
 
 ### What technology stack do you use?
 - **Frontend**: React + TypeScript + TailwindCSS + Vite
-- **Backend**: NestJS (API Gateway), Go (Analysis Service)
+- **Backend**: NestJS (API Gateway), NestJS (Game Sync Service), Go (Analysis Service)
 - **Database**: PostgreSQL with Prisma ORM
 - **Cache**: Redis
 - **Engine**: Stockfish 16
 - **Charts**: Recharts
 - **Chess Logic**: chess.js + react-chessboard
+- **Notifications**: Sonner (toast library)
+- **Admin Panel**: Separate React app
 
 See [tech-stack.md](tech-stack.md) for details.
 
@@ -204,6 +206,41 @@ Failed analyses can be retried. Common causes:
 
 Failed analyses are automatically retried up to 3 times.
 
+## Training & Improvement
+
+### What training features are available?
+EloInsight includes two training modules:
+1. **Chess Puzzles** — Solve tactical puzzles with an interactive board
+2. **Memory Training** — Memorize and recreate random piece positions
+
+### How do Chess Puzzles work?
+- **Practice Mode**: Unlimited retries with hints (press H). No penalty for wrong moves.
+- **Challenge Mode**: One wrong move = fail. Timer tracks your solve time.
+- Puzzles can be filtered by rating (400–2800), themes (fork, pin, mate-in-1, etc.), and difficulty.
+- Streak tracking and session statistics are displayed in the sidebar.
+- Keyboard shortcuts: `N` = next puzzle, `H` = hint, `R` = retry, `Enter` = start/next.
+
+### How do I import the Lichess puzzle database?
+1. Download the puzzle CSV from [database.lichess.org](https://database.lichess.org/#puzzles)
+2. If you downloaded a `.csv.zst` or `.csv.bz2` file, decompress it first to get the `.csv`
+3. Go to Chess Puzzles → click "Import Lichess Puzzle Database"
+4. Drop or select the `.csv` file
+
+The full 1 GB database (~4M puzzles) is supported — the importer streams the file and loads the first 50,000 puzzles without loading the entire file into memory.
+
+### Where are imported puzzles stored?
+Puzzles are stored in your browser's `localStorage`. If the data is too large (>4.5 MB), puzzles will be loaded for the current session only and you'll see a warning toast. There is no backend storage for puzzles.
+
+### How does Memory Training work?
+1. Configure settings: piece count (1–16), memorization time (3–30s), piece colors, and mode.
+2. Press **Start Game** — pieces appear on the board.
+3. Memorize the positions within the time limit (or press "I'm Ready" early).
+4. The board clears — recreate the positions by dragging or clicking pieces from the palette.
+5. Press **Submit** — see your accuracy with color-coded feedback per square.
+
+**Normal Mode**: You receive exactly the pieces to place back.  
+**Hard Mode**: Full piece palette available — recall both type and position.
+
 ## Mobile & Desktop
 
 ### Is there a mobile app?
@@ -213,10 +250,7 @@ Not yet, but it's on our [roadmap](roadmap.md) for 2027. The web app is mobile-r
 Not yet, but planned for the future. You can use the web app in any browser.
 
 ### Can I use this offline?
-No, EloInsight requires an internet connection to:
-- Sync games
-- Analyze positions
-- Access your data
+No, EloInsight requires an internet connection for core features like game sync and analysis. However, **Chess Puzzles** and **Memory Training** work offline once puzzles are loaded — they run entirely in the browser.
 
 ## Troubleshooting
 

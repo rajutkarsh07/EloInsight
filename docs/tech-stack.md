@@ -49,6 +49,7 @@ EloInsight uses a modern, polyglot tech stack optimized for performance, develop
 **Sonner**
 - Toast notifications
 - Beautiful animations
+- Import feedback (puzzle CSV import success/failure)
 - Easy to use
 
 ### State Management
@@ -78,12 +79,14 @@ EloInsight uses a modern, polyglot tech stack optimized for performance, develop
 - Drag and drop moves
 - Position validation
 - Customizable pieces
+- Used for: Game analysis, Puzzles, Memory Training
 
 **chess.js**
 - Move validation
 - Game state management
 - PGN parsing
 - FEN support
+- Used for: Game analysis, Puzzle move validation
 
 ### Build Tools
 **Vite**
