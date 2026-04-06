@@ -2,12 +2,9 @@ import { Controller, Post, Body, HttpCode, HttpStatus, Get, Query, UseGuards, Re
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import {
-    LoginDto,
-    RegisterDto,
     VerifyEmailDto,
     ResendVerificationDto,
     AuthResponseDto,
-    RegisterResponseDto,
     VerifyResponseDto,
 } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -21,18 +18,6 @@ export class AuthController {
         private authService: AuthService,
         private configService: ConfigService,
     ) { }
-
-    @Post('register')
-    @ApiOperation({ summary: 'Register a new user' })
-    @ApiResponse({
-        status: 201,
-        description: 'User registered. Verification email sent.',
-        type: RegisterResponseDto,
-    })
-    @ApiResponse({ status: 400, description: 'Email/username already exists or validation failed' })
-    async register(@Body() registerDto: RegisterDto): Promise<RegisterResponseDto> {
-        return this.authService.register(registerDto);
-    }
 
     @Get('verify-email')
     @ApiOperation({ summary: 'Verify email address' })
@@ -69,19 +54,6 @@ export class AuthController {
     })
     async resendVerification(@Body() resendDto: ResendVerificationDto) {
         return this.authService.resendVerification(resendDto.email);
-    }
-
-    @Post('login')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Login with email and password' })
-    @ApiResponse({
-        status: 200,
-        description: 'Successfully logged in',
-        type: AuthResponseDto,
-    })
-    @ApiResponse({ status: 401, description: 'Invalid credentials or email not verified' })
-    async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
-        return this.authService.login(loginDto);
     }
 
     @Post('refresh')

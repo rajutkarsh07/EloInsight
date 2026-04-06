@@ -160,24 +160,7 @@ export class AppModule {}
 
 ### Input Validation
 
-```typescript
-import { IsEmail, IsString, MinLength, Matches } from 'class-validator';
-
-export class RegisterDto {
-  @IsEmail()
-  email: string;
-
-  @IsString()
-  @MinLength(3)
-  @Matches(/^[a-zA-Z0-9_-]+$/)
-  username: string;
-
-  @IsString()
-  @MinLength(8)
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
-  password: string;
-}
-```
+OAuth callback payloads and any authenticated mutations should still be validated with DTOs and provider-specific checks.
 
 ### CORS Configuration
 

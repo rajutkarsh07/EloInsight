@@ -1,13 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authService } from '../services/authService';
-import type { User, LoginRequest, RegisterRequest } from '../types/api';
+import type { User } from '../types/api';
 
 interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
     isLoading: boolean;
-    login: (credentials: LoginRequest) => Promise<void>;
-    register: (data: RegisterRequest) => Promise<{ message: string }>;
     logout: () => void;
     refreshUser: () => Promise<void>;
 }
@@ -38,21 +36,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         initAuth();
     }, []);
 
-    const login = useCallback(async (credentials: LoginRequest) => {
-        setIsLoading(true);
-        try {
-            const response = await authService.login(credentials);
-            setUser(response.user);
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    const register = useCallback(async (data: RegisterRequest) => {
-        const response = await authService.register(data);
-        return { message: response.message };
-    }, []);
-
     const logout = useCallback(() => {
         authService.logout();
         setUser(null);
@@ -72,8 +55,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         isAuthenticated: !!user,
         isLoading,
-        login,
-        register,
         logout,
         refreshUser,
     };

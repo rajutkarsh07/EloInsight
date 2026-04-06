@@ -196,7 +196,7 @@ import { cn } from '../lib/utils';
 
 ### Flow
 
-1. User logs in with email/password
+1. User logs in with OAuth (Lichess or Google)
 2. JWT tokens stored in `localStorage`
 3. `AuthContext` provides auth state app-wide
 4. API client interceptor adds `Authorization` header

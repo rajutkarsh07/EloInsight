@@ -1,9 +1,8 @@
 import { Injectable, UnauthorizedException, BadRequestException, OnModuleInit, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
-import { LoginDto, RegisterDto, VerifyResponseDto } from './dto/auth.dto';
+import { VerifyResponseDto } from './dto/auth.dto';
 import { EmailService } from './email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import * as crypto from 'crypto';
@@ -27,66 +26,6 @@ export class AuthService {
         private prisma: PrismaService,
     ) { }
 
-    async register(registerDto: RegisterDto) {
-        const { email, username, password } = registerDto;
-
-        // Check if email already exists
-        const existingEmail = await this.prisma.user.findUnique({ where: { email } });
-        if (existingEmail) {
-            throw new BadRequestException('Email already registered');
-        }
-
-        // Check if username already exists
-        const existingUsername = await this.prisma.user.findUnique({ where: { username } });
-        if (existingUsername) {
-            throw new BadRequestException('Username already taken');
-        }
-
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Create user
-        // Note: Prisma schema uses 'passwordHash', 'emailVerified', 'isActive'
-        const user = await this.prisma.user.create({
-            data: {
-                email,
-                username,
-                passwordHash: hashedPassword,
-                emailVerified: false,
-                // Default isActive is true in schema
-            },
-        });
-
-        // Normally we'd send a verification email here.
-        // For now, we'll keep the logic simple or just log it.
-        // If you have a verification table or column, logic goes here.
-
-        // Let's assume we want to auto-verify for dev convenience or implement proper flow
-        // The original code had verification logic with tokens. 
-        // Integrating that requires schema support for verification tokens if not present.
-
-        // Since the current schema doesn't explicitly show verificationToken columns in the snippet I saw earlier,
-        // (Only emailVerified boolean), I'll skip token storage unless I add it to schema.
-        // However, I'll log that verification is skipped/mocked for now to unblock login.
-
-        /* 
-           If verification is strictly required:
-           We need to store the token somewhere (Redis, separate table, or add column to User).
-           For this refactor, I will auto-verify or let the user login immediately if allowed, 
-           or leave emailVerified=false and require manual update like we did before.
-        */
-
-        return {
-            message: 'Registration successful. You can now log in.',
-            user: {
-                id: user.id,
-                email: user.email,
-                username: user.username,
-                isVerified: user.emailVerified,
-            },
-        };
-    }
-
     async verifyEmail(token: string): Promise<VerifyResponseDto> {
         // Without a token column in DB, we can't implement this exactly same way yet.
         // Would need to add `verificationToken` to User model in schema.
@@ -97,37 +36,6 @@ export class AuthService {
         return {
             message: 'Verification feature pending schema update.',
         };
-    }
-
-    async login(loginDto: LoginDto) {
-        const { email, password } = loginDto;
-
-        // Find user
-        const user = await this.prisma.user.findUnique({
-            where: { email },
-            include: {
-                profile: true,
-                linkedAccounts: true, // to load chess usernames if needed
-            }
-        });
-
-        if (!user) {
-            throw new UnauthorizedException('Invalid credentials');
-        }
-
-        // Verify password
-        const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-        if (!isPasswordValid) {
-            throw new UnauthorizedException('Invalid credentials');
-        }
-
-        // Check if verified
-        if (!user.emailVerified) {
-            throw new UnauthorizedException('Please verify your email before logging in');
-        }
-
-        // Generate tokens
-        return this.generateTokens(user);
     }
 
     async refreshToken(refreshToken: string) {
