@@ -20,65 +20,15 @@ EloInsight provides a RESTful API for frontend-backend communication. All endpoi
 
 ## Authentication
 
-### Register
-Create a new user account.
+### OAuth Login
+Authenticate via the supported OAuth providers.
 
 ```http
-POST /api/v1/auth/register
-Content-Type: application/json
-
-{
-  "email": "player@example.com",
-  "username": "chessmaster",
-  "password": "SecurePass123!"
-}
+GET /api/v1/auth/lichess/login
+GET /api/v1/auth/google/login
 ```
 
-**Response** (201 Created):
-```json
-{
-  "user": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "email": "player@example.com",
-    "username": "chessmaster",
-    "createdAt": "2026-01-11T10:30:00Z"
-  },
-  "tokens": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expiresIn": 900
-  }
-}
-```
-
-### Login
-Authenticate existing user.
-
-```http
-POST /api/v1/auth/login
-Content-Type: application/json
-
-{
-  "email": "player@example.com",
-  "password": "SecurePass123!"
-}
-```
-
-**Response** (200 OK):
-```json
-{
-  "user": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "email": "player@example.com",
-    "username": "chessmaster"
-  },
-  "tokens": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expiresIn": 900
-  }
-}
-```
+These endpoints redirect the user to the provider OAuth flow. On success, the frontend receives access and refresh tokens through the callback redirect.
 
 ### Refresh Token
 Get new access token using refresh token.

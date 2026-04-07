@@ -26,8 +26,8 @@ npm run build && npm run start:prod
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/auth/register` | User registration |
-| `POST` | `/auth/login` | User login |
+| `GET` | `/auth/lichess/login` | Start Lichess OAuth login |
+| `GET` | `/auth/google/login` | Start Google OAuth login |
 | `POST` | `/auth/refresh` | Refresh tokens |
 | `GET` | `/users/me` | Get current user |
 | `GET` | `/games` | List user games |

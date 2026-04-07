@@ -13,26 +13,6 @@ export interface User {
     createdAt: string;
 }
 
-export interface LoginRequest {
-    email: string;
-    password: string;
-}
-
-export interface RegisterRequest {
-    email: string;
-    username: string;
-    password: string;
-}
-
-export interface AuthResponse {
-    user: User;
-    tokens: {
-        accessToken: string;
-        refreshToken: string;
-        expiresIn: number;
-    };
-}
-
 // Game Types
 export interface Game {
     id: string;

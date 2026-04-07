@@ -31,8 +31,8 @@ npm run start:dev
 ```
 
 **Endpoints:**
-- `POST /auth/login` - User login
-- `POST /auth/register` - User registration
+- `GET /auth/lichess/login` - Start Lichess OAuth
+- `GET /auth/google/login` - Start Google OAuth
 - `GET /games` - List user games
 - `POST /sync/trigger` - Trigger game sync
 

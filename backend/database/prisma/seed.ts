@@ -662,9 +662,8 @@ async function main() {
     console.log('   • Opening Statistics: 3');
     console.log('   • Sync Jobs: 2');
     console.log('   • Analysis Jobs: 3');
-    console.log('\n🔑 Demo Credentials:');
-    console.log('   Email: demo@eloinsight.com');
-    console.log('   Password: password123');
+    console.log('\n🔑 Demo Access:');
+    console.log('   Use the seeded linked accounts with the OAuth flows exposed by the frontend.');
 }
 
 main()

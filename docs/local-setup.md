@@ -317,35 +317,8 @@ echo "API: http://localhost:14000/api/v1"
 2. Click "Continue with Lichess" (recommended)
 3. Or sign up with email
 
-### Option 2: Create via script
-```bash
-cd backend/api-gateway
-npx ts-node -e "
-const { PrismaClient } = require('@prisma/client');
-const bcrypt = require('bcrypt');
-
-const prisma = new PrismaClient();
-
-async function main() {
-  const hash = await bcrypt.hash('password123', 10);
-  const user = await prisma.user.create({
-    data: {
-      email: 'test@example.com',
-      username: 'testuser',
-      passwordHash: hash,
-      emailVerified: true,
-    },
-  });
-  console.log('Created user:', user.email);
-}
-
-main().finally(() => prisma.\$disconnect());
-"
-```
-
-Then login with:
-- Email: `test@example.com`
-- Password: `password123`
+### Option 2: Use OAuth for a local account
+Use the frontend login page and sign in with one of the configured OAuth providers.
 
 ---
 

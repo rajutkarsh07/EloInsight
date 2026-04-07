@@ -17,46 +17,21 @@ Server will be available at:
 
 ## 🧪 Test the API
 
-### 1. Login with Demo User
+### 1. Start OAuth Login
+
+Use one of the OAuth entry points:
 
 ```bash
-curl -X POST http://localhost:14000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "demo@eloinsight.dev",
-    "password": "password123"
-  }'
+xdg-open http://localhost:14000/api/v1/auth/lichess/login
 ```
 
-**Response**:
-```json
-{
-  "user": {
-    "id": "1",
-    "email": "demo@eloinsight.dev",
-    "username": "demo"
-  },
-  "tokens": {
-    "accessToken": "eyJhbGci...",
-    "refreshToken": "eyJhbGci...",
-    "expiresIn": 900
-  }
-}
-```
-
-### 2. Register New User
+or
 
 ```bash
-curl -X POST http://localhost:14000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "newuser@example.com",
-    "username": "newuser",
-    "password": "password123"
-  }'
+xdg-open http://localhost:14000/api/v1/auth/google/login
 ```
 
-### 3. Access Protected Endpoint
+### 2. Access Protected Endpoint
 
 ```bash
 # Save the access token from login response
@@ -66,21 +41,21 @@ curl -X GET http://localhost:14000/api/v1/users/me \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-### 4. Get User Statistics
+### 3. Get User Statistics
 
 ```bash
 curl -X GET http://localhost:14000/api/v1/users/stats \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-### 5. Get Games List
+### 4. Get Games List
 
 ```bash
 curl -X GET "http://localhost:14000/api/v1/games?page=1&limit=20" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-### 6. Request Game Analysis
+### 5. Request Game Analysis
 
 ```bash
 curl -X POST http://localhost:14000/api/v1/analysis/game-123 \
@@ -107,10 +82,10 @@ You can:
 
 ## 🔐 Authentication Flow
 
-1. **Login** → Get access token
-2. **Use token** in `Authorization: Bearer <token>` header
-3. **Token expires** after 15 minutes
-4. **Refresh** using refresh token (valid for 7 days)
+1. **OAuth login** via Lichess or Google
+2. **Frontend receives** access and refresh tokens from the callback flow
+3. **Use token** in `Authorization: Bearer <token>` header
+4. **Refresh** using refresh token when needed
 
 ## 📁 Project Structure
 
