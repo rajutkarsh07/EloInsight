@@ -6,6 +6,8 @@ import { VerifyResponseDto } from './dto/auth.dto';
 import { EmailService } from './email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import * as crypto from 'crypto';
+import * as bcrypt from 'bcrypt';
+import { UserRole, UserRoles } from './auth.types';
 
 // Interface matching the Prisma User model structure roughly for internal use if needed
 // But efficiently we will just return the Prisma User object or partials
@@ -13,6 +15,7 @@ export interface AuthUser {
     id: string;
     email: string;
     username: string;
+    role: UserRole;
 }
 
 @Injectable()
@@ -62,11 +65,36 @@ export class AuthService {
         }
     }
 
+    async authenticateAdmin(email: string, password: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { email },
+            include: { linkedAccounts: true },
+        });
+
+        if (!user || !user.passwordHash) {
+            throw new UnauthorizedException('Invalid admin credentials');
+        }
+
+        const role = await this.getUserRole(user.id);
+        if (role !== UserRoles.ADMIN) {
+            throw new UnauthorizedException('Invalid admin credentials');
+        }
+
+        const passwordMatches = await bcrypt.compare(password, user.passwordHash);
+        if (!passwordMatches) {
+            throw new UnauthorizedException('Invalid admin credentials');
+        }
+
+        return this.generateTokens(user);
+    }
+
     private async generateTokens(user: any) {
+        const role = user.role ?? await this.getUserRole(user.id);
         const payload = {
             sub: user.id,
             email: user.email,
             username: user.username,
+            role,
         };
 
         const accessToken = this.jwtService.sign(payload, {
@@ -88,6 +116,7 @@ export class AuthService {
                 id: user.id,
                 email: user.email,
                 username: user.username,
+                role,
                 isVerified: user.emailVerified,
                 chessComUsername: chessComAccount?.platformUsername || null,
                 lichessUsername: lichessAccount?.platformUsername || null,
@@ -101,6 +130,17 @@ export class AuthService {
                 expiresIn: 3600,
             },
         };
+    }
+
+    private async getUserRole(userId: string): Promise<UserRole> {
+        const rows = await this.prisma.$queryRaw<Array<{ role: string }>>`
+            SELECT role::text AS role
+            FROM users
+            WHERE id = ${userId}::uuid
+            LIMIT 1
+        `;
+
+        return rows[0]?.role === UserRoles.ADMIN ? UserRoles.ADMIN : UserRoles.USER;
     }
 
     async getUserById(id: string) {

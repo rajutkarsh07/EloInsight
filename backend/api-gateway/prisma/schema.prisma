@@ -22,6 +22,7 @@ model User {
   email         String    @unique @db.VarChar(255)
   username      String    @unique @db.VarChar(50)
   passwordHash  String    @map("password_hash") @db.VarChar(255)
+  role          UserRole  @default(USER)
   emailVerified Boolean   @default(false) @map("email_verified")
   isActive      Boolean   @default(true) @map("is_active")
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -530,6 +531,11 @@ model AnalysisJob {
 // ============================================
 // ENUMS
 // ============================================
+
+enum UserRole {
+  USER
+  ADMIN
+}
 
 enum Platform {
   CHESS_COM @map("chess.com")
