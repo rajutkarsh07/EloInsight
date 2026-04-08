@@ -1,5 +1,4 @@
 import { PrismaClient, Platform, Theme, GameResult, TimeClass, AnalysisStatus, MoveClassification, PlayerColor, PeriodType } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
@@ -30,13 +29,10 @@ async function main() {
     // ==========================================
     console.log('👤 Creating users...');
 
-    const hashedPassword = await bcrypt.hash('password123', 10);
-
     const user1 = await prisma.user.create({
         data: {
             email: 'magnus@eloinsight.com',
             username: 'magnus_fan',
-            passwordHash: hashedPassword,
             emailVerified: true,
             isActive: true,
         },
@@ -46,7 +42,6 @@ async function main() {
         data: {
             email: 'hikaru@eloinsight.com',
             username: 'hikaru_speed',
-            passwordHash: hashedPassword,
             emailVerified: true,
             isActive: true,
         },
@@ -56,7 +51,6 @@ async function main() {
         data: {
             email: 'demo@eloinsight.com',
             username: 'demo_user',
-            passwordHash: hashedPassword,
             emailVerified: false,
             isActive: true,
         },
