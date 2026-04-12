@@ -2,14 +2,6 @@ import { apiClient } from './apiClient';
 import type { User } from '../types/api';
 
 export const authService = {
-    async verifyEmail(token: string): Promise<{ message: string; verified: boolean }> {
-        return apiClient.get<{ message: string; verified: boolean }>(`/auth/verify-email?token=${token}`);
-    },
-
-    async resendVerification(email: string): Promise<{ message: string }> {
-        return apiClient.post<{ message: string }>('/auth/resend-verification', { email });
-    },
-
     async logout(): Promise<void> {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');

@@ -1,12 +1,7 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, Get, Query, UseGuards, Req, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import {
-    VerifyEmailDto,
-    ResendVerificationDto,
-    AuthResponseDto,
-    VerifyResponseDto,
-} from './dto/auth.dto';
+import { AuthResponseDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -18,43 +13,6 @@ export class AuthController {
         private authService: AuthService,
         private configService: ConfigService,
     ) { }
-
-    @Get('verify-email')
-    @ApiOperation({ summary: 'Verify email address' })
-    @ApiQuery({ name: 'token', description: 'Verification token from email' })
-    @ApiResponse({
-        status: 200,
-        description: 'Email verified successfully',
-        type: VerifyResponseDto,
-    })
-    @ApiResponse({ status: 400, description: 'Invalid or expired token' })
-    async verifyEmail(@Query('token') token: string): Promise<VerifyResponseDto> {
-        return this.authService.verifyEmail(token);
-    }
-
-    @Post('verify-email')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Verify email address (POST alternative)' })
-    @ApiResponse({
-        status: 200,
-        description: 'Email verified successfully',
-        type: VerifyResponseDto,
-    })
-    @ApiResponse({ status: 400, description: 'Invalid or expired token' })
-    async verifyEmailPost(@Body() verifyDto: VerifyEmailDto): Promise<VerifyResponseDto> {
-        return this.authService.verifyEmail(verifyDto.token);
-    }
-
-    @Post('resend-verification')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Resend verification email' })
-    @ApiResponse({
-        status: 200,
-        description: 'Verification email sent (if email exists)',
-    })
-    async resendVerification(@Body() resendDto: ResendVerificationDto) {
-        return this.authService.resendVerification(resendDto.email);
-    }
 
     @Post('refresh')
     @HttpCode(HttpStatus.OK)

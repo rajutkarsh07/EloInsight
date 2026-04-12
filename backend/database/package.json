@@ -18,15 +18,13 @@
         "postinstall": "prisma generate"
     },
     "dependencies": {
-        "@prisma/client": "^5.22.0",
-        "bcrypt": "^5.1.1"
+        "@prisma/client": "^5.22.0"
     },
     "devDependencies": {
         "prisma": "^5.22.0",
         "typescript": "^5.0.0",
         "ts-node": "^10.9.1",
-        "@types/node": "^20.0.0",
-        "@types/bcrypt": "^5.0.0"
+        "@types/node": "^20.0.0"
     },
     "prisma": {
         "seed": "ts-node prisma/seed.ts"

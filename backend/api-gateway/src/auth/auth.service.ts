@@ -1,16 +1,11 @@
-import { Injectable, UnauthorizedException, BadRequestException, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { v4 as uuidv4 } from 'uuid';
-import { VerifyResponseDto } from './dto/auth.dto';
-import { EmailService } from './email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { UserRole, UserRoles } from './auth.types';
 
-// Interface matching the Prisma User model structure roughly for internal use if needed
-// But efficiently we will just return the Prisma User object or partials
 export interface AuthUser {
     id: string;
     email: string;
@@ -25,21 +20,8 @@ export class AuthService {
     constructor(
         private jwtService: JwtService,
         private configService: ConfigService,
-        private emailService: EmailService,
         private prisma: PrismaService,
     ) { }
-
-    async verifyEmail(token: string): Promise<VerifyResponseDto> {
-        // Without a token column in DB, we can't implement this exactly same way yet.
-        // Would need to add `verificationToken` to User model in schema.
-        throw new BadRequestException('Verification not fully implemented in Postgres schema yet');
-    }
-
-    async resendVerification(email: string) {
-        return {
-            message: 'Verification feature pending schema update.',
-        };
-    }
 
     async refreshToken(refreshToken: string) {
         try {
@@ -481,10 +463,9 @@ export class AuthService {
         // New user - create account (no avatar - user can connect Google for avatar)
         const newUser = await this.prisma.user.create({
             data: {
-                email: `${lichessUsername.toLowerCase()}@lichess.oauth`, // Placeholder email
+                email: `${lichessUsername.toLowerCase()}@lichess.oauth`,
                 username: lichessUsername,
-                passwordHash: '', // No password for OAuth users
-                emailVerified: true, // OAuth users are auto-verified
+                emailVerified: true,
                 linkedAccounts: {
                     create: {
                         platform: 'LICHESS',
@@ -715,8 +696,7 @@ export class AuthService {
                 data: {
                     email,
                     username,
-                    passwordHash: '', // No password for OAuth users
-                    emailVerified: true, // Google users are auto-verified
+                    emailVerified: true,
                     linkedAccounts: {
                         create: {
                             platform: 'GOOGLE',

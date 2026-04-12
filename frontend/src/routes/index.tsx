@@ -2,7 +2,6 @@ import { createBrowserRouter, Navigate, Outlet, useRoutes } from 'react-router-d
 import MainLayout from '../components/layout/MainLayout';
 import Login from '../pages/Login';
 import Signup from '../pages/Signup';
-import VerifyEmail from '../pages/VerifyEmail';
 import AuthCallback from '../pages/AuthCallback';
 import Dashboard from '../pages/Dashboard';
 import GamesList from '../pages/GamesList';
@@ -65,10 +64,6 @@ const routeConfig = [
                 element: <Signup />,
             },
         ],
-    },
-    {
-        path: '/verify-email',
-        element: <VerifyEmail />,
     },
     {
         path: '/auth/callback',
