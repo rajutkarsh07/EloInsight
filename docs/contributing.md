@@ -52,6 +52,9 @@ We are committed to providing a welcoming and inclusive environment for all cont
 
 3. **Install dependencies**
    ```bash
+   # run this if alias docker-compose is not set up
+   alias docker-compose="docker compose" 
+   
    # See deployment.md for detailed setup
    docker-compose up -d postgres redis rabbitmq
    ```
