@@ -47,31 +47,58 @@ export class AuthService {
         }
     }
 
+    /**
+     * A stable bcrypt hash used when the target account does not exist or has
+     * no password set. Comparing against it keeps `authenticateAdmin` timing
+     * constant across all failure paths, so the endpoint cannot be used as a
+     * side-channel to probe whether an email belongs to an admin.
+     *
+     * The plaintext ("__eloinsight_invalid_password__") is not a valid password
+     * for any real account.
+     */
+    private static readonly DUMMY_PASSWORD_HASH =
+        '$2b$10$CwTycUXWue0Thq9StjUM0uJ8pG9.qQfX1pJzYH8lQG8GtgLxWxqOq';
+
     async authenticateAdmin(email: string, password: string) {
         const user = await this.prisma.user.findUnique({
             where: { email },
             include: { linkedAccounts: true },
         });
 
-        if (!user || !user.passwordHash) {
-            throw new UnauthorizedException('Invalid admin credentials');
-        }
+        // Always run bcrypt.compare against either the real hash or a dummy
+        // hash so the response time does not depend on whether the account
+        // exists, has a password, or is an admin.
+        const hashToCompare = user?.passwordHash ?? AuthService.DUMMY_PASSWORD_HASH;
+        const passwordMatches = await bcrypt.compare(password, hashToCompare);
 
-        const role = await this.getUserRole(user.id);
-        if (role !== UserRoles.ADMIN) {
-            throw new UnauthorizedException('Invalid admin credentials');
-        }
+        const isAdmin =
+            !!user &&
+            !!user.passwordHash &&
+            user.role === UserRoles.ADMIN &&
+            passwordMatches;
 
-        const passwordMatches = await bcrypt.compare(password, user.passwordHash);
-        if (!passwordMatches) {
+        if (!isAdmin) {
             throw new UnauthorizedException('Invalid admin credentials');
         }
 
         return this.generateTokens(user);
     }
 
-    private async generateTokens(user: any) {
-        const role = user.role ?? await this.getUserRole(user.id);
+    private async generateTokens(user: {
+        id: string;
+        email: string;
+        username: string;
+        emailVerified: boolean;
+        role?: UserRole | null;
+        linkedAccounts?: Array<{
+            platform: string;
+            platformUsername: string;
+            accessToken: string | null;
+        }>;
+    }) {
+        // `role` should always be present when the user was loaded via Prisma,
+        // but guard against callers that forget to select it.
+        const role: UserRole = (user.role as UserRole) ?? UserRoles.USER;
         const payload = {
             sub: user.id,
             email: user.email,
@@ -90,8 +117,8 @@ export class AuthService {
         });
 
         // Map linked accounts to flat fields for compatibility
-        const chessComAccount = user.linkedAccounts?.find((a: any) => a.platform === 'CHESS_COM');
-        const lichessAccount = user.linkedAccounts?.find((a: any) => a.platform === 'LICHESS');
+        const chessComAccount = user.linkedAccounts?.find((a) => a.platform === 'CHESS_COM');
+        const lichessAccount = user.linkedAccounts?.find((a) => a.platform === 'LICHESS');
 
         return {
             user: {
@@ -112,17 +139,6 @@ export class AuthService {
                 expiresIn: 3600,
             },
         };
-    }
-
-    private async getUserRole(userId: string): Promise<UserRole> {
-        const rows = await this.prisma.$queryRaw<Array<{ role: string }>>`
-            SELECT role::text AS role
-            FROM users
-            WHERE id = ${userId}::uuid
-            LIMIT 1
-        `;
-
-        return rows[0]?.role === UserRoles.ADMIN ? UserRoles.ADMIN : UserRoles.USER;
     }
 
     async getUserById(id: string) {

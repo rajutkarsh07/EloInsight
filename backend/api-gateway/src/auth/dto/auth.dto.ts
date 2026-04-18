@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { UserRole } from '../auth.types';
 
 export class AuthResponseDto {
     @ApiProperty()
@@ -6,7 +7,7 @@ export class AuthResponseDto {
         id: string;
         email: string;
         username: string;
-        role?: string;
+        role: UserRole;
         isVerified: boolean;
     };
 

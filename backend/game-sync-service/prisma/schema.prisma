@@ -22,6 +22,7 @@ model User {
   email         String    @unique @db.VarChar(255)
   username      String    @unique @db.VarChar(50)
   passwordHash  String?   @map("password_hash") @db.VarChar(255)
+  role          UserRole  @default(USER)
   emailVerified Boolean   @default(false) @map("email_verified")
   isActive      Boolean   @default(true) @map("is_active")
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -40,6 +41,7 @@ model User {
 
   @@index([email], map: "idx_users_email")
   @@index([username], map: "idx_users_username")
+  @@index([role], map: "idx_users_role")
   @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
   @@map("users")
 }

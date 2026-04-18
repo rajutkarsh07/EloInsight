@@ -27,6 +27,29 @@ const adminLinkedAccountSelect = {
   syncEnabled: true,
 } as const;
 
+/**
+ * Fields safe to return from admin SyncJob endpoints. Intentionally excludes
+ * no sensitive columns today, but defined as a single constant so future
+ * fields don't silently disappear from responses and so callers cannot
+ * accidentally expose related sensitive data (like linked-account tokens).
+ */
+const adminSyncJobSelect = {
+  id: true,
+  userId: true,
+  linkedAccountId: true,
+  status: true,
+  totalGames: true,
+  processedGames: true,
+  newGames: true,
+  skippedGames: true,
+  retryCount: true,
+  errorMessage: true,
+  startedAt: true,
+  completedAt: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 @Injectable()
 export class AdminService {
   constructor(private prisma: PrismaService) {}
@@ -570,7 +593,8 @@ export class AdminService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: {
+        select: {
+          ...adminSyncJobSelect,
           user: {
             select: { id: true, username: true, email: true },
           },
@@ -597,20 +621,7 @@ export class AdminService {
     const job = await this.prisma.syncJob.findUnique({
       where: { id },
       select: {
-        id: true,
-        userId: true,
-        linkedAccountId: true,
-        status: true,
-        totalGames: true,
-        processedGames: true,
-        newGames: true,
-        skippedGames: true,
-        retryCount: true,
-        errorMessage: true,
-        startedAt: true,
-        completedAt: true,
-        createdAt: true,
-        updatedAt: true,
+        ...adminSyncJobSelect,
         user: {
           select: { id: true, username: true, email: true },
         },

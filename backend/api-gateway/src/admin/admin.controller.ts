@@ -11,11 +11,19 @@ import {
   Req,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { AuthService } from '../auth/auth.service';
+import { Throttle } from '@nestjs/throttler';
+import { AuthService, AuthUser } from '../auth/auth.service';
 import { AdminOnly } from '../auth/decorators/admin-only.decorator';
-import { UserRole } from '../auth/auth.types';
+import { Public } from '../auth/decorators/public.decorator';
 import { AdminService } from './admin.service';
 
+/**
+ * All admin endpoints are gated by the class-level `@AdminOnly()`. New
+ * handlers added to this controller are admin-only by default; if a route
+ * must be publicly reachable (e.g. admin login), explicitly mark it with
+ * `@Public()`.
+ */
+@AdminOnly()
 @Controller('admin')
 export class AdminController {
   constructor(
@@ -25,13 +33,11 @@ export class AdminController {
 
   // ==================== DASHBOARD ====================
 
-  @AdminOnly()
   @Get('dashboard/stats')
   getDashboardStats() {
     return this.adminService.getDashboardStats();
   }
 
-  @AdminOnly()
   @Get('dashboard/activity')
   getRecentActivity() {
     return this.adminService.getRecentActivity();
@@ -39,20 +45,18 @@ export class AdminController {
 
   // ==================== AUTH ====================
 
+  // Tight rate limit on admin login to resist credential stuffing. Tuned to
+  // allow a human retrying a typo while blocking automated brute force.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Public()
   @Post('auth/login')
   async adminLogin(@Body() body: { email: string; password: string }) {
     return this.authService.authenticateAdmin(body.email, body.password);
   }
 
-  @AdminOnly()
   @Get('auth/verify')
   async verifyAdmin(@Req() req: Request) {
-    const user = req.user as {
-      id: string;
-      email: string;
-      username: string;
-      role: UserRole;
-    };
+    const user = req.user as AuthUser;
 
     return {
       valid: true,
@@ -67,7 +71,6 @@ export class AdminController {
 
   // ==================== USERS ====================
 
-  @AdminOnly()
   @Get('users')
   getUsers(
     @Query('page') page?: string,
@@ -83,13 +86,11 @@ export class AdminController {
     });
   }
 
-  @AdminOnly()
   @Get('users/:id')
   getUserById(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.getUserById(id);
   }
 
-  @AdminOnly()
   @Post('users')
   createUser(
     @Body() body: { username: string; email: string; password: string; emailVerified?: boolean },
@@ -97,7 +98,6 @@ export class AdminController {
     return this.adminService.createUser(body);
   }
 
-  @AdminOnly()
   @Patch('users/:id')
   updateUser(
     @Param('id', ParseUUIDPipe) id: string,
@@ -106,19 +106,16 @@ export class AdminController {
     return this.adminService.updateUser(id, body);
   }
 
-  @AdminOnly()
   @Delete('users/:id')
   deleteUser(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.deleteUser(id);
   }
 
-  @AdminOnly()
   @Patch('users/:id/soft-delete')
   softDeleteUser(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.softDeleteUser(id);
   }
 
-  @AdminOnly()
   @Patch('users/:id/restore')
   restoreUser(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.restoreUser(id);
@@ -126,7 +123,6 @@ export class AdminController {
 
   // ==================== GAMES ====================
 
-  @AdminOnly()
   @Get('games')
   getGames(
     @Query('page') page?: string,
@@ -144,13 +140,11 @@ export class AdminController {
     });
   }
 
-  @AdminOnly()
   @Get('games/:id')
   getGameById(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.getGameById(id);
   }
 
-  @AdminOnly()
   @Patch('games/:id')
   updateGame(
     @Param('id', ParseUUIDPipe) id: string,
@@ -159,19 +153,16 @@ export class AdminController {
     return this.adminService.updateGame(id, body);
   }
 
-  @AdminOnly()
   @Delete('games/:id')
   deleteGame(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.deleteGame(id);
   }
 
-  @AdminOnly()
   @Post('games/:id/requeue-analysis')
   requeueGameAnalysis(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.requeueGameAnalysis(id);
   }
 
-  @AdminOnly()
   @Post('games/fix-lichess')
   fixLichessGames() {
     return this.adminService.fixLichessGames();
@@ -179,7 +170,6 @@ export class AdminController {
 
   // ==================== ANALYSIS ====================
 
-  @AdminOnly()
   @Get('analysis')
   getAnalyses(
     @Query('page') page?: string,
@@ -193,13 +183,11 @@ export class AdminController {
     });
   }
 
-  @AdminOnly()
   @Get('analysis/:id')
   getAnalysisById(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.getAnalysisById(id);
   }
 
-  @AdminOnly()
   @Delete('analysis/:id')
   deleteAnalysis(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.deleteAnalysis(id);
@@ -207,7 +195,6 @@ export class AdminController {
 
   // ==================== LINKED ACCOUNTS ====================
 
-  @AdminOnly()
   @Get('linked-accounts')
   getLinkedAccounts(
     @Query('page') page?: string,
@@ -223,7 +210,6 @@ export class AdminController {
     });
   }
 
-  @AdminOnly()
   @Patch('linked-accounts/:id')
   updateLinkedAccount(
     @Param('id', ParseUUIDPipe) id: string,
@@ -232,7 +218,6 @@ export class AdminController {
     return this.adminService.updateLinkedAccount(id, body);
   }
 
-  @AdminOnly()
   @Delete('linked-accounts/:id')
   deleteLinkedAccount(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.deleteLinkedAccount(id);
@@ -240,7 +225,6 @@ export class AdminController {
 
   // ==================== SYNC JOBS ====================
 
-  @AdminOnly()
   @Get('sync-jobs')
   getSyncJobs(
     @Query('page') page?: string,
@@ -256,19 +240,16 @@ export class AdminController {
     });
   }
 
-  @AdminOnly()
   @Get('sync-jobs/:id')
   getSyncJobById(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.getSyncJobById(id);
   }
 
-  @AdminOnly()
   @Post('sync-jobs/:id/cancel')
   cancelSyncJob(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.cancelSyncJob(id);
   }
 
-  @AdminOnly()
   @Post('sync-jobs/:id/retry')
   retrySyncJob(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.retrySyncJob(id);
@@ -276,7 +257,6 @@ export class AdminController {
 
   // ==================== ANALYSIS JOBS ====================
 
-  @AdminOnly()
   @Get('analysis-jobs')
   getAnalysisJobs(
     @Query('page') page?: string,
@@ -292,25 +272,21 @@ export class AdminController {
     });
   }
 
-  @AdminOnly()
   @Get('analysis-jobs/:id')
   getAnalysisJobById(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.getAnalysisJobById(id);
   }
 
-  @AdminOnly()
   @Post('analysis-jobs/:id/cancel')
   cancelAnalysisJob(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.cancelAnalysisJob(id);
   }
 
-  @AdminOnly()
   @Post('analysis-jobs/:id/retry')
   retryAnalysisJob(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.retryAnalysisJob(id);
   }
 
-  @AdminOnly()
   @Patch('analysis-jobs/:id')
   updateAnalysisJob(
     @Param('id', ParseUUIDPipe) id: string,
@@ -324,19 +300,16 @@ export class AdminController {
 
   // ==================== STATISTICS ====================
 
-  @AdminOnly()
   @Get('statistics/users/:userId')
   getUserStatistics(@Param('userId', ParseUUIDPipe) userId: string) {
     return this.adminService.getUserStatistics(userId);
   }
 
-  @AdminOnly()
   @Get('statistics/openings/:userId')
   getOpeningStatistics(@Param('userId', ParseUUIDPipe) userId: string) {
     return this.adminService.getOpeningStatistics(userId);
   }
 
-  @AdminOnly()
   @Post('statistics/recalculate/:userId')
   recalculateStatistics(@Param('userId', ParseUUIDPipe) userId: string) {
     return this.adminService.recalculateStatistics(userId);
