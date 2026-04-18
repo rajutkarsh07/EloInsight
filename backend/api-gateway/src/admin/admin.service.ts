@@ -2,6 +2,31 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 
+const adminUserSelect = {
+  id: true,
+  email: true,
+  username: true,
+  role: true,
+  emailVerified: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
+  deletedAt: true,
+} as const;
+
+const adminLinkedAccountSelect = {
+  id: true,
+  userId: true,
+  platform: true,
+  platformUsername: true,
+  platformUserId: true,
+  avatarUrl: true,
+  isActive: true,
+  linkedAt: true,
+  lastSyncAt: true,
+  syncEnabled: true,
+} as const;
+
 @Injectable()
 export class AdminService {
   constructor(private prisma: PrismaService) {}
@@ -114,7 +139,8 @@ export class AdminService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: {
+        select: {
+          ...adminUserSelect,
           profile: true,
           settings: true,
           _count: {
@@ -144,10 +170,13 @@ export class AdminService {
   async getUserById(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: {
+      select: {
+        ...adminUserSelect,
         profile: true,
         settings: true,
-        linkedAccounts: true,
+        linkedAccounts: {
+          select: adminLinkedAccountSelect,
+        },
         _count: {
           select: {
             games: true,
@@ -197,7 +226,8 @@ export class AdminService {
           create: {},
         },
       },
-      include: {
+      select: {
+        ...adminUserSelect,
         profile: true,
         settings: true,
       },
@@ -218,7 +248,8 @@ export class AdminService {
     return this.prisma.user.update({
       where: { id },
       data,
-      include: {
+      select: {
+        ...adminUserSelect,
         profile: true,
         settings: true,
         _count: {
@@ -245,6 +276,7 @@ export class AdminService {
     return this.prisma.user.update({
       where: { id },
       data: { deletedAt: new Date(), isActive: false },
+      select: adminUserSelect,
     });
   }
 
@@ -252,6 +284,7 @@ export class AdminService {
     return this.prisma.user.update({
       where: { id },
       data: { deletedAt: null, isActive: true },
+      select: adminUserSelect,
     });
   }
 
@@ -467,7 +500,8 @@ export class AdminService {
         skip,
         take: limit,
         orderBy: { linkedAt: 'desc' },
-        include: {
+        select: {
+          ...adminLinkedAccountSelect,
           user: {
             select: { id: true, username: true, email: true },
           },
@@ -496,6 +530,12 @@ export class AdminService {
     return this.prisma.linkedAccount.update({
       where: { id },
       data,
+      select: {
+        ...adminLinkedAccountSelect,
+        user: {
+          select: { id: true, username: true, email: true },
+        },
+      },
     });
   }
 
@@ -556,11 +596,27 @@ export class AdminService {
   async getSyncJobById(id: string) {
     const job = await this.prisma.syncJob.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        userId: true,
+        linkedAccountId: true,
+        status: true,
+        totalGames: true,
+        processedGames: true,
+        newGames: true,
+        skippedGames: true,
+        retryCount: true,
+        errorMessage: true,
+        startedAt: true,
+        completedAt: true,
+        createdAt: true,
+        updatedAt: true,
         user: {
           select: { id: true, username: true, email: true },
         },
-        linkedAccount: true,
+        linkedAccount: {
+          select: adminLinkedAccountSelect,
+        },
       },
     });
 
@@ -845,4 +901,3 @@ export class AdminService {
     };
   }
 }
-

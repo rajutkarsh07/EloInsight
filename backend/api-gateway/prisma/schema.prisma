@@ -531,6 +531,11 @@ model AnalysisJob {
 // ENUMS
 // ============================================
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
 enum Platform {
   CHESS_COM @map("chess.com")
   LICHESS   @map("lichess")
